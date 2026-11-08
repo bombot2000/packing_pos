@@ -151,7 +151,7 @@ class PackingTransactionRepository {
     );
   }
 
-  Future<void> _validate(PackingTransactionDraft draft) async {
+  void _validate(PackingTransactionDraft draft) {
     if (![draft.lengthCm, draft.widthCm, draft.heightCm]
         .every((v) => v.isFinite && v > 0)) {
       throw ArgumentError('Dimensi harus berupa angka lebih dari nol.');
