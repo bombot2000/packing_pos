@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import 'features/packing/packing_calculator_screen.dart';
 import 'features/packing/packing_transaction_history_screen.dart';
+import 'features/packing/material_master_screen.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
@@ -58,7 +59,13 @@ class HomePage extends StatelessWidget {
         title: Text('Mode offline'),
         subtitle: Text('Transaksi dan pembayaran disimpan di perangkat.'),
       )),
-      const ListTile(leading: Icon(Icons.inventory_2), title: Text('Bahan'), subtitle: Text('Master bahan dan harga — tahap berikutnya')),
+      Card(child: ListTile(
+        leading: const Icon(Icons.inventory_2),
+        title: const Text('Master bahan'),
+        subtitle: const Text('Kelola nama, satuan, dan harga bahan packing.'),
+        trailing: const Icon(Icons.chevron_right),
+        onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const MaterialMasterScreen())),
+      )),
       const ListTile(leading: Icon(Icons.bar_chart), title: Text('Laporan — tahap berikutnya')),
       const ListTile(leading: Icon(Icons.backup), title: Text('Backup dan restore — tahap berikutnya')),
     ]),

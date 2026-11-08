@@ -63,6 +63,56 @@ class PackingTransactionRepository {
 
   final PackingDatabase _database;
 
+
+  /// Daftar master bahan. Secara default hanya bahan aktif yang ditampilkan.
+  Future<List<Map<String, Object?>>> listMaterials({bool activeOnly = true}) async {
+    final db = await _database.database;
+    return db.query('materials',
+      where: activeOnly ? 'is_active = 1' : null,
+      orderBy: 'name COLLATE NOCASE ASC');
+  }
+
+  /// Simpan master bahan tanpa mengubah snapshot transaksi yang sudah ada.
+  Future<int> saveMaterial({
+    int? id,
+    required String name,
+    required String unit,
+    required int currentUnitPrice,
+  }) async {
+    final cleanName = name.trim();
+    final cleanUnit = unit.trim();
+    if (cleanName.isEmpty) throw ArgumentError('Nama bahan wajib diisi.');
+    if (cleanUnit.isEmpty) throw ArgumentError('Satuan bahan wajib diisi.');
+    if (currentUnitPrice < 0) throw ArgumentError('Harga tidak boleh negatif.');
+    final db = await _database.database;
+    final now = DateTime.now().toUtc().toIso8601String();
+    if (id == null) {
+      return db.insert('materials', {
+        'name': cleanName, 'unit': cleanUnit,
+        'current_unit_price': currentUnitPrice, 'is_active': 1,
+        'created_at': now, 'updated_at': now,
+      });
+    }
+    final changed = await db.update('materials', {
+      'name': cleanName, 'unit': cleanUnit,
+      'current_unit_price': currentUnitPrice, 'updated_at': now,
+    }, where: 'id = ?', whereArgs: [id]);
+    if (changed == 0) throw StateError('Bahan tidak ditemukan.');
+    return id;
+  }
+
+  /// Nonaktifkan secara lunak; bahan dan transaksi historis tidak dihapus.
+  Future<void> deactivateMaterial(int id) async {
+    final db = await _database.database;
+    final changed = await db.update('materials', {
+      'is_active': 0,
+      'updated_at': DateTime.now().toUtc().toIso8601String(),
+    }, where: 'id = ? AND is_active = 1', whereArgs: [id]);
+    if (changed == 0) {
+      throw StateError('Bahan tidak ditemukan atau sudah nonaktif.');
+    }
+  }
+
   /// Saves header and material snapshots atomically. A failure rolls back all
   /// rows, so an incomplete receipt is never left in the local database.
   Future<String> save(PackingTransactionDraft draft) async {
