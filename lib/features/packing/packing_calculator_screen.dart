@@ -12,7 +12,6 @@ class _PackingCalculatorScreenState extends State<PackingCalculatorScreen> {
   final _height = TextEditingController(text: '50');
   final _slatWidth = TextEditingController(text: '5');
   final _gap = TextEditingController(text: '5');
-  final _markup = TextEditingController(text: '30');
   final Map<PackingFace, FaceBuildType> _modes = {
     for (final face in PackingFace.values) face: FaceBuildType.closedBoard,
   };
@@ -22,7 +21,7 @@ class _PackingCalculatorScreenState extends State<PackingCalculatorScreen> {
   @override
   void dispose() {
     _length.dispose(); _width.dispose(); _height.dispose();
-    _slatWidth.dispose(); _gap.dispose(); _markup.dispose();
+    _slatWidth.dispose(); _gap.dispose();
     super.dispose();
   }
 
