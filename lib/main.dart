@@ -1,10 +1,16 @@
 import 'package:flutter/material.dart';
-import 'features/packing/packing_calculator_screen.dart';
 
-void main() { WidgetsFlutterBinding.ensureInitialized(); runApp(const PackingPosApp()); }
+import 'features/packing/packing_calculator_screen.dart';
+import 'features/packing/packing_transaction_history_screen.dart';
+
+void main() {
+  WidgetsFlutterBinding.ensureInitialized();
+  runApp(const PackingPosApp());
+}
 
 class PackingPosApp extends StatelessWidget {
   const PackingPosApp({super.key});
+
   @override
   Widget build(BuildContext context) => MaterialApp(
     title: 'Packing POS',
@@ -20,6 +26,7 @@ class PackingPosApp extends StatelessWidget {
 
 class HomePage extends StatelessWidget {
   const HomePage({super.key});
+
   @override
   Widget build(BuildContext context) => Scaffold(
     appBar: AppBar(title: const Text('Packing POS')),
@@ -39,15 +46,21 @@ class HomePage extends StatelessWidget {
         ]),
       )),
       const SizedBox(height: 12),
+      Card(child: ListTile(
+        leading: const Icon(Icons.receipt_long),
+        title: const Text('Riwayat transaksi'),
+        subtitle: const Text('Buka nota, periksa bahan, dan catat pembayaran.'),
+        trailing: const Icon(Icons.chevron_right),
+        onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const PackingTransactionHistoryScreen())),
+      )),
       const Card(child: ListTile(
         leading: Icon(Icons.wifi_off),
         title: Text('Mode offline'),
-        subtitle: Text('Aplikasi dirancang berjalan tanpa koneksi internet.'),
+        subtitle: Text('Transaksi dan pembayaran disimpan di perangkat.'),
       )),
-      const ListTile(leading: Icon(Icons.receipt_long), title: Text('Transaksi'), subtitle: Text('Riwayat nota — tahap berikutnya')),
       const ListTile(leading: Icon(Icons.inventory_2), title: Text('Bahan'), subtitle: Text('Master bahan dan harga — tahap berikutnya')),
-      const ListTile(leading: Icon(Icons.bar_chart), title: Text('Laporan')),
-      const ListTile(leading: Icon(Icons.backup), title: Text('Backup dan restore')),
+      const ListTile(leading: Icon(Icons.bar_chart), title: Text('Laporan — tahap berikutnya')),
+      const ListTile(leading: Icon(Icons.backup), title: Text('Backup dan restore — tahap berikutnya')),
     ]),
   );
 }
