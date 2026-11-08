@@ -27,6 +27,10 @@ class _PackingCalculatorScreenState extends State<PackingCalculatorScreen> {
   final _overhead = TextEditingController(text: '0');
   final _markup = TextEditingController(text: '30');
   final _note = TextEditingController();
+  final _actualSlatMeters = TextEditingController();
+  final _actualBoardArea = TextEditingController();
+  final _slatAdjustmentReason = TextEditingController();
+  final _boardAdjustmentReason = TextEditingController();
 
   final _repository = PackingTransactionRepository();
   final Map<PackingFace, FaceBuildType> _modes = {
@@ -43,6 +47,7 @@ class _PackingCalculatorScreenState extends State<PackingCalculatorScreen> {
     for (final controller in [
       _customer, _item, _length, _width, _height, _slatWidth, _gap,
       _slatPrice, _boardPrice, _labor, _overhead, _markup, _note,
+      _actualSlatMeters, _actualBoardArea, _slatAdjustmentReason, _boardAdjustmentReason,
     ]) {
       controller.dispose();
     }
@@ -89,6 +94,10 @@ class _PackingCalculatorScreenState extends State<PackingCalculatorScreen> {
       setState(() {
         _dimensions = dimensions;
         _result = result;
+        _actualSlatMeters.text = result.totalSlatMeters.toStringAsFixed(3);
+        _actualBoardArea.text = result.totalBoardAreaM2.toStringAsFixed(3);
+        _slatAdjustmentReason.clear();
+        _boardAdjustmentReason.clear();
         _error = null;
         _price = null;
       });
@@ -100,12 +109,20 @@ class _PackingCalculatorScreenState extends State<PackingCalculatorScreen> {
     }
   }
 
+  double _actualQuantity(TextEditingController controller, String label) =>
+      _number(controller, label, allowZero: true);
+
+  bool _isAdjusted(double actual, double calculated) =>
+      (actual - calculated).abs() > 0.000001;
+
   void _calculatePrice() {
     if (_result == null) return;
     try {
+      final actualSlat = _actualQuantity(_actualSlatMeters, 'Jumlah aktual kayu bilah');
+      final actualBoard = _actualQuantity(_actualBoardArea, 'Jumlah aktual papan');
       final lines = <MaterialCostLine>[
-        MaterialCostLine(name: 'Kayu bilah', quantity: _result!.totalSlatMeters, unitPrice: _integer(_slatPrice, 'Harga kayu per meter')),
-        MaterialCostLine(name: 'Papan', quantity: _result!.totalBoardAreaM2, unitPrice: _integer(_boardPrice, 'Harga papan per m²')),
+        MaterialCostLine(name: 'Kayu bilah', quantity: actualSlat, unitPrice: _integer(_slatPrice, 'Harga kayu per meter')),
+        MaterialCostLine(name: 'Papan', quantity: actualBoard, unitPrice: _integer(_boardPrice, 'Harga papan per m²')),
       ];
       final price = PricingCalculator.calculate(
         materials: lines,
@@ -146,11 +163,11 @@ class _PackingCalculatorScreenState extends State<PackingCalculatorScreen> {
   )}';
 
   Widget _numberField(String label, TextEditingController controller, {
-    String? suffix, bool currency = false,
+    String? suffix, bool currency = false, bool invalidate = true,
   }) => TextFormField(
     controller: controller,
     keyboardType: const TextInputType.numberWithOptions(decimal: true),
-    onChanged: (_) => _invalidate(),
+    onChanged: (_) { if (invalidate) { _invalidate(); } else { _calculatePrice(); } },
     decoration: InputDecoration(
       labelText: label,
       suffixText: suffix,
@@ -171,12 +188,22 @@ class _PackingCalculatorScreenState extends State<PackingCalculatorScreen> {
     }
     setState(() => _saving = true);
     try {
+      final actualSlat = _actualQuantity(_actualSlatMeters, 'Jumlah aktual kayu bilah');
+      final actualBoard = _actualQuantity(_actualBoardArea, 'Jumlah aktual papan');
+      if (_isAdjusted(actualSlat, _result!.totalSlatMeters) && _slatAdjustmentReason.text.trim().isEmpty) {
+        throw const FormatException('Alasan perubahan jumlah kayu bilah wajib diisi.');
+      }
+      if (_isAdjusted(actualBoard, _result!.totalBoardAreaM2) && _boardAdjustmentReason.text.trim().isEmpty) {
+        throw const FormatException('Alasan perubahan jumlah papan wajib diisi.');
+      }
       final materials = <MaterialUsageDraft>[];
       if (_result!.totalSlatMeters > 0) {
         materials.add(MaterialUsageDraft(
           name: 'Kayu bilah',
           unit: 'm',
           calculatedQuantity: _result!.totalSlatMeters,
+          actualQuantity: actualSlat,
+          adjustmentNote: _slatAdjustmentReason.text.trim(),
           unitPrice: _integer(_slatPrice, 'Harga kayu per meter'),
         ));
       }
@@ -185,6 +212,8 @@ class _PackingCalculatorScreenState extends State<PackingCalculatorScreen> {
           name: 'Papan',
           unit: 'm²',
           calculatedQuantity: _result!.totalBoardAreaM2,
+          actualQuantity: actualBoard,
+          adjustmentNote: _boardAdjustmentReason.text.trim(),
           unitPrice: _integer(_boardPrice, 'Harga papan per m²'),
         ));
       }
@@ -204,6 +233,12 @@ class _PackingCalculatorScreenState extends State<PackingCalculatorScreen> {
         'totals': {
           'slatMeters': _result!.totalSlatMeters,
           'boardAreaM2': _result!.totalBoardAreaM2,
+        },
+        'actualMaterialUsage': {
+          'slatMeters': actualSlat,
+          'slatAdjustmentReason': _slatAdjustmentReason.text.trim(),
+          'boardAreaM2': actualBoard,
+          'boardAdjustmentReason': _boardAdjustmentReason.text.trim(),
         },
         'pricing': {
           'slatUnitPrice': _integer(_slatPrice, 'Harga kayu per meter'),
@@ -311,16 +346,36 @@ class _PackingCalculatorScreenState extends State<PackingCalculatorScreen> {
           ListTile(title: const Text('Total kayu bilah'), trailing: Text('${_result!.totalSlatMeters.toStringAsFixed(2)} m')),
           ListTile(title: const Text('Total luas papan'), trailing: Text('${_result!.totalBoardAreaM2.toStringAsFixed(3)} m²')),
         ])),
+        _sectionTitle('Penyesuaian jumlah bahan aktual'),
+        const Text('Jumlah hasil hitung dapat disesuaikan sesuai pemakaian nyata. Jika berbeda, isi alasan agar perubahan tercatat pada nota.'),
+        const SizedBox(height: 10),
+        Card(child: Padding(padding: const EdgeInsets.all(12), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          const Text('Kayu bilah', style: TextStyle(fontWeight: FontWeight.w600)),
+          Text('Hasil hitung: ${_result!.totalSlatMeters.toStringAsFixed(3)} m'),
+          const SizedBox(height: 8),
+          _numberField('Jumlah aktual kayu (m)', _actualSlatMeters, suffix: 'm', invalidate: false),
+          const SizedBox(height: 8),
+          TextField(controller: _slatAdjustmentReason, maxLines: 2, decoration: const InputDecoration(labelText: 'Alasan penyesuaian kayu (wajib jika berbeda)', border: OutlineInputBorder())),
+        ]))),
+        const SizedBox(height: 8),
+        Card(child: Padding(padding: const EdgeInsets.all(12), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          const Text('Papan', style: TextStyle(fontWeight: FontWeight.w600)),
+          Text('Hasil hitung: ${_result!.totalBoardAreaM2.toStringAsFixed(3)} m²'),
+          const SizedBox(height: 8),
+          _numberField('Jumlah aktual papan (m²)', _actualBoardArea, suffix: 'm²', invalidate: false),
+          const SizedBox(height: 8),
+          TextField(controller: _boardAdjustmentReason, maxLines: 2, decoration: const InputDecoration(labelText: 'Alasan penyesuaian papan (wajib jika berbeda)', border: OutlineInputBorder())),
+        ]))),
         _sectionTitle('Biaya dan harga jual'),
-        _numberField('Harga kayu bilah per meter', _slatPrice, currency: true),
+        _numberField('Harga kayu bilah per meter', _slatPrice, currency: true, invalidate: false),
         const SizedBox(height: 10),
-        _numberField('Harga papan per m²', _boardPrice, currency: true),
+        _numberField('Harga papan per m²', _boardPrice, currency: true, invalidate: false),
         const SizedBox(height: 10),
-        _numberField('Biaya jasa', _labor, currency: true),
+        _numberField('Biaya jasa', _labor, currency: true, invalidate: false),
         const SizedBox(height: 10),
-        _numberField('Biaya tambahan', _overhead, currency: true),
+        _numberField('Biaya tambahan', _overhead, currency: true, invalidate: false),
         const SizedBox(height: 10),
-        _numberField('Markup', _markup, suffix: '%'),
+        _numberField('Markup', _markup, suffix: '%', invalidate: false),
         const SizedBox(height: 10),
         OutlinedButton.icon(
           onPressed: _calculatePrice,
