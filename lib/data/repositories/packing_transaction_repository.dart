@@ -151,6 +151,83 @@ class PackingTransactionRepository {
     );
   }
 
+
+  /// Records a payment and refreshes the cached paid balance atomically.
+  /// Overpayments and payments on cancelled transactions are rejected.
+  Future<void> addPayment({
+    required int transactionId,
+    required int amount,
+    required String paymentMethod,
+    String note = '',
+  }) async {
+    if (amount <= 0) throw ArgumentError('Nominal pembayaran harus lebih dari nol.');
+    if (paymentMethod.trim().isEmpty) throw ArgumentError('Metode pembayaran wajib dipilih.');
+    final db = await _database.database;
+    final now = DateTime.now().toUtc().toIso8601String();
+    await db.transaction((txn) async {
+      final rows = await txn.query(
+        'packing_transactions',
+        where: 'id = ?',
+        whereArgs: [transactionId],
+        limit: 1,
+      );
+      if (rows.isEmpty) throw StateError('Transaksi tidak ditemukan.');
+      final transaction = rows.first;
+      if (transaction['status'] == 'cancelled') {
+        throw StateError('Transaksi yang dibatalkan tidak dapat menerima pembayaran.');
+      }
+      final paid = (transaction['paid_amount'] as num).toInt();
+      final total = (transaction['selling_price'] as num).toInt();
+      if (amount > total - paid) {
+        throw ArgumentError('Pembayaran melebihi sisa tagihan.');
+      }
+      await txn.insert('transaction_payments', {
+        'transaction_id': transactionId,
+        'amount': amount,
+        'payment_method': paymentMethod.trim(),
+        'note': note.trim(),
+        'created_at': now,
+      });
+      final newPaid = paid + amount;
+      await txn.update(
+        'packing_transactions',
+        {
+          'paid_amount': newPaid,
+          'status': newPaid >= total ? 'completed' : 'open',
+          'updated_at': now,
+        },
+        where: 'id = ?',
+        whereArgs: [transactionId],
+      );
+    });
+  }
+
+  Future<List<Map<String, Object?>>> paymentsFor(int transactionId) async {
+    final db = await _database.database;
+    return db.query(
+      'transaction_payments',
+      where: 'transaction_id = ?',
+      whereArgs: [transactionId],
+      orderBy: 'id DESC',
+    );
+  }
+
+  Future<void> cancel(int transactionId, {String reason = ''}) async {
+    final db = await _database.database;
+    final now = DateTime.now().toUtc().toIso8601String();
+    final changed = await db.update(
+      'packing_transactions',
+      {
+        'status': 'cancelled',
+        'note': reason.trim().isEmpty ? 'Transaksi dibatalkan' : reason.trim(),
+        'updated_at': now,
+      },
+      where: "id = ? AND status != 'cancelled'",
+      whereArgs: [transactionId],
+    );
+    if (changed == 0) throw StateError('Transaksi tidak ditemukan atau sudah dibatalkan.');
+  }
+
   void _validate(PackingTransactionDraft draft) {
     if (![draft.lengthCm, draft.widthCm, draft.heightCm]
         .every((v) => v.isFinite && v > 0)) {

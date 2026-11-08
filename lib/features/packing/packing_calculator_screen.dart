@@ -63,6 +63,12 @@ class _PackingCalculatorScreenState extends State<PackingCalculatorScreen> {
     return value.round();
   }
 
+  void _invalidate() {
+    if (_result != null || _price != null) {
+      setState(() { _result = null; _price = null; });
+    }
+  }
+
   void _calculate() {
     FocusScope.of(context).unfocus();
     try {
@@ -144,6 +150,7 @@ class _PackingCalculatorScreenState extends State<PackingCalculatorScreen> {
   }) => TextFormField(
     controller: controller,
     keyboardType: const TextInputType.numberWithOptions(decimal: true),
+    onChanged: (_) => _invalidate(),
     decoration: InputDecoration(
       labelText: label,
       suffixText: suffix,
