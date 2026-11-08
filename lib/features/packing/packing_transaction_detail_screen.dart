@@ -48,7 +48,7 @@ class _PackingTransactionDetailScreenState extends State<PackingTransactionDetai
   String _money(Object? value) {
     final amount = (value as num?)?.toInt() ?? 0;
     return 'Rp ${amount.toString().replaceAllMapped(
-      RegExp(r'(?<=\\d)(?=(\\d{3})+(?!\\d))'),
+      RegExp(r'(?<=\d)(?=(\d{3})+(?!\d))'),
       (m) => '.',
     )}';
   }
