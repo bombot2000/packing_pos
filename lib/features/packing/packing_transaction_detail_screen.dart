@@ -29,14 +29,13 @@ class _PackingTransactionDetailScreenState extends State<PackingTransactionDetai
 
   Future<void> _refresh() async {
     try {
-      final tx = await _repository.listRecent(limit: 500);
-      final found = tx.where((row) => (row['id'] as num).toInt() == widget.transactionId);
-      if (found.isEmpty) throw StateError('Transaksi tidak ditemukan.');
+      final found = await _repository.findById(widget.transactionId);
+      if (found == null) throw StateError('Transaksi tidak ditemukan.');
       final materials = await _repository.materialsFor(widget.transactionId);
       final payments = await _repository.paymentsFor(widget.transactionId);
       if (!mounted) return;
       setState(() {
-        _transaction = found.first;
+        _transaction = found;
         _materials = materials;
         _payments = payments;
         _error = null;
@@ -207,6 +206,8 @@ class _PackingTransactionDetailScreenState extends State<PackingTransactionDetai
               Text('Ukuran: ${dimensions['length'] ?? tx['length_cm']} × ${dimensions['width'] ?? tx['width_cm']} × ${dimensions['height'] ?? tx['height_cm']} cm'),
               Text('Tanggal: ${tx['created_at']}'),
               if ((tx['note'] as String).isNotEmpty) Text('Catatan: ${tx['note']}'),
+              if ((tx['cancellation_reason'] as String? ?? '').isNotEmpty)
+                Text('Alasan pembatalan: ${tx['cancellation_reason']}'),
             ]),
           )),
           if (boardPlan != null) ...[

@@ -7,7 +7,7 @@ class PackingDatabase {
   PackingDatabase._();
   static final PackingDatabase instance = PackingDatabase._();
 
-  static const int schemaVersion = 1;
+  static const int schemaVersion = 2;
   Database? _database;
 
   Future<Database> get database async {
@@ -45,6 +45,7 @@ class PackingDatabase {
         status TEXT NOT NULL DEFAULT 'open'
           CHECK(status IN ('open', 'completed', 'cancelled')),
         note TEXT NOT NULL DEFAULT '',
+        cancellation_reason TEXT NOT NULL DEFAULT '',
         created_at TEXT NOT NULL,
         updated_at TEXT NOT NULL
       )
@@ -103,7 +104,12 @@ class PackingDatabase {
   }
 
   Future<void> _upgrade(Database db, int oldVersion, int newVersion) async {
-    // Add explicit migrations here when schemaVersion increases.
+    if (oldVersion < 2) {
+      await db.execute(
+        "ALTER TABLE packing_transactions "
+        "ADD COLUMN cancellation_reason TEXT NOT NULL DEFAULT ''",
+      );
+    }
     // Deliberately no destructive fallback or drop-table behavior.
   }
 }

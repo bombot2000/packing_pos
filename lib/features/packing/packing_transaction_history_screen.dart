@@ -17,10 +17,10 @@ class _PackingTransactionHistoryScreenState extends State<PackingTransactionHist
   @override
   void initState() {
     super.initState();
-    _future = _repository.listRecent();
+    _future = _repository.listRecent(limit: 500);
   }
 
-  void _refresh() => setState(() => _future = _repository.listRecent());
+  void _refresh() => setState(() => _future = _repository.listRecent(limit: 500));
 
   String _money(Object? value) {
     final amount = (value as num?)?.toInt() ?? 0;

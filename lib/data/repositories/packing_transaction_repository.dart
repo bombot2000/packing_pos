@@ -178,6 +178,17 @@ class PackingTransactionRepository {
     );
   }
 
+  Future<Map<String, Object?>?> findById(int id) async {
+    final db = await _database.database;
+    final rows = await db.query(
+      'packing_transactions',
+      where: 'id = ?',
+      whereArgs: [id],
+      limit: 1,
+    );
+    return rows.isEmpty ? null : rows.first;
+  }
+
   Future<Map<String, Object?>?> findByReceipt(String receiptNo) async {
     final db = await _database.database;
     final rows = await db.query(
@@ -267,7 +278,7 @@ class PackingTransactionRepository {
       'packing_transactions',
       {
         'status': 'cancelled',
-        'note': reason.trim().isEmpty ? 'Transaksi dibatalkan' : reason.trim(),
+        'cancellation_reason': reason.trim().isEmpty ? 'Tidak disebutkan' : reason.trim(),
         'updated_at': now,
       },
       where: "id = ? AND status != 'cancelled'",
@@ -338,7 +349,7 @@ class PackingTransactionRepository {
         db.query(table, orderBy: 'id');
     return {
       'format': 'packing_pos_backup',
-      'version': 1,
+      'version': 2,
       'createdAt': DateTime.now().toUtc().toIso8601String(),
       'packing_transactions': await rows('packing_transactions'),
       'transaction_materials': await rows('transaction_materials'),
@@ -351,7 +362,7 @@ class PackingTransactionRepository {
   /// Replaces local data only after validating the backup envelope. All table
   /// changes run in one SQLite transaction; invalid files roll back entirely.
   Future<void> restoreBackup(Map<String, dynamic> backup) async {
-    if (backup['format'] != 'packing_pos_backup' || backup['version'] != 1) {
+    if (backup['format'] != 'packing_pos_backup' || ![1, 2].contains(backup['version'])) {
       throw const FormatException('Format atau versi backup tidak didukung.');
     }
     const tables = [
