@@ -43,7 +43,19 @@ void main() {
       );
     });
 
-    test('accepts empty optional app setting values', () {\n      final backup = validBackup();\n      backup['app_settings'] = [\n        {\n          'key': 'optional_printer_alias',\n          'value': '',\n          'updated_at': '2026-11-09T00:00:00.000Z',\n        },\n      ];\n      expect(() => PackingBackupValidator.validate(backup), returnsNormally);\n    });\n\n    test('rejects malformed calculation snapshots before restore', () {
+    test('accepts empty optional app setting values', () {
+      final backup = validBackup();
+      backup['app_settings'] = [
+        {
+          'key': 'optional_printer_alias',
+          'value': '',
+          'updated_at': '2026-11-09T00:00:00.000Z',
+        },
+      ];
+      expect(() => PackingBackupValidator.validate(backup), returnsNormally);
+    });
+
+    test('rejects malformed calculation snapshots before restore', () {
       final backup = validBackup();
       backup['packing_transactions']![0]['calculation_snapshot'] = '{broken';
       expect(
