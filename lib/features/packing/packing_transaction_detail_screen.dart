@@ -190,6 +190,8 @@ class _PackingTransactionDetailScreenState extends State<PackingTransactionDetai
         final snapshotData = jsonDecode(tx['calculation_snapshot'] as String) as Map<String, dynamic>;
         final dimensions = snapshotData['dimensionsCm'] as Map<String, dynamic>? ?? {};
         final frameData = snapshotData['frame'] as Map<String, dynamic>?;
+        final timberPlan = snapshotData['timberCutPlan'] as Map<String, dynamic>?;
+        final timberBins = timberPlan?['bins'] as List<dynamic>? ?? const [];
         final frameCuts = frameData?['cuts'] as List<dynamic>? ?? const [];
         return ListView(padding: const EdgeInsets.all(16), children: [
           Card(child: Padding(
@@ -205,6 +207,29 @@ class _PackingTransactionDetailScreenState extends State<PackingTransactionDetai
               if ((tx['note'] as String).isNotEmpty) Text('Catatan: ${tx['note']}'),
             ]),
           )),
+          if (timberPlan != null) ...[
+            const SizedBox(height: 8),
+            const Text('Rencana pembelian dan potong stok', style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold)),
+            Card(child: Column(children: [
+              ListTile(title: const Text('Perkiraan batang'), trailing: Text((timberPlan['stockCount'] as num).toString())),
+              ListTile(title: const Text('Panjang stok per batang'), trailing: Text((timberPlan['stockLengthCm'] as num).toStringAsFixed(1) + ' cm')),
+              ListTile(title: const Text('Sisa total'), trailing: Text((timberPlan['leftoverLengthCm'] as num).toStringAsFixed(1) + ' cm')),
+              ...timberBins.map((raw) {
+                final bin = raw as Map<String, dynamic>;
+                final cuts = (bin['cuts'] as List<dynamic>? ?? const [])
+                    .map((rawCut) {
+                      final cut = rawCut as Map<String, dynamic>;
+                      return (cut['label']?.toString() ?? 'Potongan') + ' ' + (cut['lengthCm'] as num).toStringAsFixed(1) + ' cm';
+                    }).join(' • ');
+                return ListTile(
+                  dense: true,
+                  title: Text('Batang ' + bin['number'].toString()),
+                  subtitle: Text(cuts),
+                  trailing: Text('Sisa ' + (bin['remainingLengthCm'] as num).toStringAsFixed(1) + ' cm'),
+                );
+              }),
+            ])),
+          ],
           if (frameData != null) ...[
             const SizedBox(height: 8),
             const Text('Rincian potongan rangka', style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold)),
