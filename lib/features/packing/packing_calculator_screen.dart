@@ -783,6 +783,25 @@ class _PackingCalculatorScreenState extends State<PackingCalculatorScreen> {
         Expanded(child: _numberField('Tinggi', _height, suffix: 'cm')),
       ]),
       _sectionTitle('Rangka utama 8 sudut'),
+      DropdownButtonFormField<String>(
+        value: _frameJointMethod,
+        decoration: const InputDecoration(
+          labelText: 'Metode sambungan rangka',
+          border: OutlineInputBorder(),
+        ),
+        items: const [
+          DropdownMenuItem(value: 'butt', child: Text('Sambungan tumpul')),
+          DropdownMenuItem(value: 'overlap', child: Text('Sambungan tumpang')),
+          DropdownMenuItem(value: 'halfLap', child: Text('Takik setengah')),
+          DropdownMenuItem(value: 'manual', child: Text('Potongan custom / manual')),
+        ],
+        onChanged: (value) {
+          if (value != null) setState(() { _frameJointMethod = value; _result = null; _price = null; });
+        },
+      ),
+      const SizedBox(height: 8),
+      const Text('Metode sambungan dicatat pada nota. Panjang potong tiang dan rel tetap dapat diubah manual; aplikasi tidak mengurangi tebal kayu otomatis karena orientasi penampang dan detail sambungan harus mengikuti konstruksi nyata.'),
+
       Row(children: [
         Expanded(child: _numberField('Stok kayu rangka', _frameStockLength, suffix: 'cm')),
         const SizedBox(width: 8),
