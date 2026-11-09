@@ -7,11 +7,12 @@ Flutter POS khusus jasa packing barang, bukan aplikasi transaksi pengiriman/kuri
 - Transaksi packing berdasarkan panjang, lebar, dan tinggi barang.
 - Enam bidang dikonfigurasi independen: atas, bawah, depan, belakang, kiri, dan kanan.
 - Konstruksi bidang: bilah kayu terbuka, papan tertutup, atau tidak digunakan.
+- Margin kiri/kanan bilah dan overlap panjang/lebar papan dapat diatur terpisah untuk setiap bidang.
 - Celah bilah tetap; sisa lebar tepi dilaporkan dan celah tidak direnggangkan.
 - Estimasi rangka 8 sudut: empat tiang, empat rel arah panjang, dan empat rel arah lebar. Panjang potong dapat disesuaikan.
-- Daftar potongan kayu dan optimasi jumlah batang berbasis first-fit decreasing dengan allowance mata gergaji.
+- Daftar potongan rangka dan bilah dipisah menurut kelompok bahan/penampang; panjang stok masing-masing dapat diatur dan optimasi jumlah batang memakai first-fit decreasing dengan allowance mata gergaji.
 - Nesting papan lembar berbasis guillotine best-short-side-fit dengan rotasi.
-- Dua mode harga pembelian: kayu per meter atau per batang; papan per m² atau per lembar.
+- Mode harga pembelian terpisah untuk rangka dan bilah: per meter atau per batang; papan per m² atau per lembar.
 - Master bahan dengan snapshot nama, satuan, dan harga saat transaksi.
 - Jumlah aktual dapat disesuaikan dengan alasan wajib jika berbeda dari hasil hitung.
 - Nota transaksi, pembayaran bertahap, pembatalan dengan alasan, riwayat transaksi.
