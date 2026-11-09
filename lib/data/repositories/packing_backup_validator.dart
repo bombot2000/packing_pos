@@ -138,7 +138,14 @@ class PackingBackupValidator {
     return data;
   }
 
-  static String _string(Object? value, String field) {\n    if (value is! String) {\n      throw FormatException('$field harus berupa teks.');\n    }\n    return value;\n  }\n\n  static String _text(Object? value, String field) {
+  static String _string(Object? value, String field) {
+    if (value is! String) {
+      throw FormatException('$field harus berupa teks.');
+    }
+    return value;
+  }
+
+  static String _text(Object? value, String field) {
     if (value is! String || value.trim().isEmpty) {
       throw FormatException('$field wajib berupa teks dan tidak boleh kosong.');
     }
