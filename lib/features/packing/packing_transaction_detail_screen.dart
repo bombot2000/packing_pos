@@ -70,6 +70,19 @@ class _PackingTransactionDetailScreenState extends State<PackingTransactionDetai
     }
   }
 
+
+  String _faceLabel(String value) {
+    switch (value) {
+      case 'top': return 'Atas';
+      case 'bottom': return 'Bawah';
+      case 'front': return 'Depan';
+      case 'back': return 'Belakang';
+      case 'left': return 'Kiri';
+      case 'right': return 'Kanan';
+      default: return value;
+    }
+  }
+
   Future<void> _addPayment() async {
     final amountController = TextEditingController();
     final noteController = TextEditingController();
@@ -188,6 +201,7 @@ class _PackingTransactionDetailScreenState extends State<PackingTransactionDetai
         final status = tx['status'] as String;
         final snapshotData = jsonDecode(tx['calculation_snapshot'] as String) as Map<String, dynamic>;
         final dimensions = snapshotData['dimensionsCm'] as Map<String, dynamic>? ?? {};
+        final faceSettings = snapshotData['faceSettings'] as List<dynamic>? ?? const [];
         final frameData = snapshotData['frame'] as Map<String, dynamic>?;
         final timberPlan = snapshotData['timberCutPlan'] as Map<String, dynamic>?;
         final boardPlan = snapshotData['boardSheetPlan'] as Map<String, dynamic>?;
@@ -210,6 +224,25 @@ class _PackingTransactionDetailScreenState extends State<PackingTransactionDetai
                 Text('Alasan pembatalan: ${tx['cancellation_reason']}'),
             ]),
           )),
+          if (faceSettings.isNotEmpty) ...[
+            const SizedBox(height: 8),
+            const Text('Pengaturan keenam bidang', style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold)),
+            Card(child: Column(children: faceSettings.map((raw) {
+              final setting = raw as Map<String, dynamic>;
+              final face = setting['face']?.toString() ?? '';
+              final mode = setting['buildType']?.toString() ?? '';
+              final detail = mode == 'openSlat'
+                  ? 'Margin kiri ${setting['leftMarginCm']} cm • kanan ${setting['rightMarginCm']} cm'
+                  : mode == 'closedBoard'
+                      ? 'Overlap panjang ${setting['boardOverlapLengthCm']} cm • lebar ${setting['boardOverlapWidthCm']} cm'
+                      : 'Tidak menggunakan bidang';
+              return ListTile(
+                dense: true,
+                title: Text(_faceLabel(face)),
+                subtitle: Text(mode + ' • ' + detail),
+              );
+            }).toList())),
+          ],
           if (boardPlan != null) ...[
             const SizedBox(height: 8),
             const Text('Rencana nesting lembar papan', style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold)),
