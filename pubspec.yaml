@@ -13,6 +13,9 @@ dependencies:
   path: ^1.9.0
   sqflite: ^2.3.3+1
   shared_preferences: ^2.2.3
+  file_picker: ^8.1.7
+  path_provider: ^2.1.5
+  share_plus: ^10.1.4
 dev_dependencies:
   flutter_test:
     sdk: flutter

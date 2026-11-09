@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import 'features/packing/packing_calculator_screen.dart';
 import 'features/packing/packing_transaction_history_screen.dart';
 import 'features/packing/material_master_screen.dart';
+import 'features/packing/packing_reports_screen.dart';
+import 'features/packing/packing_backup_screen.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
@@ -66,8 +68,20 @@ class HomePage extends StatelessWidget {
         trailing: const Icon(Icons.chevron_right),
         onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const MaterialMasterScreen())),
       )),
-      const ListTile(leading: Icon(Icons.bar_chart), title: Text('Laporan — tahap berikutnya')),
-      const ListTile(leading: Icon(Icons.backup), title: Text('Backup dan restore — tahap berikutnya')),
+      Card(child: ListTile(
+        leading: const Icon(Icons.bar_chart),
+        title: const Text('Laporan usaha'),
+        subtitle: const Text('Ringkasan penjualan, pembayaran, piutang, dan pemakaian bahan.'),
+        trailing: const Icon(Icons.chevron_right),
+        onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const PackingReportsScreen())),
+      )),
+      Card(child: ListTile(
+        leading: const Icon(Icons.backup),
+        title: const Text('Backup dan restore'),
+        subtitle: const Text('Ekspor dan pulihkan data lokal melalui file JSON.'),
+        trailing: const Icon(Icons.chevron_right),
+        onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const PackingBackupScreen())),
+      )),
     ]),
   );
 }
