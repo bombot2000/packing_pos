@@ -121,50 +121,14 @@ jobs:
           done
           exit 1
 
-      - name: Check persistent release signing secrets
-        id: signing
-        env:
-          KEYSTORE_B64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
-          KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
-          KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
-          STORE_PASSWORD: ${{ secrets.ANDROID_STORE_PASSWORD || secrets.ANDROID_KEYSTORE_PASSWORD }}
+      - name: Prepare debug APK for GitHub Release
+        if: startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch'
         run: |
-          if [ -n "$KEYSTORE_B64" ] && [ -n "$KEY_ALIAS" ] && [ -n "$KEY_PASSWORD" ] && [ -n "$STORE_PASSWORD" ]; then
-            echo "ready=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "ready=false" >> "$GITHUB_OUTPUT"
-            echo "::warning::APK release dilewati. Konfigurasikan empat secret keystore permanen agar update APK tidak berganti tanda tangan."
-          fi
+          cp build/app/outputs/flutter-apk/app-debug.apk packing-pos-debug.apk
+          sha256sum packing-pos-debug.apk
 
-      - name: Configure permanent Android signing
-        if: steps.signing.outputs.ready == 'true'
-        env:
-          KEYSTORE_B64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
-          KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
-          KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
-          STORE_PASSWORD: ${{ secrets.ANDROID_STORE_PASSWORD }}
-        run: |
-          echo "$KEYSTORE_B64" | base64 --decode > android/app/packing-pos-release.jks
-          cat > android/key.properties <<EOF
-          storeFile=packing-pos-release.jks
-          keyAlias=$KEY_ALIAS
-          keyPassword=$KEY_PASSWORD
-          storePassword=$STORE_PASSWORD
-          EOF
-          python3 tool/configure_android_release_signing.py
-
-      - name: Build signed release APK
-        if: steps.signing.outputs.ready == 'true'
-        run: |
-          for attempt in 1 2 3; do
-            flutter build apk --release && exit 0
-            echo "Build release gagal pada percobaan $attempt; mencoba ulang..."
-            sleep 15
-          done
-          exit 1
-
-      - name: Publish APK to GitHub Release
-        if: steps.signing.outputs.ready == 'true' && (startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch')
+      - name: Publish debug APK to GitHub Release
+        if: startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch'
         env:
           GH_TOKEN: ${{ github.token }}
           INPUT_RELEASE_TAG: ${{ inputs.release_tag }}
@@ -174,10 +138,10 @@ jobs:
           elif [ -n "${INPUT_RELEASE_TAG}" ]; then
             TAG="${INPUT_RELEASE_TAG}"
           else
-            TAG="packing-pos-${GITHUB_RUN_NUMBER}"
+            TAG="packing-pos-debug-${GITHUB_RUN_NUMBER}"
           fi
           gh release view "$TAG" >/dev/null 2>&1 || gh release create "$TAG" \
             --target "${GITHUB_SHA}" \
-            --title "Packing POS $TAG" \
-            --notes "Build otomatis Packing POS. APK ditandatangani dengan keystore permanen."
-          gh release upload "$TAG" build/app/outputs/flutter-apk/app-release.apk --clobber
+            --title "Packing POS Debug $TAG" \
+            --notes "APK debug untuk pengujian. APK ini otomatis ditandatangani dengan debug keystore sementara milik GitHub Actions, bukan keystore permanen. Sertifikat dapat berbeda antar-build sehingga mungkin tidak dapat memasang sebagai pembaruan di atas aplikasi yang sudah terpasang. Jangan hapus aplikasi lama jika data lokal belum dicadangkan."
+          gh release upload "$TAG" packing-pos-debug.apk --clobber
