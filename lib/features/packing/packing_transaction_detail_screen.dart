@@ -71,6 +71,39 @@ class _PackingTransactionDetailScreenState extends State<PackingTransactionDetai
   }
 
 
+
+  Widget _timberPlanCard(String title, Map<String, dynamic> plan) {
+    final bins = plan['bins'] as List<dynamic>? ?? const [];
+    return Card(child: Column(children: [
+      ListTile(
+        title: Text(title, style: const TextStyle(fontWeight: FontWeight.bold)),
+        trailing: Text((plan['stockCount'] as num).toString()),
+      ),
+      ListTile(
+        title: const Text('Panjang stok per batang'),
+        trailing: Text((plan['stockLengthCm'] as num).toStringAsFixed(1) + ' cm'),
+      ),
+      ListTile(
+        title: const Text('Sisa total'),
+        trailing: Text((plan['leftoverLengthCm'] as num).toStringAsFixed(1) + ' cm'),
+      ),
+      ...bins.map((raw) {
+        final bin = raw as Map<String, dynamic>;
+        final cuts = (bin['cuts'] as List<dynamic>? ?? const []).map((rawCut) {
+          final cut = rawCut as Map<String, dynamic>;
+          return (cut['label']?.toString() ?? 'Potongan') + ' ' +
+              (cut['lengthCm'] as num).toStringAsFixed(1) + ' cm';
+        }).join(' • ');
+        return ListTile(
+          dense: true,
+          title: Text(title + ' ' + bin['number'].toString()),
+          subtitle: Text(cuts),
+          trailing: Text('Sisa ' + (bin['remainingLengthCm'] as num).toStringAsFixed(1) + ' cm'),
+        );
+      }),
+    ]));
+  }
+
   String _faceLabel(String value) {
     switch (value) {
       case 'top': return 'Atas';
@@ -203,10 +236,12 @@ class _PackingTransactionDetailScreenState extends State<PackingTransactionDetai
         final dimensions = snapshotData['dimensionsCm'] as Map<String, dynamic>? ?? {};
         final faceSettings = snapshotData['faceSettings'] as List<dynamic>? ?? const [];
         final frameData = snapshotData['frame'] as Map<String, dynamic>?;
-        final timberPlan = snapshotData['timberCutPlan'] as Map<String, dynamic>?;
+        final timberPlans = snapshotData['timberCutPlans'] as Map<String, dynamic>?;
+        final legacyTimberPlan = snapshotData['timberCutPlan'] as Map<String, dynamic>?;
+        final frameTimberPlan = timberPlans?['frame'] as Map<String, dynamic>? ?? legacyTimberPlan;
+        final slatTimberPlan = timberPlans?['slat'] as Map<String, dynamic>?;
         final boardPlan = snapshotData['boardSheetPlan'] as Map<String, dynamic>?;
         final boardSheets = boardPlan?['sheets'] as List<dynamic>? ?? const [];
-        final timberBins = timberPlan?['bins'] as List<dynamic>? ?? const [];
         final frameCuts = frameData?['cuts'] as List<dynamic>? ?? const [];
         return ListView(padding: const EdgeInsets.all(16), children: [
           Card(child: Padding(
@@ -266,28 +301,13 @@ class _PackingTransactionDetailScreenState extends State<PackingTransactionDetai
               }),
             ])),
           ],
-          if (timberPlan != null) ...[
+          if (frameTimberPlan != null) ...[
             const SizedBox(height: 8),
-            const Text('Rencana pembelian dan potong stok', style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold)),
-            Card(child: Column(children: [
-              ListTile(title: const Text('Perkiraan batang'), trailing: Text((timberPlan['stockCount'] as num).toString())),
-              ListTile(title: const Text('Panjang stok per batang'), trailing: Text((timberPlan['stockLengthCm'] as num).toStringAsFixed(1) + ' cm')),
-              ListTile(title: const Text('Sisa total'), trailing: Text((timberPlan['leftoverLengthCm'] as num).toStringAsFixed(1) + ' cm')),
-              ...timberBins.map((raw) {
-                final bin = raw as Map<String, dynamic>;
-                final cuts = (bin['cuts'] as List<dynamic>? ?? const [])
-                    .map((rawCut) {
-                      final cut = rawCut as Map<String, dynamic>;
-                      return (cut['label']?.toString() ?? 'Potongan') + ' ' + (cut['lengthCm'] as num).toStringAsFixed(1) + ' cm';
-                    }).join(' • ');
-                return ListTile(
-                  dense: true,
-                  title: Text('Batang ' + bin['number'].toString()),
-                  subtitle: Text(cuts),
-                  trailing: Text('Sisa ' + (bin['remainingLengthCm'] as num).toStringAsFixed(1) + ' cm'),
-                );
-              }),
-            ])),
+            _timberPlanCard('Batang rangka', frameTimberPlan),
+          ],
+          if (slatTimberPlan != null) ...[
+            const SizedBox(height: 8),
+            _timberPlanCard('Batang bilah', slatTimberPlan),
           ],
           if (frameData != null) ...[
             const SizedBox(height: 8),
