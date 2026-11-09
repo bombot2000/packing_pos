@@ -30,14 +30,18 @@ class _PackingCalculatorScreenState extends State<PackingCalculatorScreen> {
   final _actualFrameMeters = TextEditingController();
   final _frameAdjustmentReason = TextEditingController();
   final _framePrice = TextEditingController(text: '0');
-  final _timberStockLength = TextEditingController(text: '400');
+  final _frameStockLength = TextEditingController(text: '400');
+  final _slatStockLength = TextEditingController(text: '400');
   final _sawKerf = TextEditingController(text: '0.3');
   final _boardSheetLength = TextEditingController(text: '244');
   final _boardSheetWidth = TextEditingController(text: '122');
   final _boardKerf = TextEditingController(text: '0.3');
-  final _stockPrice = TextEditingController(text: '0');
-  final _actualStockBars = TextEditingController();
-  final _stockAdjustmentReason = TextEditingController();
+  final _frameStockPrice = TextEditingController(text: '0');
+  final _actualFrameStockBars = TextEditingController();
+  final _frameStockAdjustmentReason = TextEditingController();
+  final _slatStockPrice = TextEditingController(text: '0');
+  final _actualSlatStockBars = TextEditingController();
+  final _slatStockAdjustmentReason = TextEditingController();
   final _boardSheetPrice = TextEditingController(text: '0');
   final _actualBoardSheets = TextEditingController();
   final _boardSheetAdjustmentReason = TextEditingController();
@@ -57,9 +61,11 @@ class _PackingCalculatorScreenState extends State<PackingCalculatorScreen> {
   int? _selectedFrameMaterialId;
   int? _selectedSlatMaterialId;
   int? _selectedBoardMaterialId;
-  int? _selectedStockMaterialId;
+  int? _selectedFrameStockMaterialId;
+  int? _selectedSlatStockMaterialId;
   int? _selectedBoardSheetMaterialId;
-  bool _priceTimberByStock = false;
+  bool _priceFrameByStock = false;
+  bool _priceSlatByStock = false;
   bool _priceBoardBySheet = false;
   bool _loadingMaterials = true;
   String? _materialLoadError;
@@ -126,13 +132,20 @@ class _PackingCalculatorScreenState extends State<PackingCalculatorScreen> {
     _calculatePrice();
   }
 
-  void _selectStockMaterial(int? id) {
+  void _selectFrameStockMaterial(int? id) {
     final material = _selectedMasterMaterial(id);
     setState(() {
-      _selectedStockMaterialId = id;
-      if (material != null) {
-        _stockPrice.text = (material['current_unit_price'] as num).toInt().toString();
-      }
+      _selectedFrameStockMaterialId = id;
+      if (material != null) _frameStockPrice.text = (material['current_unit_price'] as num).toInt().toString();
+    });
+    _calculatePrice();
+  }
+
+  void _selectSlatStockMaterial(int? id) {
+    final material = _selectedMasterMaterial(id);
+    setState(() {
+      _selectedSlatStockMaterialId = id;
+      if (material != null) _slatStockPrice.text = (material['current_unit_price'] as num).toInt().toString();
     });
     _calculatePrice();
   }
@@ -227,7 +240,8 @@ class _PackingCalculatorScreenState extends State<PackingCalculatorScreen> {
   };
   PackingDimensions? _dimensions;
   FrameEstimate? _frameResult;
-  TimberCutPlan? _timberPlan;
+  TimberCutPlan? _frameTimberPlan;
+  TimberCutPlan? _slatTimberPlan;
   BoardSheetPlan? _boardPlan;
   PackingFacesResult? _result;
   PriceResult? _price;
@@ -239,9 +253,10 @@ class _PackingCalculatorScreenState extends State<PackingCalculatorScreen> {
     for (final controller in [
       _customer, _item, _length, _width, _height, _slatWidth, _gap,
       _framePostLength, _frameLengthRail, _frameWidthRail, _actualFrameMeters,
-      _frameAdjustmentReason, _framePrice, _timberStockLength, _sawKerf,
+      _frameAdjustmentReason, _framePrice, _frameStockLength, _slatStockLength, _sawKerf,
       _boardSheetLength, _boardSheetWidth, _boardKerf,
-      _stockPrice, _actualStockBars, _stockAdjustmentReason,
+      _frameStockPrice, _actualFrameStockBars, _frameStockAdjustmentReason,
+      _slatStockPrice, _actualSlatStockBars, _slatStockAdjustmentReason,
       _boardSheetPrice, _actualBoardSheets, _boardSheetAdjustmentReason,
       _slatPrice, _boardPrice, _labor, _overhead, _markup, _note,
       _actualSlatMeters, _actualBoardArea, _slatAdjustmentReason, _boardAdjustmentReason,
@@ -314,22 +329,27 @@ class _PackingCalculatorScreenState extends State<PackingCalculatorScreen> {
         boardOverlapWidthCm: _number(_faceBoardOverlapWidth[face]!, 'Overlap lebar ' + _faceName(face), allowZero: true),
       )).toList();
       final result = PackingFacesCalculator.calculate(dimensions: dimensions, configs: configs);
-      final cutPieces = <TimberCutPiece>[
-        ...frame.cutList.map((cut) => TimberCutPiece(
-          label: cut.label,
-          lengthCm: cut.lengthCm,
-          quantity: cut.count,
-        )),
-        ...result.faces.where((face) => face.slat != null && face.slat!.count > 0).map((face) => TimberCutPiece(
-          label: 'Bilah ' + _faceName(face.face),
-          lengthCm: dimensions.faceSize(face.face).length,
-          quantity: face.slat!.count,
-        )),
-      ];
-      final timberPlan = TimberCutOptimizer.optimize(
-        stockLengthCm: _number(_timberStockLength, 'Panjang stok kayu'),
+      final frameCutPieces = frame.cutList.map((cut) => TimberCutPiece(
+        label: cut.label,
+        lengthCm: cut.lengthCm,
+        quantity: cut.count,
+      )).toList();
+      final slatCutPieces = result.faces
+          .where((face) => face.slat != null && face.slat!.count > 0)
+          .map((face) => TimberCutPiece(
+            label: 'Bilah ' + _faceName(face.face),
+            lengthCm: dimensions.faceSize(face.face).length,
+            quantity: face.slat!.count,
+          )).toList();
+      final frameTimberPlan = TimberCutOptimizer.optimize(
+        stockLengthCm: _number(_frameStockLength, 'Panjang stok kayu rangka'),
         kerfCm: _number(_sawKerf, 'Lebar mata gergaji', allowZero: true),
-        pieces: cutPieces,
+        pieces: frameCutPieces,
+      );
+      final slatTimberPlan = TimberCutOptimizer.optimize(
+        stockLengthCm: _number(_slatStockLength, 'Panjang stok kayu bilah'),
+        kerfCm: _number(_sawKerf, 'Lebar mata gergaji', allowZero: true),
+        pieces: slatCutPieces,
       );
       final boardPieces = result.faces
           .where((face) => face.buildType == FaceBuildType.closedBoard)
@@ -359,11 +379,14 @@ class _PackingCalculatorScreenState extends State<PackingCalculatorScreen> {
       setState(() {
         _dimensions = dimensions;
         _frameResult = frame;
-        _timberPlan = timberPlan;
+        _frameTimberPlan = frameTimberPlan;
+        _slatTimberPlan = slatTimberPlan;
         _boardPlan = boardPlan;
         _actualFrameMeters.text = frame.totalMeters.toStringAsFixed(3);
-        _actualStockBars.text = timberPlan.stockCount.toString();
-        _stockAdjustmentReason.clear();
+        _actualFrameStockBars.text = frameTimberPlan.stockCount.toString();
+        _frameStockAdjustmentReason.clear();
+        _actualSlatStockBars.text = slatTimberPlan.stockCount.toString();
+        _slatStockAdjustmentReason.clear();
         _actualBoardSheets.text = boardPlan.sheetCount.toString();
         _boardSheetAdjustmentReason.clear();
         _frameAdjustmentReason.clear();
@@ -396,14 +419,22 @@ class _PackingCalculatorScreenState extends State<PackingCalculatorScreen> {
       final actualSlat = _actualQuantity(_actualSlatMeters, 'Jumlah aktual kayu bilah');
       final actualBoard = _actualQuantity(_actualBoardArea, 'Jumlah aktual papan');
       final lines = <MaterialCostLine>[];
-      if (_priceTimberByStock) {
+      if (_priceFrameByStock) {
         lines.add(MaterialCostLine(
-          name: _selectedMasterMaterial(_selectedStockMaterialId)?['name']?.toString() ?? 'Kayu stok',
-          quantity: _wholeQuantity(_actualStockBars, 'Jumlah batang kayu aktual'),
-          unitPrice: _integer(_stockPrice, 'Harga per batang kayu'),
+          name: _selectedMasterMaterial(_selectedFrameStockMaterialId)?['name']?.toString() ?? 'Kayu stok rangka',
+          quantity: _wholeQuantity(_actualFrameStockBars, 'Jumlah batang kayu rangka aktual'),
+          unitPrice: _integer(_frameStockPrice, 'Harga per batang kayu rangka'),
         ));
       } else {
         lines.add(MaterialCostLine(name: 'Kayu rangka', quantity: actualFrame, unitPrice: _integer(_framePrice, 'Harga kayu rangka per meter')));
+      }
+      if (_priceSlatByStock) {
+        lines.add(MaterialCostLine(
+          name: _selectedMasterMaterial(_selectedSlatStockMaterialId)?['name']?.toString() ?? 'Kayu stok bilah',
+          quantity: _wholeQuantity(_actualSlatStockBars, 'Jumlah batang kayu bilah aktual'),
+          unitPrice: _integer(_slatStockPrice, 'Harga per batang kayu bilah'),
+        ));
+      } else {
         lines.add(MaterialCostLine(name: 'Kayu bilah', quantity: actualSlat, unitPrice: _integer(_slatPrice, 'Harga kayu per meter')));
       }
       if (_priceBoardBySheet) {
@@ -472,6 +503,27 @@ class _PackingCalculatorScreenState extends State<PackingCalculatorScreen> {
     child: Text(title, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
   );
 
+
+  Map<String, Object?> _timberPlanSnapshot(TimberCutPlan plan) => {
+    'strategy': 'firstFitDecreasing',
+    'stockLengthCm': plan.stockLengthCm,
+    'kerfCm': plan.kerfCm,
+    'stockCount': plan.stockCount,
+    'purchasedLengthMeters': plan.purchasedLengthMeters,
+    'totalPieceLengthCm': plan.totalPieceLengthCm,
+    'totalKerfCm': plan.totalKerfCm,
+    'leftoverLengthCm': plan.leftoverLengthCm,
+    'bins': plan.bins.map((bin) => {
+      'number': bin.number,
+      'usedLengthCm': bin.usedLengthCm,
+      'remainingLengthCm': bin.remainingLengthCm,
+      'cuts': bin.cuts.map((cut) => {
+        'label': cut.label,
+        'lengthCm': cut.lengthCm,
+      }).toList(),
+    }).toList(),
+  };
+
   Future<void> _saveTransaction() async {
     if (_result == null || _price == null || _dimensions == null) {
       _calculate();
@@ -480,11 +532,17 @@ class _PackingCalculatorScreenState extends State<PackingCalculatorScreen> {
     setState(() => _saving = true);
     try {
       final actualFrame = _actualQuantity(_actualFrameMeters, 'Jumlah aktual rangka');
-      final actualStockBars = _actualQuantity(_actualStockBars, 'Jumlah batang kayu aktual');
-      if (_priceTimberByStock && _timberPlan != null &&
-          _isAdjusted(actualStockBars, _timberPlan!.stockCount.toDouble()) &&
-          _stockAdjustmentReason.text.trim().isEmpty) {
-        throw const FormatException('Alasan perubahan jumlah batang kayu wajib diisi.');
+      final actualFrameStockBars = _wholeQuantity(_actualFrameStockBars, 'Jumlah batang kayu rangka aktual');
+      if (_priceFrameByStock && _frameTimberPlan != null &&
+          _isAdjusted(actualFrameStockBars, _frameTimberPlan!.stockCount.toDouble()) &&
+          _frameStockAdjustmentReason.text.trim().isEmpty) {
+        throw const FormatException('Alasan perubahan jumlah batang kayu rangka wajib diisi.');
+      }
+      final actualSlatStockBars = _wholeQuantity(_actualSlatStockBars, 'Jumlah batang kayu bilah aktual');
+      if (_priceSlatByStock && _slatTimberPlan != null &&
+          _isAdjusted(actualSlatStockBars, _slatTimberPlan!.stockCount.toDouble()) &&
+          _slatStockAdjustmentReason.text.trim().isEmpty) {
+        throw const FormatException('Alasan perubahan jumlah batang kayu bilah wajib diisi.');
       }
       final actualBoardSheets = _actualQuantity(_actualBoardSheets, 'Jumlah lembar papan aktual');
       if (_priceBoardBySheet && _boardPlan != null &&
@@ -512,7 +570,7 @@ class _PackingCalculatorScreenState extends State<PackingCalculatorScreen> {
           calculatedQuantity: _frameResult!.totalMeters,
           actualQuantity: actualFrame,
           adjustmentNote: _frameAdjustmentReason.text.trim(),
-          unitPrice: _priceTimberByStock ? 0 : _integer(_framePrice, 'Harga kayu rangka per meter'),
+          unitPrice: _priceFrameByStock ? 0 : _integer(_framePrice, 'Harga kayu rangka per meter'),
         ));
       }
       if (_result!.totalSlatMeters > 0) {
@@ -523,7 +581,7 @@ class _PackingCalculatorScreenState extends State<PackingCalculatorScreen> {
           calculatedQuantity: _result!.totalSlatMeters,
           actualQuantity: actualSlat,
           adjustmentNote: _slatAdjustmentReason.text.trim(),
-          unitPrice: _priceTimberByStock ? 0 : _integer(_slatPrice, 'Harga kayu per meter'),
+          unitPrice: _priceSlatByStock ? 0 : _integer(_slatPrice, 'Harga kayu per meter'),
         ));
       }
       if (_result!.totalBoardAreaM2 > 0) {
@@ -537,15 +595,26 @@ class _PackingCalculatorScreenState extends State<PackingCalculatorScreen> {
           unitPrice: _priceBoardBySheet ? 0 : _integer(_boardPrice, 'Harga papan per m²'),
         ));
       }
-      if (_priceTimberByStock && _timberPlan!.stockCount > 0) {
+      if (_priceFrameByStock && _frameTimberPlan!.stockCount > 0) {
         materials.add(MaterialUsageDraft(
-          materialId: _selectedStockMaterialId,
-          name: _selectedMasterMaterial(_selectedStockMaterialId)?['name']?.toString() ?? 'Kayu stok',
+          materialId: _selectedFrameStockMaterialId,
+          name: _selectedMasterMaterial(_selectedFrameStockMaterialId)?['name']?.toString() ?? 'Kayu stok rangka',
           unit: 'batang',
-          calculatedQuantity: _timberPlan!.stockCount.toDouble(),
-          actualQuantity: actualStockBars,
-          adjustmentNote: _stockAdjustmentReason.text.trim(),
-          unitPrice: _integer(_stockPrice, 'Harga per batang kayu'),
+          calculatedQuantity: _frameTimberPlan!.stockCount.toDouble(),
+          actualQuantity: actualFrameStockBars,
+          adjustmentNote: _frameStockAdjustmentReason.text.trim(),
+          unitPrice: _integer(_frameStockPrice, 'Harga per batang kayu rangka'),
+        ));
+      }
+      if (_priceSlatByStock && _slatTimberPlan!.stockCount > 0) {
+        materials.add(MaterialUsageDraft(
+          materialId: _selectedSlatStockMaterialId,
+          name: _selectedMasterMaterial(_selectedSlatStockMaterialId)?['name']?.toString() ?? 'Kayu stok bilah',
+          unit: 'batang',
+          calculatedQuantity: _slatTimberPlan!.stockCount.toDouble(),
+          actualQuantity: actualSlatStockBars,
+          adjustmentNote: _slatStockAdjustmentReason.text.trim(),
+          unitPrice: _integer(_slatStockPrice, 'Harga per batang kayu bilah'),
         ));
       }
       if (_priceBoardBySheet && _boardPlan!.sheetCount > 0) {
@@ -601,24 +670,9 @@ class _PackingCalculatorScreenState extends State<PackingCalculatorScreen> {
             }).toList(),
           }).toList(),
         },
-        'timberCutPlan': {
-          'strategy': 'firstFitDecreasing',
-          'stockLengthCm': _timberPlan!.stockLengthCm,
-          'kerfCm': _timberPlan!.kerfCm,
-          'stockCount': _timberPlan!.stockCount,
-          'purchasedLengthMeters': _timberPlan!.purchasedLengthMeters,
-          'totalPieceLengthCm': _timberPlan!.totalPieceLengthCm,
-          'totalKerfCm': _timberPlan!.totalKerfCm,
-          'leftoverLengthCm': _timberPlan!.leftoverLengthCm,
-          'bins': _timberPlan!.bins.map((bin) => {
-            'number': bin.number,
-            'usedLengthCm': bin.usedLengthCm,
-            'remainingLengthCm': bin.remainingLengthCm,
-            'cuts': bin.cuts.map((cut) => {
-              'label': cut.label,
-              'lengthCm': cut.lengthCm,
-            }).toList(),
-          }).toList(),
+        'timberCutPlans': {
+          'frame': _timberPlanSnapshot(_frameTimberPlan!),
+          'slat': _timberPlanSnapshot(_slatTimberPlan!),
         },
         'frame': {
           'method': 'eightCorner',
@@ -644,8 +698,10 @@ class _PackingCalculatorScreenState extends State<PackingCalculatorScreen> {
           'boardAdjustmentReason': _boardAdjustmentReason.text.trim(),
         },
         'masterMaterialSelection': {
-          'stockMaterialId': _selectedStockMaterialId,
-          'stockMaterialName': _selectedMasterMaterial(_selectedStockMaterialId)?['name'],
+          'frameStockMaterialId': _selectedFrameStockMaterialId,
+          'frameStockMaterialName': _selectedMasterMaterial(_selectedFrameStockMaterialId)?['name'],
+          'slatStockMaterialId': _selectedSlatStockMaterialId,
+          'slatStockMaterialName': _selectedMasterMaterial(_selectedSlatStockMaterialId)?['name'],
           'boardSheetMaterialId': _selectedBoardSheetMaterialId,
           'boardSheetMaterialName': _selectedMasterMaterial(_selectedBoardSheetMaterialId)?['name'],
           'frameMaterialId': _selectedFrameMaterialId,
@@ -656,9 +712,14 @@ class _PackingCalculatorScreenState extends State<PackingCalculatorScreen> {
           'boardMaterialName': _selectedMasterMaterial(_selectedBoardMaterialId)?['name'],
         },
         'pricing': {
-          'timberPurchaseMode': _priceTimberByStock ? 'batang' : 'meter',
-          'timberStockPrice': _integer(_stockPrice, 'Harga per batang kayu'),
-          'actualTimberStockBars': actualStockBars,
+          'framePurchaseMode': _priceFrameByStock ? 'batang' : 'meter',
+          'frameStockMaterialId': _selectedFrameStockMaterialId,
+          'frameStockPrice': _integer(_frameStockPrice, 'Harga per batang kayu rangka'),
+          'actualFrameStockBars': actualFrameStockBars,
+          'slatPurchaseMode': _priceSlatByStock ? 'batang' : 'meter',
+          'slatStockMaterialId': _selectedSlatStockMaterialId,
+          'slatStockPrice': _integer(_slatStockPrice, 'Harga per batang kayu bilah'),
+          'actualSlatStockBars': actualSlatStockBars,
           'boardPurchaseMode': _priceBoardBySheet ? 'lembar' : 'meterPersegi',
           'boardSheetPrice': _integer(_boardSheetPrice, 'Harga per lembar papan'),
           'actualBoardSheets': actualBoardSheets,
@@ -722,6 +783,11 @@ class _PackingCalculatorScreenState extends State<PackingCalculatorScreen> {
         Expanded(child: _numberField('Tinggi', _height, suffix: 'cm')),
       ]),
       _sectionTitle('Rangka utama 8 sudut'),
+      Row(children: [
+        Expanded(child: _numberField('Stok kayu rangka', _frameStockLength, suffix: 'cm')),
+        const SizedBox(width: 8),
+        Expanded(child: _numberField('Stok kayu bilah', _slatStockLength, suffix: 'cm')),
+      ]),
       const Text('Estimasi rangka: 4 tiang sudut mengikuti tinggi barang, 4 rel arah panjang mengikuti panjang barang, dan 4 rel arah lebar mengikuti lebar barang. Isi ukuran potong hanya jika perlu menyesuaikan sambungan atau orientasi kayu; kosong = mengikuti dimensi barang.'),
       const SizedBox(height: 10),
       Row(children: [
@@ -896,45 +962,41 @@ class _PackingCalculatorScreenState extends State<PackingCalculatorScreen> {
           ),
         SwitchListTile(
           contentPadding: EdgeInsets.zero,
-          title: const Text('Hitung kayu berdasarkan batang stok'),
-          subtitle: const Text('Biaya memakai jumlah batang dari rencana potong, bukan meter teoritis.'),
-          value: _priceTimberByStock,
-          onChanged: (value) {
-            setState(() => _priceTimberByStock = value);
-            _calculatePrice();
-          },
+          title: const Text('Harga kayu rangka per batang'),
+          subtitle: const Text('Menggunakan jumlah batang dari rencana potong rangka.'),
+          value: _priceFrameByStock,
+          onChanged: (value) { setState(() => _priceFrameByStock = value); _calculatePrice(); },
         ),
-        if (_priceTimberByStock) ...[
-          _materialSelector(
-            label: 'Master kayu stok (satuan batang)',
-            unit: 'batang',
-            selectedId: _selectedStockMaterialId,
-            onChanged: _selectStockMaterial,
-          ),
-          const SizedBox(height: 10),
-          _numberField('Harga per batang kayu', _stockPrice, currency: true, invalidate: false),
-          const SizedBox(height: 10),
-          Text('Perkiraan batang: ' + (_timberPlan?.stockCount ?? 0).toString()),
-          _numberField('Batang aktual dibeli', _actualStockBars, suffix: 'batang', invalidate: false),
+        if (_priceFrameByStock) ...[
+          _materialSelector(label: 'Master stok rangka (batang)', unit: 'batang', selectedId: _selectedFrameStockMaterialId, onChanged: _selectFrameStockMaterial),
           const SizedBox(height: 8),
-          TextField(controller: _stockAdjustmentReason, maxLines: 2, decoration: const InputDecoration(labelText: 'Alasan perubahan jumlah batang (wajib jika berbeda)', border: OutlineInputBorder())),
+          _numberField('Harga per batang rangka', _frameStockPrice, currency: true, invalidate: false),
+          Text('Perkiraan batang rangka: ' + (_frameTimberPlan?.stockCount ?? 0).toString()),
+          _numberField('Batang rangka aktual dibeli', _actualFrameStockBars, suffix: 'batang', invalidate: false),
+          TextField(controller: _frameStockAdjustmentReason, maxLines: 2, decoration: const InputDecoration(labelText: 'Alasan perubahan batang rangka (wajib jika berbeda)', border: OutlineInputBorder())),
         ] else ...[
-          _materialSelector(
-            label: 'Master kayu rangka (satuan meter)',
-            unit: 'm',
-            selectedId: _selectedFrameMaterialId,
-            onChanged: _selectFrameMaterial,
-          ),
-          const SizedBox(height: 10),
+          _materialSelector(label: 'Master kayu rangka (meter)', unit: 'm', selectedId: _selectedFrameMaterialId, onChanged: _selectFrameMaterial),
+          const SizedBox(height: 8),
           _numberField('Harga kayu rangka per meter', _framePrice, currency: true, invalidate: false),
-          const SizedBox(height: 14),
-          _materialSelector(
-            label: 'Master kayu bilah (satuan meter)',
-            unit: 'm',
-            selectedId: _selectedSlatMaterialId,
-            onChanged: _selectSlatMaterial,
-          ),
-          const SizedBox(height: 10),
+        ],
+        const Divider(height: 24),
+        SwitchListTile(
+          contentPadding: EdgeInsets.zero,
+          title: const Text('Harga kayu bilah per batang'),
+          subtitle: const Text('Menggunakan jumlah batang dari rencana potong bilah.'),
+          value: _priceSlatByStock,
+          onChanged: (value) { setState(() => _priceSlatByStock = value); _calculatePrice(); },
+        ),
+        if (_priceSlatByStock) ...[
+          _materialSelector(label: 'Master stok bilah (batang)', unit: 'batang', selectedId: _selectedSlatStockMaterialId, onChanged: _selectSlatStockMaterial),
+          const SizedBox(height: 8),
+          _numberField('Harga per batang bilah', _slatStockPrice, currency: true, invalidate: false),
+          Text('Perkiraan batang bilah: ' + (_slatTimberPlan?.stockCount ?? 0).toString()),
+          _numberField('Batang bilah aktual dibeli', _actualSlatStockBars, suffix: 'batang', invalidate: false),
+          TextField(controller: _slatStockAdjustmentReason, maxLines: 2, decoration: const InputDecoration(labelText: 'Alasan perubahan batang bilah (wajib jika berbeda)', border: OutlineInputBorder())),
+        ] else ...[
+          _materialSelector(label: 'Master kayu bilah (meter)', unit: 'm', selectedId: _selectedSlatMaterialId, onChanged: _selectSlatMaterial),
+          const SizedBox(height: 8),
           _numberField('Harga kayu bilah per meter', _slatPrice, currency: true, invalidate: false),
         ],
         const Divider(height: 24),
