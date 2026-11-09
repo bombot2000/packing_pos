@@ -71,10 +71,11 @@ void main() {
 
     test('rejects duplicate receipt numbers', () {
       final backup = validBackup();
-      backup['packing_transactions']!.add({
-        ...backup['packing_transactions']![0],
-        'id': 2,
-      });
+      final duplicate = Map<String, Object?>.from(
+        backup['packing_transactions']![0] as Map,
+      );
+      duplicate['id'] = 2;
+      backup['packing_transactions']!.add(duplicate);
       expect(
         () => PackingBackupValidator.validate(backup),
         throwsFormatException,
