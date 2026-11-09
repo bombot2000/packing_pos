@@ -1,4 +1,5 @@
 import 'package:esc_pos_utils_plus/esc_pos_utils_plus.dart';
+import 'package:intl/intl.dart';
 import 'package:print_bluetooth_thermal/print_bluetooth_thermal.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -57,6 +58,10 @@ class PackingReceiptPrinter {
       styles: const PosStyles(align: PosAlign.center, bold: true),
     ));
     bytes.addAll(generator.hr());
+    final createdAt = DateTime.tryParse(transaction['created_at']?.toString() ?? '');
+    if (createdAt != null) {
+      bytes.addAll(generator.text('Tanggal: ' + DateFormat('dd/MM/yyyy HH:mm').format(createdAt.toLocal())));
+    }
     bytes.addAll(generator.text('Pelanggan: ' + (transaction['customer_name']?.toString() ?? '-')));
     bytes.addAll(generator.text('Barang: ' + (transaction['item_description']?.toString() ?? '-')));
     bytes.addAll(generator.text(
@@ -64,6 +69,12 @@ class PackingReceiptPrinter {
       ' x ' + (transaction['width_cm']?.toString() ?? '-') +
       ' x ' + (transaction['height_cm']?.toString() ?? '') + ' cm',
     ));
+    if ((transaction['note']?.toString() ?? '').trim().isNotEmpty) {
+      bytes.addAll(generator.text('Catatan: ' + transaction['note'].toString()));
+    }
+    if ((transaction['cancellation_reason']?.toString() ?? '').trim().isNotEmpty) {
+      bytes.addAll(generator.text('Alasan batal: ' + transaction['cancellation_reason'].toString()));
+    }
     bytes.addAll(generator.hr());
     bytes.addAll(generator.text('RINCIAN BAHAN', styles: const PosStyles(bold: true)));
     for (final material in materials) {
