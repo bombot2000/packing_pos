@@ -278,6 +278,110 @@ class PackingTransactionRepository {
     if (changed == 0) throw StateError('Transaksi tidak ditemukan atau sudah dibatalkan.');
   }
 
+
+  /// Ringkasan laporan lintas transaksi. Transaksi batal tidak dihitung sebagai
+  /// penjualan, tetapi tetap tersimpan pada riwayat.
+  Future<Map<String, Object?>> reportSummary() async {
+    final db = await _database.database;
+    final totals = await db.rawQuery('''
+      SELECT
+        COUNT(*) AS transaction_count,
+        COALESCE(SUM(selling_price), 0) AS sales_total,
+        COALESCE(SUM(paid_amount), 0) AS paid_total,
+        COALESCE(SUM(selling_price - paid_amount), 0) AS receivable_total,
+        SUM(CASE WHEN status = 'completed' THEN 1 ELSE 0 END) AS completed_count,
+        SUM(CASE WHEN status = 'open' THEN 1 ELSE 0 END) AS open_count,
+        SUM(CASE WHEN status = 'cancelled' THEN 1 ELSE 0 END) AS cancelled_count
+      FROM packing_transactions
+      WHERE status != 'cancelled'
+    ''');
+    final materials = await db.rawQuery('''
+      SELECT material_name_snapshot AS name, unit_snapshot AS unit,
+        COALESCE(SUM(actual_quantity), 0) AS quantity,
+        COALESCE(SUM(subtotal), 0) AS cost
+      FROM transaction_materials
+      INNER JOIN packing_transactions
+        ON packing_transactions.id = transaction_materials.transaction_id
+      WHERE packing_transactions.status != 'cancelled'
+      GROUP BY material_name_snapshot, unit_snapshot
+      ORDER BY cost DESC, name COLLATE NOCASE
+    ''');
+    return {
+      'totals': totals.first,
+      'materials': materials,
+    };
+  }
+
+  /// Portable JSON backup. IDs and historical price snapshots are preserved.
+  Future<Map<String, Object?>> exportBackup() async {
+    final db = await _database.database;
+    Future<List<Map<String, Object?>>> rows(String table) =>
+        db.query(table, orderBy: 'id');
+    return {
+      'format': 'packing_pos_backup',
+      'version': 1,
+      'createdAt': DateTime.now().toUtc().toIso8601String(),
+      'packing_transactions': await rows('packing_transactions'),
+      'transaction_materials': await rows('transaction_materials'),
+      'transaction_payments': await rows('transaction_payments'),
+      'materials': await rows('materials'),
+      'app_settings': await db.query('app_settings', orderBy: 'key'),
+    };
+  }
+
+  /// Replaces local data only after validating the backup envelope. All table
+  /// changes run in one SQLite transaction; invalid files roll back entirely.
+  Future<void> restoreBackup(Map<String, dynamic> backup) async {
+    if (backup['format'] != 'packing_pos_backup' || backup['version'] != 1) {
+      throw const FormatException('Format atau versi backup tidak didukung.');
+    }
+    const tables = [
+      'packing_transactions',
+      'transaction_materials',
+      'transaction_payments',
+      'materials',
+      'app_settings',
+    ];
+    final data = <String, List<Map<String, Object?>>>{};
+    for (final table in tables) {
+      final raw = backup[table];
+      if (raw is! List) {
+        throw FormatException('Data tabel $table tidak ditemukan pada backup.');
+      }
+      data[table] = raw.map((row) {
+        if (row is! Map) {
+          throw FormatException('Baris tabel $table tidak valid.');
+        }
+        return Map<String, Object?>.from(row);
+      }).toList();
+    }
+
+    final db = await _database.database;
+    await db.transaction((txn) async {
+      await txn.delete('transaction_payments');
+      await txn.delete('transaction_materials');
+      await txn.delete('packing_transactions');
+      await txn.delete('materials');
+      await txn.delete('app_settings');
+
+      for (final row in data['materials']!) {
+        await txn.insert('materials', row);
+      }
+      for (final row in data['packing_transactions']!) {
+        await txn.insert('packing_transactions', row);
+      }
+      for (final row in data['transaction_materials']!) {
+        await txn.insert('transaction_materials', row);
+      }
+      for (final row in data['transaction_payments']!) {
+        await txn.insert('transaction_payments', row);
+      }
+      for (final row in data['app_settings']!) {
+        await txn.insert('app_settings', row);
+      }
+    });
+  }
+
   void _validate(PackingTransactionDraft draft) {
     if (![draft.lengthCm, draft.widthCm, draft.heightCm]
         .every((v) => v.isFinite && v > 0)) {
