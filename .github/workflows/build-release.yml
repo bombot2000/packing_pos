@@ -16,6 +16,10 @@ on:
 permissions:
   contents: write
 
+concurrency:
+  group: packing-pos-ci
+  cancel-in-progress: true
+
 jobs:
   validate-and-build:
     runs-on: ubuntu-latest
