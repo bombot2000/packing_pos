@@ -112,27 +112,34 @@ class _PackingCalculatorScreenState extends State<PackingCalculatorScreen> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         DropdownButtonFormField<int>(
-          value: compatible.any((item) => item['id'] == selectedId)
-              ? selectedId
-              : null,
+          value: selectedId == null ||
+                  !compatible.any((item) => item['id'] == selectedId)
+              ? -1
+              : selectedId,
           isExpanded: true,
           decoration: InputDecoration(
             labelText: label,
             border: const OutlineInputBorder(),
           ),
           hint: const Text('Harga manual / pilih master bahan'),
-          items: compatible.map((item) {
-            final materialId = item['id'] as int;
-            final price = (item['current_unit_price'] as num).toInt();
-            return DropdownMenuItem<int>(
-              value: materialId,
-              child: Text(
-                item['name'].toString() + ' • ' + _rupiah(price) + '/' + item['unit'].toString(),
-                overflow: TextOverflow.ellipsis,
-              ),
-            );
-          }).toList(),
-          onChanged: onChanged,
+          items: [
+            const DropdownMenuItem<int>(
+              value: -1,
+              child: Text('Harga manual (tanpa master)'),
+            ),
+            ...compatible.map((item) {
+              final materialId = item['id'] as int;
+              final price = (item['current_unit_price'] as num).toInt();
+              return DropdownMenuItem<int>(
+                value: materialId,
+                child: Text(
+                  item['name'].toString() + ' • ' + _rupiah(price) + '/' + item['unit'].toString(),
+                  overflow: TextOverflow.ellipsis,
+                ),
+              );
+            }),
+          ],
+          onChanged: (value) => onChanged(value == -1 ? null : value),
         ),
         if (compatible.isEmpty)
           Padding(
