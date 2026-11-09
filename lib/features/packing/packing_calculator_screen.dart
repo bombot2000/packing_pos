@@ -33,6 +33,118 @@ class _PackingCalculatorScreenState extends State<PackingCalculatorScreen> {
   final _boardAdjustmentReason = TextEditingController();
 
   final _repository = PackingTransactionRepository();
+  List<Map<String, Object?>> _masterMaterials = [];
+  int? _selectedSlatMaterialId;
+  int? _selectedBoardMaterialId;
+  bool _loadingMaterials = true;
+  String? _materialLoadError;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadMasterMaterials();
+  }
+
+  Future<void> _loadMasterMaterials() async {
+    try {
+      final materials = await _repository.listMaterials();
+      if (!mounted) return;
+      setState(() {
+        _masterMaterials = materials;
+        _loadingMaterials = false;
+        _materialLoadError = null;
+      });
+    } catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _loadingMaterials = false;
+        _materialLoadError = error.toString();
+      });
+    }
+  }
+
+  String _normalizedUnit(String unit) =>
+      unit.trim().toLowerCase().replaceAll('²', '2').replaceAll(' ', '');
+
+  List<Map<String, Object?>> _materialsForUnit(String unit) =>
+      _masterMaterials.where((item) =>
+        _normalizedUnit(item['unit']?.toString() ?? '') == _normalizedUnit(unit)
+      ).toList();
+
+  Map<String, Object?>? _selectedMasterMaterial(int? id) {
+    if (id == null) return null;
+    for (final item in _masterMaterials) {
+      if (item['id'] == id) return item;
+    }
+    return null;
+  }
+
+  void _selectSlatMaterial(int? id) {
+    final material = _selectedMasterMaterial(id);
+    setState(() {
+      _selectedSlatMaterialId = id;
+      if (material != null) {
+        _slatPrice.text = (material['current_unit_price'] as num).toInt().toString();
+      }
+    });
+    _calculatePrice();
+  }
+
+  void _selectBoardMaterial(int? id) {
+    final material = _selectedMasterMaterial(id);
+    setState(() {
+      _selectedBoardMaterialId = id;
+      if (material != null) {
+        _boardPrice.text = (material['current_unit_price'] as num).toInt().toString();
+      }
+    });
+    _calculatePrice();
+  }
+
+  Widget _materialSelector({
+    required String label,
+    required String unit,
+    required int? selectedId,
+    required ValueChanged<int?> onChanged,
+  }) {
+    final compatible = _materialsForUnit(unit);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        DropdownButtonFormField<int>(
+          value: compatible.any((item) => item['id'] == selectedId)
+              ? selectedId
+              : null,
+          isExpanded: true,
+          decoration: InputDecoration(
+            labelText: label,
+            border: const OutlineInputBorder(),
+          ),
+          hint: const Text('Harga manual / pilih master bahan'),
+          items: compatible.map((item) {
+            final materialId = item['id'] as int;
+            final price = (item['current_unit_price'] as num).toInt();
+            return DropdownMenuItem<int>(
+              value: materialId,
+              child: Text(
+                item['name'].toString() + ' • ' + _rupiah(price) + '/' + item['unit'].toString(),
+                overflow: TextOverflow.ellipsis,
+              ),
+            );
+          }).toList(),
+          onChanged: onChanged,
+        ),
+        if (compatible.isEmpty)
+          Padding(
+            padding: const EdgeInsets.only(top: 5),
+            child: Text(
+              'Belum ada bahan master dengan satuan ' + unit + '. Harga dapat diisi manual.',
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
+          ),
+      ],
+    );
+  }
   final Map<PackingFace, FaceBuildType> _modes = {
     for (final face in PackingFace.values) face: FaceBuildType.closedBoard,
   };
@@ -199,7 +311,8 @@ class _PackingCalculatorScreenState extends State<PackingCalculatorScreen> {
       final materials = <MaterialUsageDraft>[];
       if (_result!.totalSlatMeters > 0) {
         materials.add(MaterialUsageDraft(
-          name: 'Kayu bilah',
+          materialId: _selectedSlatMaterialId,
+          name: _selectedMasterMaterial(_selectedSlatMaterialId)?['name']?.toString() ?? 'Kayu bilah',
           unit: 'm',
           calculatedQuantity: _result!.totalSlatMeters,
           actualQuantity: actualSlat,
@@ -209,7 +322,8 @@ class _PackingCalculatorScreenState extends State<PackingCalculatorScreen> {
       }
       if (_result!.totalBoardAreaM2 > 0) {
         materials.add(MaterialUsageDraft(
-          name: 'Papan',
+          materialId: _selectedBoardMaterialId,
+          name: _selectedMasterMaterial(_selectedBoardMaterialId)?['name']?.toString() ?? 'Papan',
           unit: 'm²',
           calculatedQuantity: _result!.totalBoardAreaM2,
           actualQuantity: actualBoard,
@@ -239,6 +353,12 @@ class _PackingCalculatorScreenState extends State<PackingCalculatorScreen> {
           'slatAdjustmentReason': _slatAdjustmentReason.text.trim(),
           'boardAreaM2': actualBoard,
           'boardAdjustmentReason': _boardAdjustmentReason.text.trim(),
+        },
+        'masterMaterialSelection': {
+          'slatMaterialId': _selectedSlatMaterialId,
+          'slatMaterialName': _selectedMasterMaterial(_selectedSlatMaterialId)?['name'],
+          'boardMaterialId': _selectedBoardMaterialId,
+          'boardMaterialName': _selectedMasterMaterial(_selectedBoardMaterialId)?['name'],
         },
         'pricing': {
           'slatUnitPrice': _integer(_slatPrice, 'Harga kayu per meter'),
@@ -366,8 +486,33 @@ class _PackingCalculatorScreenState extends State<PackingCalculatorScreen> {
           const SizedBox(height: 8),
           TextField(controller: _boardAdjustmentReason, maxLines: 2, decoration: const InputDecoration(labelText: 'Alasan penyesuaian papan (wajib jika berbeda)', border: OutlineInputBorder())),
         ]))),
-        _sectionTitle('Biaya dan harga jual'),
+        _sectionTitle('Master bahan dan biaya'),
+        if (_loadingMaterials)
+          const LinearProgressIndicator(),
+        if (_materialLoadError != null)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 8),
+            child: Text(
+              'Master bahan tidak dapat dimuat: ' + _materialLoadError! + '. Harga manual tetap dapat digunakan.',
+              style: TextStyle(color: Theme.of(context).colorScheme.error),
+            ),
+          ),
+        _materialSelector(
+          label: 'Master kayu bilah (satuan meter)',
+          unit: 'm',
+          selectedId: _selectedSlatMaterialId,
+          onChanged: _selectSlatMaterial,
+        ),
+        const SizedBox(height: 10),
         _numberField('Harga kayu bilah per meter', _slatPrice, currency: true, invalidate: false),
+        const SizedBox(height: 14),
+        _materialSelector(
+          label: 'Master papan (satuan m²)',
+          unit: 'm²',
+          selectedId: _selectedBoardMaterialId,
+          onChanged: _selectBoardMaterial,
+        ),
+
         const SizedBox(height: 10),
         _numberField('Harga papan per m²', _boardPrice, currency: true, invalidate: false),
         const SizedBox(height: 10),
