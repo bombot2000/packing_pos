@@ -323,10 +323,10 @@ class _PackingCalculatorScreenState extends State<PackingCalculatorScreen> {
         buildType: _modes[face]!,
         slatWidthCm: slatWidth,
         gapCm: gap,
-        leftMarginCm: _number(_faceLeftMargin[face]!, 'Margin kiri ' + _faceName(face), allowZero: true),
-        rightMarginCm: _number(_faceRightMargin[face]!, 'Margin kanan ' + _faceName(face), allowZero: true),
-        boardOverlapLengthCm: _number(_faceBoardOverlapLength[face]!, 'Overlap panjang ' + _faceName(face), allowZero: true),
-        boardOverlapWidthCm: _number(_faceBoardOverlapWidth[face]!, 'Overlap lebar ' + _faceName(face), allowZero: true),
+        leftMarginCm: _modes[face] == FaceBuildType.openSlat ? _number(_faceLeftMargin[face]!, 'Margin kiri ' + _faceName(face), allowZero: true) : 0,
+        rightMarginCm: _modes[face] == FaceBuildType.openSlat ? _number(_faceRightMargin[face]!, 'Margin kanan ' + _faceName(face), allowZero: true) : 0,
+        boardOverlapLengthCm: _modes[face] == FaceBuildType.closedBoard ? _number(_faceBoardOverlapLength[face]!, 'Overlap panjang ' + _faceName(face), allowZero: true) : 0,
+        boardOverlapWidthCm: _modes[face] == FaceBuildType.closedBoard ? _number(_faceBoardOverlapWidth[face]!, 'Overlap lebar ' + _faceName(face), allowZero: true) : 0,
       )).toList();
       final result = PackingFacesCalculator.calculate(dimensions: dimensions, configs: configs);
       final frameCutPieces = frame.cutList.map((cut) => TimberCutPiece(
@@ -637,10 +637,10 @@ class _PackingCalculatorScreenState extends State<PackingCalculatorScreen> {
         'faceSettings': PackingFace.values.map((face) => {
           'face': face.name,
           'buildType': _modes[face]!.name,
-          'leftMarginCm': _number(_faceLeftMargin[face]!, 'Margin kiri ' + _faceName(face), allowZero: true),
-          'rightMarginCm': _number(_faceRightMargin[face]!, 'Margin kanan ' + _faceName(face), allowZero: true),
-          'boardOverlapLengthCm': _number(_faceBoardOverlapLength[face]!, 'Overlap panjang ' + _faceName(face), allowZero: true),
-          'boardOverlapWidthCm': _number(_faceBoardOverlapWidth[face]!, 'Overlap lebar ' + _faceName(face), allowZero: true),
+          'leftMarginCm': _modes[face] == FaceBuildType.openSlat ? _number(_faceLeftMargin[face]!, 'Margin kiri ' + _faceName(face), allowZero: true) : 0,
+          'rightMarginCm': _modes[face] == FaceBuildType.openSlat ? _number(_faceRightMargin[face]!, 'Margin kanan ' + _faceName(face), allowZero: true) : 0,
+          'boardOverlapLengthCm': _modes[face] == FaceBuildType.closedBoard ? _number(_faceBoardOverlapLength[face]!, 'Overlap panjang ' + _faceName(face), allowZero: true) : 0,
+          'boardOverlapWidthCm': _modes[face] == FaceBuildType.closedBoard ? _number(_faceBoardOverlapWidth[face]!, 'Overlap lebar ' + _faceName(face), allowZero: true) : 0,
         }).toList(),
         'faces': _result!.faces.map((face) => {
           'face': face.face.name,
