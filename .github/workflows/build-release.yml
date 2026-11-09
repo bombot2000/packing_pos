@@ -40,6 +40,33 @@ jobs:
             flutter create . --platforms=android --org com.packingpos --project-name packing_pos
           fi
 
+      - name: Set Android compile SDK required by current plugins
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          candidates = [
+              Path("android/app/build.gradle"),
+              Path("android/app/build.gradle.kts"),
+          ]
+          found = False
+          for path in candidates:
+              if not path.exists():
+                  continue
+              text = path.read_text()
+              updated = text.replace("compileSdk = flutter.compileSdkVersion", "compileSdk = 36")
+              updated = updated.replace("compileSdkVersion flutter.compileSdkVersion", "compileSdkVersion 36")
+              updated = updated.replace("compileSdk flutter.compileSdkVersion", "compileSdk 36")
+              if updated != text:
+                  path.write_text(updated)
+                  found = True
+                  print(f"Set compileSdk 36 in {path}")
+              elif "compileSdk = 36" in text or "compileSdkVersion 36" in text or "compileSdk 36" in text:
+                  found = True
+                  print(f"{path} already targets compileSdk 36")
+          if not found:
+              raise SystemExit("Could not locate an Android app Gradle compileSdk setting to update.")
+          PY
+
       - name: Use smaller Gradle binary distribution
         run: |
           if [ -f android/gradle/wrapper/gradle-wrapper.properties ]; then
