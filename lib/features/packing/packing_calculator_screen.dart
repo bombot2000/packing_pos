@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import '../../core/calculation/packing_faces.dart';
 import '../../core/calculation/frame_calculator.dart';
 import '../../core/calculation/timber_cut_optimizer.dart';
+import '../../core/calculation/board_sheet_optimizer.dart';
 import '../../core/calculation/pricing_calculator.dart';
 import '../../data/repositories/packing_transaction_repository.dart';
 
@@ -31,6 +32,9 @@ class _PackingCalculatorScreenState extends State<PackingCalculatorScreen> {
   final _framePrice = TextEditingController(text: '0');
   final _timberStockLength = TextEditingController(text: '400');
   final _sawKerf = TextEditingController(text: '0.3');
+  final _boardSheetLength = TextEditingController(text: '244');
+  final _boardSheetWidth = TextEditingController(text: '122');
+  final _boardKerf = TextEditingController(text: '0.3');
   final _slatPrice = TextEditingController(text: '0');
   final _boardPrice = TextEditingController(text: '0');
   final _labor = TextEditingController(text: '0');
@@ -180,6 +184,7 @@ class _PackingCalculatorScreenState extends State<PackingCalculatorScreen> {
   PackingDimensions? _dimensions;
   FrameEstimate? _frameResult;
   TimberCutPlan? _timberPlan;
+  BoardSheetPlan? _boardPlan;
   PackingFacesResult? _result;
   PriceResult? _price;
   String? _error;
@@ -191,6 +196,7 @@ class _PackingCalculatorScreenState extends State<PackingCalculatorScreen> {
       _customer, _item, _length, _width, _height, _slatWidth, _gap,
       _framePostLength, _frameLengthRail, _frameWidthRail, _actualFrameMeters,
       _frameAdjustmentReason, _framePrice, _timberStockLength, _sawKerf,
+      _boardSheetLength, _boardSheetWidth, _boardKerf,
       _slatPrice, _boardPrice, _labor, _overhead, _markup, _note,
       _actualSlatMeters, _actualBoardArea, _slatAdjustmentReason, _boardAdjustmentReason,
     ]) {
@@ -263,10 +269,28 @@ class _PackingCalculatorScreenState extends State<PackingCalculatorScreen> {
         kerfCm: _number(_sawKerf, 'Lebar mata gergaji', allowZero: true),
         pieces: cutPieces,
       );
+      final boardPieces = result.faces
+          .where((face) => face.buildType == FaceBuildType.closedBoard)
+          .map((face) {
+            final size = dimensions.faceSize(face.face);
+            return BoardCutPiece(
+              label: 'Papan ' + _faceName(face.face),
+              widthCm: size.length,
+              heightCm: size.width,
+              quantity: 1,
+            );
+          }).toList();
+      final boardPlan = BoardSheetOptimizer.optimize(
+        sheetWidthCm: _number(_boardSheetWidth, 'Lebar lembar papan'),
+        sheetHeightCm: _number(_boardSheetLength, 'Panjang lembar papan'),
+        kerfAllowanceCm: _number(_boardKerf, 'Kerf papan', allowZero: true),
+        pieces: boardPieces,
+      );
       setState(() {
         _dimensions = dimensions;
         _frameResult = frame;
         _timberPlan = timberPlan;
+        _boardPlan = boardPlan;
         _actualFrameMeters.text = frame.totalMeters.toStringAsFixed(3);
         _frameAdjustmentReason.clear();
         _result = result;
@@ -425,6 +449,27 @@ class _PackingCalculatorScreenState extends State<PackingCalculatorScreen> {
           'slatLinearMeters': face.slat?.totalLinearMeters,
           'boardAreaM2': face.boardAreaM2,
         }).toList(),
+        'boardSheetPlan': {
+          'sheetWidthCm': _boardPlan!.sheetWidthCm,
+          'sheetHeightCm': _boardPlan!.sheetHeightCm,
+          'kerfAllowanceCm': _boardPlan!.kerfAllowanceCm,
+          'sheetCount': _boardPlan!.sheetCount,
+          'purchasedAreaM2': _boardPlan!.purchasedAreaM2,
+          'totalPieceAreaM2': _boardPlan!.totalPieceAreaM2,
+          'wasteAreaM2': _boardPlan!.wasteAreaM2,
+          'utilizationPercent': _boardPlan!.utilizationPercent,
+          'sheets': _boardPlan!.sheets.map((sheet) => {
+            'number': sheet.number,
+            'placements': sheet.placements.map((placement) => {
+              'label': placement.label,
+              'xCm': placement.xCm,
+              'yCm': placement.yCm,
+              'widthCm': placement.widthCm,
+              'heightCm': placement.heightCm,
+              'rotated': placement.rotated,
+            }).toList(),
+          }).toList(),
+        },
         'timberCutPlan': {
           'strategy': 'firstFitDecreasing',
           'stockLengthCm': _timberPlan!.stockLengthCm,
@@ -551,6 +596,14 @@ class _PackingCalculatorScreenState extends State<PackingCalculatorScreen> {
         Expanded(child: _numberField('Mata gergaji', _sawKerf, suffix: 'cm')),
       ]),
       const Text('Panjang stok dan lebar mata gergaji dipakai untuk estimasi jumlah batang. Optimasi menggunakan metode first-fit decreasing; hasil merupakan estimasi, bukan jaminan jumlah minimum.'),
+      _sectionTitle('Ukuran lembar papan'),
+      Row(children: [
+        Expanded(child: _numberField('Panjang lembar', _boardSheetLength, suffix: 'cm')),
+        const SizedBox(width: 8),
+        Expanded(child: _numberField('Lebar lembar', _boardSheetWidth, suffix: 'cm')),
+        const SizedBox(width: 8),
+        Expanded(child: _numberField('Kerf papan', _boardKerf, suffix: 'cm')),
+      ]),
       _sectionTitle('Pengaturan bilah kayu'),
       Row(children: [
         Expanded(child: _numberField('Lebar bilah', _slatWidth, suffix: 'cm')),
@@ -593,6 +646,20 @@ class _PackingCalculatorScreenState extends State<PackingCalculatorScreen> {
             )),
             const Divider(height: 1),
             ListTile(title: const Text('Total rangka'), trailing: Text(_frameResult!.totalMeters.toStringAsFixed(2) + ' m')),
+          ])),
+        _sectionTitle('Rencana nesting lembar papan'),
+        if (_boardPlan != null)
+          Card(child: Column(children: [
+            ListTile(title: const Text('Perkiraan lembar dibeli'), trailing: Text(_boardPlan!.sheetCount.toString(), style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold))),
+            ListTile(title: const Text('Luas pembelian'), trailing: Text(_boardPlan!.purchasedAreaM2.toStringAsFixed(3) + ' m²')),
+            ListTile(title: const Text('Utilisasi area'), trailing: Text(_boardPlan!.utilizationPercent.toStringAsFixed(1) + '%')),
+            ListTile(title: const Text('Sisa / waste area'), trailing: Text(_boardPlan!.wasteAreaM2.toStringAsFixed(3) + ' m²')),
+            ..._boardPlan!.sheets.map((sheet) => ListTile(
+              dense: true,
+              title: Text('Lembar ' + sheet.number.toString()),
+              subtitle: Text(sheet.placements.map((p) => p.label + ' ' + p.widthCm.toStringAsFixed(1) + '×' + p.heightCm.toStringAsFixed(1) + ' cm' + (p.rotated ? ' (rotasi)' : '')).join(' • ')),
+              isThreeLine: true,
+            )),
           ])),
         _sectionTitle('Rencana pemotongan stok kayu'),
         if (_timberPlan != null)
@@ -731,7 +798,7 @@ class _PackingCalculatorScreenState extends State<PackingCalculatorScreen> {
         Text(_error!, style: TextStyle(color: Theme.of(context).colorScheme.error)),
       ],
       const SizedBox(height: 20),
-      const Text('Catatan: jumlah batang pada rencana pemotongan merupakan estimasi first-fit decreasing untuk rangka dan bilah. Harga kayu masih dihitung berdasarkan meter teoritis; harga pembelian per batang dan optimasi papan lembar akan ditambahkan pada tahap berikutnya.'),
+      const Text('Catatan: pemotongan kayu memakai estimasi first-fit decreasing; papan memakai nesting guillotine dengan rotasi. Keduanya heuristik, bukan jaminan limbah minimum. Harga masih memakai meter kayu dan m² papan teoritis; harga pembelian per batang/lembar belum diterapkan.'),
     ]),
   );
 }
