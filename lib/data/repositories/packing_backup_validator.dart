@@ -132,13 +132,13 @@ class PackingBackupValidator {
     for (final row in data['app_settings']!) {
       final key = _text(row['key'], 'Kunci pengaturan');
       if (!settingKeys.add(key)) throw FormatException('Kunci pengaturan duplikat: $key.');
-      _text(row['value'], 'Nilai pengaturan');
+      _string(row['value'], 'Nilai pengaturan');
       _text(row['updated_at'], 'Tanggal pengaturan');
     }
     return data;
   }
 
-  static String _text(Object? value, String field) {
+  static String _string(Object? value, String field) {\n    if (value is! String) {\n      throw FormatException('$field harus berupa teks.');\n    }\n    return value;\n  }\n\n  static String _text(Object? value, String field) {
     if (value is! String || value.trim().isEmpty) {
       throw FormatException('$field wajib berupa teks dan tidak boleh kosong.');
     }
