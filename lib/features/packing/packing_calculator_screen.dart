@@ -27,6 +27,7 @@ class _PackingCalculatorScreenState extends State<PackingCalculatorScreen> {
   final _framePostLength = TextEditingController();
   final _frameLengthRail = TextEditingController();
   final _frameWidthRail = TextEditingController();
+  String _frameJointMethod = 'manual';
   final _actualFrameMeters = TextEditingController();
   final _frameAdjustmentReason = TextEditingController();
   final _framePrice = TextEditingController(text: '0');
