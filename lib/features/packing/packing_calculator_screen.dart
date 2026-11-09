@@ -22,9 +22,9 @@ class _PackingCalculatorScreenState extends State<PackingCalculatorScreen> {
   final _height = TextEditingController(text: '50');
   final _slatWidth = TextEditingController(text: '5');
   final _gap = TextEditingController(text: '5');
-  final _framePostLength = TextEditingController(text: '50');
-  final _frameLengthRail = TextEditingController(text: '100');
-  final _frameWidthRail = TextEditingController(text: '60');
+  final _framePostLength = TextEditingController();
+  final _frameLengthRail = TextEditingController();
+  final _frameWidthRail = TextEditingController();
   final _actualFrameMeters = TextEditingController();
   final _frameAdjustmentReason = TextEditingController();
   final _framePrice = TextEditingController(text: '0');
@@ -203,6 +203,11 @@ class _PackingCalculatorScreenState extends State<PackingCalculatorScreen> {
     return value;
   }
 
+  double _dimensionOverride(TextEditingController controller, double fallback, String label) {
+    if (controller.text.trim().isEmpty) return fallback;
+    return _number(controller, label);
+  }
+
   int _integer(TextEditingController controller, String label) {
     final value = _number(controller, label, allowZero: true);
     if (value > 9000000000000) throw FormatException('$label terlalu besar.');
@@ -224,9 +229,9 @@ class _PackingCalculatorScreenState extends State<PackingCalculatorScreen> {
         heightCm: _number(_height, 'Tinggi'),
       );
       final frame = FrameEstimate.eightCorner(
-        postHeightCm: _number(_framePostLength, 'Panjang potong tiang'),
-        lengthRailCutCm: _number(_frameLengthRail, 'Panjang potong rel arah panjang'),
-        widthRailCutCm: _number(_frameWidthRail, 'Panjang potong rel arah lebar'),
+        postHeightCm: _dimensionOverride(_framePostLength, dimensions.heightCm, 'Panjang potong tiang'),
+        lengthRailCutCm: _dimensionOverride(_frameLengthRail, dimensions.lengthCm, 'Panjang potong rel arah panjang'),
+        widthRailCutCm: _dimensionOverride(_frameWidthRail, dimensions.widthCm, 'Panjang potong rel arah lebar'),
       );
       final slatWidth = _number(_slatWidth, 'Lebar bilah');
       final gap = _number(_gap, 'Celah', allowZero: true);
@@ -490,10 +495,10 @@ class _PackingCalculatorScreenState extends State<PackingCalculatorScreen> {
         Expanded(child: _numberField('Tinggi', _height, suffix: 'cm')),
       ]),
       _sectionTitle('Rangka utama 8 sudut'),
-      const Text('Estimasi rangka: 4 tiang sudut, 4 rel arah panjang (atas/bawah), dan 4 rel arah lebar (atas/bawah). Ukuran potong dapat diubah sesuai sambungan dan orientasi kayu.'),
+      const Text('Estimasi rangka: 4 tiang sudut mengikuti tinggi barang, 4 rel arah panjang mengikuti panjang barang, dan 4 rel arah lebar mengikuti lebar barang. Isi ukuran potong hanya jika perlu menyesuaikan sambungan atau orientasi kayu; kosong = mengikuti dimensi barang.'),
       const SizedBox(height: 10),
       Row(children: [
-        Expanded(child: _numberField('Potong tiang', _framePostLength, suffix: 'cm')),
+        Expanded(child: _numberField('Potong tiang', _framePostLength, suffix: 'cm', invalidate: true)),
         const SizedBox(width: 8),
         Expanded(child: _numberField('Potong rel panjang', _frameLengthRail, suffix: 'cm')),
         const SizedBox(width: 8),
