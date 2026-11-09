@@ -295,6 +295,12 @@ class PackingTransactionRepository {
       args.add(endDate.toUtc().toIso8601String());
     }
     final dateFilter = conditions.isEmpty ? '' : ' AND ' + conditions.join(' AND ');
+    final materialDateConditions = <String>[];
+    if (startDate != null) materialDateConditions.add('packing_transactions.created_at >= ?');
+    if (endDate != null) materialDateConditions.add('packing_transactions.created_at < ?');
+    final materialDateFilter = materialDateConditions.isEmpty
+        ? ''
+        : ' AND ' + materialDateConditions.join(' AND ');
     final totals = await db.rawQuery('''
       SELECT
         COUNT(*) AS transaction_count,
@@ -315,7 +321,7 @@ class PackingTransactionRepository {
       FROM transaction_materials
       INNER JOIN packing_transactions
         ON packing_transactions.id = transaction_materials.transaction_id
-      WHERE packing_transactions.status != 'cancelled'${dateFilter}
+      WHERE packing_transactions.status != 'cancelled'${materialDateFilter}
       GROUP BY material_name_snapshot, unit_snapshot
       ORDER BY cost DESC, name COLLATE NOCASE
     ''', args);
