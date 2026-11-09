@@ -107,6 +107,9 @@ class _PackingReportsScreenState extends State<PackingReportsScreen> {
               childAspectRatio: 1.65,
               children: [
                 _metric('Penjualan', _money(totals['sales_total']), Icons.point_of_sale),
+                _metric('Laba kotor', _money(totals['gross_profit']), Icons.trending_up),
+                _metric('Biaya bahan', _money(totals['material_cost_total']), Icons.inventory_2_outlined),
+                _metric('Biaya jasa', _money(totals['labor_cost_total']), Icons.handyman_outlined),
                 _metric('Pembayaran diterima', _money(totals['paid_total']), Icons.payments_outlined),
                 _metric('Piutang tersisa', _money(totals['receivable_total']), Icons.account_balance_wallet_outlined),
                 _metric('Transaksi aktif', (totals['transaction_count'] as num? ?? 0).toString(), Icons.receipt_long),

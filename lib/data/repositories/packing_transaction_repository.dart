@@ -316,6 +316,10 @@ class PackingTransactionRepository {
       SELECT
         COUNT(*) AS transaction_count,
         COALESCE(SUM(selling_price), 0) AS sales_total,
+        COALESCE(SUM(material_cost), 0) AS material_cost_total,
+        COALESCE(SUM(labor_cost), 0) AS labor_cost_total,
+        COALESCE(SUM(overhead_cost), 0) AS overhead_cost_total,
+        COALESCE(SUM(selling_price - material_cost - labor_cost - overhead_cost), 0) AS gross_profit,
         COALESCE(SUM(paid_amount), 0) AS paid_total,
         COALESCE(SUM(selling_price - paid_amount), 0) AS receivable_total,
         SUM(CASE WHEN status = 'completed' THEN 1 ELSE 0 END) AS completed_count,
