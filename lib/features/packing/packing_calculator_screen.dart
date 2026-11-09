@@ -252,6 +252,14 @@ class _PackingCalculatorScreenState extends State<PackingCalculatorScreen> {
     return _number(controller, label);
   }
 
+  double _wholeQuantity(TextEditingController controller, String label) {
+    final value = _actualQuantity(controller, label);
+    if (value != value.roundToDouble()) {
+      throw FormatException('$label harus berupa bilangan bulat.');
+    }
+    return value;
+  }
+
   int _integer(TextEditingController controller, String label) {
     final value = _number(controller, label, allowZero: true);
     if (value > 9000000000000) throw FormatException('$label terlalu besar.');
@@ -363,7 +371,7 @@ class _PackingCalculatorScreenState extends State<PackingCalculatorScreen> {
       if (_priceTimberByStock) {
         lines.add(MaterialCostLine(
           name: _selectedMasterMaterial(_selectedStockMaterialId)?['name']?.toString() ?? 'Kayu stok',
-          quantity: _actualQuantity(_actualStockBars, 'Jumlah batang kayu aktual'),
+          quantity: _wholeQuantity(_actualStockBars, 'Jumlah batang kayu aktual'),
           unitPrice: _integer(_stockPrice, 'Harga per batang kayu'),
         ));
       } else {
@@ -373,7 +381,7 @@ class _PackingCalculatorScreenState extends State<PackingCalculatorScreen> {
       if (_priceBoardBySheet) {
         lines.add(MaterialCostLine(
           name: _selectedMasterMaterial(_selectedBoardSheetMaterialId)?['name']?.toString() ?? 'Papan lembar',
-          quantity: _actualQuantity(_actualBoardSheets, 'Jumlah lembar papan aktual'),
+          quantity: _wholeQuantity(_actualBoardSheets, 'Jumlah lembar papan aktual'),
           unitPrice: _integer(_boardSheetPrice, 'Harga per lembar papan'),
         ));
       } else {
@@ -600,6 +608,10 @@ class _PackingCalculatorScreenState extends State<PackingCalculatorScreen> {
           'boardAdjustmentReason': _boardAdjustmentReason.text.trim(),
         },
         'masterMaterialSelection': {
+          'stockMaterialId': _selectedStockMaterialId,
+          'stockMaterialName': _selectedMasterMaterial(_selectedStockMaterialId)?['name'],
+          'boardSheetMaterialId': _selectedBoardSheetMaterialId,
+          'boardSheetMaterialName': _selectedMasterMaterial(_selectedBoardSheetMaterialId)?['name'],
           'frameMaterialId': _selectedFrameMaterialId,
           'frameMaterialName': _selectedMasterMaterial(_selectedFrameMaterialId)?['name'],
           'slatMaterialId': _selectedSlatMaterialId,
