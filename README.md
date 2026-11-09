@@ -58,7 +58,7 @@ Tambahkan empat GitHub Actions Secrets berikut sebelum membuat APK rilis:
 - `ANDROID_KEYSTORE_BASE64`
 - `ANDROID_KEY_ALIAS`
 - `ANDROID_KEY_PASSWORD`
-- `ANDROID_STORE_PASSWORD`
+- `ANDROID_STORE_PASSWORD` (atau `ANDROID_KEYSTORE_PASSWORD`)
 
 Gunakan keystore permanen yang memang akan dipakai untuk aplikasi ini. Jangan mengganti keystore pada build berikutnya; tanda tangan yang berubah dapat membuat Android menolak update aplikasi dan memaksa uninstall.
 
