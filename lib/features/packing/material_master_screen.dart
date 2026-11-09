@@ -30,126 +30,22 @@ class _MaterialMasterScreenState extends State<MaterialMasterScreen> {
           );
 
   Future<void> _editMaterial([Map<String, Object?>? material]) async {
-    // Controllers belong to this method, not to the dialog's widget tree.
-    // They stay alive until showDialog has fully completed (including Back).
-    final name = TextEditingController(
-      text: material?['name']?.toString() ?? '',
-    );
-    final unit = TextEditingController(
-      text: material?['unit']?.toString() ?? '',
-    );
-    final price = TextEditingController(
-      text: material?['current_unit_price']?.toString() ?? '0',
+    // Use a normal page route instead of DialogRoute. Android Back now pops
+    // an ordinary page, avoiding the dialog-overlay teardown path.
+    final result = await Navigator.of(context).push<Map<String, Object?>>(
+      MaterialPageRoute(
+        builder: (_) => _MaterialEditorScreen(material: material),
+      ),
     );
 
-    bool saved = false;
+    if (result == null || !mounted) return;
+
     try {
-      saved = await showDialog<bool>(
-            context: context,
-            barrierDismissible: true,
-            builder: (dialogContext) {
-              String? validationMessage;
-              return StatefulBuilder(
-                builder: (context, setDialogState) => AlertDialog(
-                  title: Text(material == null ? 'Tambah bahan' : 'Ubah bahan'),
-                  content: SingleChildScrollView(
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        TextField(
-                          controller: name,
-                          textCapitalization: TextCapitalization.words,
-                          decoration: const InputDecoration(
-                            labelText: 'Nama bahan',
-                            hintText: 'Contoh: Kayu reng',
-                          ),
-                        ),
-                        const SizedBox(height: 12),
-                        TextField(
-                          controller: unit,
-                          decoration: const InputDecoration(
-                            labelText: 'Satuan',
-                            hintText: 'batang, m, m², lembar',
-                          ),
-                        ),
-                        const SizedBox(height: 12),
-                        TextField(
-                          controller: price,
-                          keyboardType: TextInputType.number,
-                          decoration: const InputDecoration(
-                            labelText: 'Harga per satuan (Rupiah)',
-                            prefixText: 'Rp ',
-                          ),
-                        ),
-                        if (validationMessage != null) ...[
-                          const SizedBox(height: 10),
-                          Align(
-                            alignment: Alignment.centerLeft,
-                            child: Text(
-                              validationMessage!,
-                              style: TextStyle(
-                                color: Theme.of(context).colorScheme.error,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ],
-                    ),
-                  ),
-                  actions: [
-                    TextButton(
-                      onPressed: () =>
-                          Navigator.of(dialogContext).pop(false),
-                      child: const Text('Batal'),
-                    ),
-                    FilledButton(
-                      onPressed: () {
-                        final parsedPrice = int.tryParse(
-                          price.text
-                              .replaceAll('.', '')
-                              .replaceAll(',', '')
-                              .trim(),
-                        );
-                        if (name.text.trim().isEmpty) {
-                          setDialogState(() {
-                            validationMessage = 'Nama bahan wajib diisi.';
-                          });
-                          return;
-                        }
-                        if (unit.text.trim().isEmpty) {
-                          setDialogState(() {
-                            validationMessage = 'Satuan wajib diisi.';
-                          });
-                          return;
-                        }
-                        if (parsedPrice == null || parsedPrice < 0) {
-                          setDialogState(() {
-                            validationMessage =
-                                'Masukkan harga Rupiah yang valid.';
-                          });
-                          return;
-                        }
-                        Navigator.of(dialogContext).pop(true);
-                      },
-                      child: const Text('Simpan'),
-                    ),
-                  ],
-                ),
-              );
-            },
-          ) ??
-          false;
-
-      if (!saved || !mounted) return;
-
-      final parsedPrice = int.parse(
-        price.text.replaceAll('.', '').replaceAll(',', '').trim(),
-      );
       await _repository.saveMaterial(
         id: material?['id'] as int?,
-        name: name.text.trim(),
-        unit: unit.text.trim(),
-        currentUnitPrice: parsedPrice,
+        name: result['name']! as String,
+        unit: result['unit']! as String,
+        currentUnitPrice: result['price']! as int,
       );
       if (!mounted) return;
       setState(_reload);
@@ -161,10 +57,6 @@ class _MaterialMasterScreenState extends State<MaterialMasterScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Gagal menyimpan bahan: $error')),
       );
-    } finally {
-      name.dispose();
-      unit.dispose();
-      price.dispose();
     }
   }
 
@@ -289,4 +181,128 @@ class _MaterialMasterScreenState extends State<MaterialMasterScreen> {
           },
         ),
       );
+}
+
+class _MaterialEditorScreen extends StatefulWidget {
+  const _MaterialEditorScreen({required this.material});
+
+  final Map<String, Object?>? material;
+
+  @override
+  State<_MaterialEditorScreen> createState() => _MaterialEditorScreenState();
+}
+
+class _MaterialEditorScreenState extends State<_MaterialEditorScreen> {
+  late final TextEditingController _name;
+  late final TextEditingController _unit;
+  late final TextEditingController _price;
+  String? _errorMessage;
+
+  @override
+  void initState() {
+    super.initState();
+    _name = TextEditingController(
+      text: widget.material?['name']?.toString() ?? '',
+    );
+    _unit = TextEditingController(
+      text: widget.material?['unit']?.toString() ?? '',
+    );
+    _price = TextEditingController(
+      text: widget.material?['current_unit_price']?.toString() ?? '0',
+    );
+  }
+
+  @override
+  void dispose() {
+    _name.dispose();
+    _unit.dispose();
+    _price.dispose();
+    super.dispose();
+  }
+
+  void _submit() {
+    final parsedPrice = int.tryParse(
+      _price.text.replaceAll('.', '').replaceAll(',', '').trim(),
+    );
+
+    if (_name.text.trim().isEmpty) {
+      setState(() => _errorMessage = 'Nama bahan wajib diisi.');
+      return;
+    }
+    if (_unit.text.trim().isEmpty) {
+      setState(() => _errorMessage = 'Satuan wajib diisi.');
+      return;
+    }
+    if (parsedPrice == null || parsedPrice < 0) {
+      setState(() => _errorMessage = 'Masukkan harga Rupiah yang valid.');
+      return;
+    }
+
+    Navigator.of(context).pop<Map<String, Object?>>({
+      'name': _name.text.trim(),
+      'unit': _unit.text.trim(),
+      'price': parsedPrice,
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isEditing = widget.material != null;
+    return Scaffold(
+      appBar: AppBar(
+        title: Text(isEditing ? 'Ubah bahan' : 'Tambah bahan'),
+      ),
+      body: ListView(
+        padding: const EdgeInsets.all(20),
+        children: [
+          TextField(
+            controller: _name,
+            textCapitalization: TextCapitalization.words,
+            decoration: const InputDecoration(
+              labelText: 'Nama bahan',
+              hintText: 'Contoh: Kayu reng',
+              border: OutlineInputBorder(),
+            ),
+          ),
+          const SizedBox(height: 16),
+          TextField(
+            controller: _unit,
+            decoration: const InputDecoration(
+              labelText: 'Satuan',
+              hintText: 'batang, m, m², lembar',
+              border: OutlineInputBorder(),
+            ),
+          ),
+          const SizedBox(height: 16),
+          TextField(
+            controller: _price,
+            keyboardType: TextInputType.number,
+            decoration: const InputDecoration(
+              labelText: 'Harga per satuan (Rupiah)',
+              prefixText: 'Rp ',
+              border: OutlineInputBorder(),
+            ),
+          ),
+          if (_errorMessage != null) ...[
+            const SizedBox(height: 12),
+            Text(
+              _errorMessage!,
+              style: TextStyle(color: Theme.of(context).colorScheme.error),
+            ),
+          ],
+          const SizedBox(height: 24),
+          FilledButton.icon(
+            onPressed: _submit,
+            icon: const Icon(Icons.save_outlined),
+            label: const Text('Simpan bahan'),
+          ),
+          const SizedBox(height: 8),
+          OutlinedButton(
+            onPressed: () => Navigator.of(context).maybePop(),
+            child: const Text('Batal'),
+          ),
+        ],
+      ),
+    );
+  }
 }
