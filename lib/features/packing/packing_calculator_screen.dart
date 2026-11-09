@@ -532,19 +532,19 @@ class _PackingCalculatorScreenState extends State<PackingCalculatorScreen> {
     setState(() => _saving = true);
     try {
       final actualFrame = _actualQuantity(_actualFrameMeters, 'Jumlah aktual rangka');
-      final actualFrameStockBars = _wholeQuantity(_actualFrameStockBars, 'Jumlah batang kayu rangka aktual');
+      final actualFrameStockBars = _priceFrameByStock ? _wholeQuantity(_actualFrameStockBars, 'Jumlah batang kayu rangka aktual') : _frameTimberPlan!.stockCount.toDouble();
       if (_priceFrameByStock && _frameTimberPlan != null &&
           _isAdjusted(actualFrameStockBars, _frameTimberPlan!.stockCount.toDouble()) &&
           _frameStockAdjustmentReason.text.trim().isEmpty) {
         throw const FormatException('Alasan perubahan jumlah batang kayu rangka wajib diisi.');
       }
-      final actualSlatStockBars = _wholeQuantity(_actualSlatStockBars, 'Jumlah batang kayu bilah aktual');
+      final actualSlatStockBars = _priceSlatByStock ? _wholeQuantity(_actualSlatStockBars, 'Jumlah batang kayu bilah aktual') : _slatTimberPlan!.stockCount.toDouble();
       if (_priceSlatByStock && _slatTimberPlan != null &&
           _isAdjusted(actualSlatStockBars, _slatTimberPlan!.stockCount.toDouble()) &&
           _slatStockAdjustmentReason.text.trim().isEmpty) {
         throw const FormatException('Alasan perubahan jumlah batang kayu bilah wajib diisi.');
       }
-      final actualBoardSheets = _wholeQuantity(_actualBoardSheets, 'Jumlah lembar papan aktual');
+      final actualBoardSheets = _priceBoardBySheet ? _wholeQuantity(_actualBoardSheets, 'Jumlah lembar papan aktual') : _boardPlan!.sheetCount.toDouble();
       if (_priceBoardBySheet && _boardPlan != null &&
           _isAdjusted(actualBoardSheets, _boardPlan!.sheetCount.toDouble()) &&
           _boardSheetAdjustmentReason.text.trim().isEmpty) {
