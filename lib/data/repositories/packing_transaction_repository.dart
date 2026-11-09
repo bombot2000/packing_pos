@@ -350,18 +350,22 @@ class PackingTransactionRepository {
   /// Portable JSON backup. IDs and historical price snapshots are preserved.
   Future<Map<String, Object?>> exportBackup() async {
     final db = await _database.database;
-    Future<List<Map<String, Object?>>> rows(String table) =>
-        db.query(table, orderBy: 'id');
-    return {
-      'format': 'packing_pos_backup',
-      'version': 2,
-      'createdAt': DateTime.now().toUtc().toIso8601String(),
-      'packing_transactions': await rows('packing_transactions'),
-      'transaction_materials': await rows('transaction_materials'),
-      'transaction_payments': await rows('transaction_payments'),
-      'materials': await rows('materials'),
-      'app_settings': await db.query('app_settings', orderBy: 'key'),
-    };
+    // Read every table from one SQLite transaction so a concurrent payment or
+    // edit cannot produce a backup with mismatched parent/child snapshots.
+    return db.transaction((txn) async {
+      Future<List<Map<String, Object?>>> rows(String table) =>
+          txn.query(table, orderBy: 'id');
+      return {
+        'format': 'packing_pos_backup',
+        'version': 2,
+        'createdAt': DateTime.now().toUtc().toIso8601String(),
+        'packing_transactions': await rows('packing_transactions'),
+        'transaction_materials': await rows('transaction_materials'),
+        'transaction_payments': await rows('transaction_payments'),
+        'materials': await rows('materials'),
+        'app_settings': await txn.query('app_settings', orderBy: 'key'),
+      };
+    });
   }
 
   /// Replaces local data only after validating the backup envelope. All table
