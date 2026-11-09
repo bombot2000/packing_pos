@@ -313,6 +313,11 @@ class _PackingTransactionDetailScreenState extends State<PackingTransactionDetai
             const SizedBox(height: 8),
             const Text('Rincian potongan rangka', style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold)),
             Card(child: Column(children: [
+              ListTile(
+                dense: true,
+                title: const Text('Metode sambungan'),
+                subtitle: Text(frameData['jointMethod']?.toString() ?? 'manual'),
+              ),
               ...frameCuts.map((raw) {
                 final cut = raw as Map<String, dynamic>;
                 return ListTile(
