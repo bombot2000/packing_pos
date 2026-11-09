@@ -291,7 +291,7 @@ class PackingTransactionRepository {
         COALESCE(SUM(selling_price - paid_amount), 0) AS receivable_total,
         SUM(CASE WHEN status = 'completed' THEN 1 ELSE 0 END) AS completed_count,
         SUM(CASE WHEN status = 'open' THEN 1 ELSE 0 END) AS open_count,
-        SUM(CASE WHEN status = 'cancelled' THEN 1 ELSE 0 END) AS cancelled_count
+        (SELECT COUNT(*) FROM packing_transactions WHERE status = 'cancelled') AS cancelled_count
       FROM packing_transactions
       WHERE status != 'cancelled'
     ''');
