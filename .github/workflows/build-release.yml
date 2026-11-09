@@ -36,6 +36,12 @@ jobs:
             flutter create . --platforms=android --org com.packingpos --project-name packing_pos
           fi
 
+      - name: Use smaller Gradle binary distribution
+        run: |
+          if [ -f android/gradle/wrapper/gradle-wrapper.properties ]; then
+            sed -i 's/-all.zip/-bin.zip/' android/gradle/wrapper/gradle-wrapper.properties
+          fi
+
       - name: Install dependencies
         run: flutter pub get
 
