@@ -35,6 +35,12 @@ class _PackingCalculatorScreenState extends State<PackingCalculatorScreen> {
   final _boardSheetLength = TextEditingController(text: '244');
   final _boardSheetWidth = TextEditingController(text: '122');
   final _boardKerf = TextEditingController(text: '0.3');
+  final _stockPrice = TextEditingController(text: '0');
+  final _actualStockBars = TextEditingController();
+  final _stockAdjustmentReason = TextEditingController();
+  final _boardSheetPrice = TextEditingController(text: '0');
+  final _actualBoardSheets = TextEditingController();
+  final _boardSheetAdjustmentReason = TextEditingController();
   final _slatPrice = TextEditingController(text: '0');
   final _boardPrice = TextEditingController(text: '0');
   final _labor = TextEditingController(text: '0');
@@ -51,6 +57,10 @@ class _PackingCalculatorScreenState extends State<PackingCalculatorScreen> {
   int? _selectedFrameMaterialId;
   int? _selectedSlatMaterialId;
   int? _selectedBoardMaterialId;
+  int? _selectedStockMaterialId;
+  int? _selectedBoardSheetMaterialId;
+  bool _priceTimberByStock = false;
+  bool _priceBoardBySheet = false;
   bool _loadingMaterials = true;
   String? _materialLoadError;
 
@@ -111,6 +121,28 @@ class _PackingCalculatorScreenState extends State<PackingCalculatorScreen> {
       _selectedSlatMaterialId = id;
       if (material != null) {
         _slatPrice.text = (material['current_unit_price'] as num).toInt().toString();
+      }
+    });
+    _calculatePrice();
+  }
+
+  void _selectStockMaterial(int? id) {
+    final material = _selectedMasterMaterial(id);
+    setState(() {
+      _selectedStockMaterialId = id;
+      if (material != null) {
+        _stockPrice.text = (material['current_unit_price'] as num).toInt().toString();
+      }
+    });
+    _calculatePrice();
+  }
+
+  void _selectBoardSheetMaterial(int? id) {
+    final material = _selectedMasterMaterial(id);
+    setState(() {
+      _selectedBoardSheetMaterialId = id;
+      if (material != null) {
+        _boardSheetPrice.text = (material['current_unit_price'] as num).toInt().toString();
       }
     });
     _calculatePrice();
@@ -197,6 +229,8 @@ class _PackingCalculatorScreenState extends State<PackingCalculatorScreen> {
       _framePostLength, _frameLengthRail, _frameWidthRail, _actualFrameMeters,
       _frameAdjustmentReason, _framePrice, _timberStockLength, _sawKerf,
       _boardSheetLength, _boardSheetWidth, _boardKerf,
+      _stockPrice, _actualStockBars, _stockAdjustmentReason,
+      _boardSheetPrice, _actualBoardSheets, _boardSheetAdjustmentReason,
       _slatPrice, _boardPrice, _labor, _overhead, _markup, _note,
       _actualSlatMeters, _actualBoardArea, _slatAdjustmentReason, _boardAdjustmentReason,
     ]) {
@@ -292,6 +326,10 @@ class _PackingCalculatorScreenState extends State<PackingCalculatorScreen> {
         _timberPlan = timberPlan;
         _boardPlan = boardPlan;
         _actualFrameMeters.text = frame.totalMeters.toStringAsFixed(3);
+        _actualStockBars.text = timberPlan.stockCount.toString();
+        _stockAdjustmentReason.clear();
+        _actualBoardSheets.text = boardPlan.sheetCount.toString();
+        _boardSheetAdjustmentReason.clear();
         _frameAdjustmentReason.clear();
         _result = result;
         _actualSlatMeters.text = result.totalSlatMeters.toStringAsFixed(3);
@@ -321,11 +359,26 @@ class _PackingCalculatorScreenState extends State<PackingCalculatorScreen> {
       final actualFrame = _actualQuantity(_actualFrameMeters, 'Jumlah aktual rangka');
       final actualSlat = _actualQuantity(_actualSlatMeters, 'Jumlah aktual kayu bilah');
       final actualBoard = _actualQuantity(_actualBoardArea, 'Jumlah aktual papan');
-      final lines = <MaterialCostLine>[
-        MaterialCostLine(name: 'Kayu rangka', quantity: actualFrame, unitPrice: _integer(_framePrice, 'Harga kayu rangka per meter')),
-        MaterialCostLine(name: 'Kayu bilah', quantity: actualSlat, unitPrice: _integer(_slatPrice, 'Harga kayu per meter')),
-        MaterialCostLine(name: 'Papan', quantity: actualBoard, unitPrice: _integer(_boardPrice, 'Harga papan per m²')),
-      ];
+      final lines = <MaterialCostLine>[];
+      if (_priceTimberByStock) {
+        lines.add(MaterialCostLine(
+          name: _selectedMasterMaterial(_selectedStockMaterialId)?['name']?.toString() ?? 'Kayu stok',
+          quantity: _actualQuantity(_actualStockBars, 'Jumlah batang kayu aktual'),
+          unitPrice: _integer(_stockPrice, 'Harga per batang kayu'),
+        ));
+      } else {
+        lines.add(MaterialCostLine(name: 'Kayu rangka', quantity: actualFrame, unitPrice: _integer(_framePrice, 'Harga kayu rangka per meter')));
+        lines.add(MaterialCostLine(name: 'Kayu bilah', quantity: actualSlat, unitPrice: _integer(_slatPrice, 'Harga kayu per meter')));
+      }
+      if (_priceBoardBySheet) {
+        lines.add(MaterialCostLine(
+          name: _selectedMasterMaterial(_selectedBoardSheetMaterialId)?['name']?.toString() ?? 'Papan lembar',
+          quantity: _actualQuantity(_actualBoardSheets, 'Jumlah lembar papan aktual'),
+          unitPrice: _integer(_boardSheetPrice, 'Harga per lembar papan'),
+        ));
+      } else {
+        lines.add(MaterialCostLine(name: 'Papan', quantity: actualBoard, unitPrice: _integer(_boardPrice, 'Harga papan per m²')));
+      }
       final price = PricingCalculator.calculate(
         materials: lines,
         laborCost: _integer(_labor, 'Biaya jasa'),
@@ -391,6 +444,18 @@ class _PackingCalculatorScreenState extends State<PackingCalculatorScreen> {
     setState(() => _saving = true);
     try {
       final actualFrame = _actualQuantity(_actualFrameMeters, 'Jumlah aktual rangka');
+      final actualStockBars = _actualQuantity(_actualStockBars, 'Jumlah batang kayu aktual');
+      if (_priceTimberByStock && _timberPlan != null &&
+          _isAdjusted(actualStockBars, _timberPlan!.stockCount.toDouble()) &&
+          _stockAdjustmentReason.text.trim().isEmpty) {
+        throw const FormatException('Alasan perubahan jumlah batang kayu wajib diisi.');
+      }
+      final actualBoardSheets = _actualQuantity(_actualBoardSheets, 'Jumlah lembar papan aktual');
+      if (_priceBoardBySheet && _boardPlan != null &&
+          _isAdjusted(actualBoardSheets, _boardPlan!.sheetCount.toDouble()) &&
+          _boardSheetAdjustmentReason.text.trim().isEmpty) {
+        throw const FormatException('Alasan perubahan jumlah lembar papan wajib diisi.');
+      }
       if (_frameResult != null && _isAdjusted(actualFrame, _frameResult!.totalMeters) && _frameAdjustmentReason.text.trim().isEmpty) {
         throw const FormatException('Alasan perubahan jumlah kayu rangka wajib diisi.');
       }
@@ -411,7 +476,7 @@ class _PackingCalculatorScreenState extends State<PackingCalculatorScreen> {
           calculatedQuantity: _frameResult!.totalMeters,
           actualQuantity: actualFrame,
           adjustmentNote: _frameAdjustmentReason.text.trim(),
-          unitPrice: _integer(_framePrice, 'Harga kayu rangka per meter'),
+          unitPrice: _priceTimberByStock ? 0 : _integer(_framePrice, 'Harga kayu rangka per meter'),
         ));
       }
       if (_result!.totalSlatMeters > 0) {
@@ -422,7 +487,7 @@ class _PackingCalculatorScreenState extends State<PackingCalculatorScreen> {
           calculatedQuantity: _result!.totalSlatMeters,
           actualQuantity: actualSlat,
           adjustmentNote: _slatAdjustmentReason.text.trim(),
-          unitPrice: _integer(_slatPrice, 'Harga kayu per meter'),
+          unitPrice: _priceTimberByStock ? 0 : _integer(_slatPrice, 'Harga kayu per meter'),
         ));
       }
       if (_result!.totalBoardAreaM2 > 0) {
@@ -433,7 +498,29 @@ class _PackingCalculatorScreenState extends State<PackingCalculatorScreen> {
           calculatedQuantity: _result!.totalBoardAreaM2,
           actualQuantity: actualBoard,
           adjustmentNote: _boardAdjustmentReason.text.trim(),
-          unitPrice: _integer(_boardPrice, 'Harga papan per m²'),
+          unitPrice: _priceBoardBySheet ? 0 : _integer(_boardPrice, 'Harga papan per m²'),
+        ));
+      }
+      if (_priceTimberByStock && _timberPlan!.stockCount > 0) {
+        materials.add(MaterialUsageDraft(
+          materialId: _selectedStockMaterialId,
+          name: _selectedMasterMaterial(_selectedStockMaterialId)?['name']?.toString() ?? 'Kayu stok',
+          unit: 'batang',
+          calculatedQuantity: _timberPlan!.stockCount.toDouble(),
+          actualQuantity: actualStockBars,
+          adjustmentNote: _stockAdjustmentReason.text.trim(),
+          unitPrice: _integer(_stockPrice, 'Harga per batang kayu'),
+        ));
+      }
+      if (_priceBoardBySheet && _boardPlan!.sheetCount > 0) {
+        materials.add(MaterialUsageDraft(
+          materialId: _selectedBoardSheetMaterialId,
+          name: _selectedMasterMaterial(_selectedBoardSheetMaterialId)?['name']?.toString() ?? 'Papan lembar',
+          unit: 'lembar',
+          calculatedQuantity: _boardPlan!.sheetCount.toDouble(),
+          actualQuantity: actualBoardSheets,
+          adjustmentNote: _boardSheetAdjustmentReason.text.trim(),
+          unitPrice: _integer(_boardSheetPrice, 'Harga per lembar papan'),
         ));
       }
       final snapshot = <String, Object?>{
@@ -521,6 +608,12 @@ class _PackingCalculatorScreenState extends State<PackingCalculatorScreen> {
           'boardMaterialName': _selectedMasterMaterial(_selectedBoardMaterialId)?['name'],
         },
         'pricing': {
+          'timberPurchaseMode': _priceTimberByStock ? 'batang' : 'meter',
+          'timberStockPrice': _integer(_stockPrice, 'Harga per batang kayu'),
+          'actualTimberStockBars': actualStockBars,
+          'boardPurchaseMode': _priceBoardBySheet ? 'lembar' : 'meterPersegi',
+          'boardSheetPrice': _integer(_boardSheetPrice, 'Harga per lembar papan'),
+          'actualBoardSheets': actualBoardSheets,
           'frameUnitPrice': _integer(_framePrice, 'Harga kayu rangka per meter'),
           'slatUnitPrice': _integer(_slatPrice, 'Harga kayu per meter'),
           'boardUnitPrice': _integer(_boardPrice, 'Harga papan per m²'),
@@ -733,33 +826,84 @@ class _PackingCalculatorScreenState extends State<PackingCalculatorScreen> {
               style: TextStyle(color: Theme.of(context).colorScheme.error),
             ),
           ),
-        _materialSelector(
-          label: 'Master kayu rangka (satuan meter)',
-          unit: 'm',
-          selectedId: _selectedFrameMaterialId,
-          onChanged: _selectFrameMaterial,
+        SwitchListTile(
+          contentPadding: EdgeInsets.zero,
+          title: const Text('Hitung kayu berdasarkan batang stok'),
+          subtitle: const Text('Biaya memakai jumlah batang dari rencana potong, bukan meter teoritis.'),
+          value: _priceTimberByStock,
+          onChanged: (value) {
+            setState(() => _priceTimberByStock = value);
+            _calculatePrice();
+          },
         ),
-        const SizedBox(height: 10),
-        _numberField('Harga kayu rangka per meter', _framePrice, currency: true, invalidate: false),
-        const SizedBox(height: 14),
-        _materialSelector(
-          label: 'Master kayu bilah (satuan meter)',
-          unit: 'm',
-          selectedId: _selectedSlatMaterialId,
-          onChanged: _selectSlatMaterial,
+        if (_priceTimberByStock) ...[
+          _materialSelector(
+            label: 'Master kayu stok (satuan batang)',
+            unit: 'batang',
+            selectedId: _selectedStockMaterialId,
+            onChanged: _selectStockMaterial,
+          ),
+          const SizedBox(height: 10),
+          _numberField('Harga per batang kayu', _stockPrice, currency: true, invalidate: false),
+          const SizedBox(height: 10),
+          Text('Perkiraan batang: ' + (_timberPlan?.stockCount ?? 0).toString()),
+          _numberField('Batang aktual dibeli', _actualStockBars, suffix: 'batang', invalidate: false),
+          const SizedBox(height: 8),
+          TextField(controller: _stockAdjustmentReason, maxLines: 2, decoration: const InputDecoration(labelText: 'Alasan perubahan jumlah batang (wajib jika berbeda)', border: OutlineInputBorder())),
+        ] else ...[
+          _materialSelector(
+            label: 'Master kayu rangka (satuan meter)',
+            unit: 'm',
+            selectedId: _selectedFrameMaterialId,
+            onChanged: _selectFrameMaterial,
+          ),
+          const SizedBox(height: 10),
+          _numberField('Harga kayu rangka per meter', _framePrice, currency: true, invalidate: false),
+          const SizedBox(height: 14),
+          _materialSelector(
+            label: 'Master kayu bilah (satuan meter)',
+            unit: 'm',
+            selectedId: _selectedSlatMaterialId,
+            onChanged: _selectSlatMaterial,
+          ),
+          const SizedBox(height: 10),
+          _numberField('Harga kayu bilah per meter', _slatPrice, currency: true, invalidate: false),
+        ],
+        const Divider(height: 24),
+        SwitchListTile(
+          contentPadding: EdgeInsets.zero,
+          title: const Text('Hitung papan berdasarkan lembar'),
+          subtitle: const Text('Biaya memakai jumlah lembar dari rencana nesting, bukan m² teoritis.'),
+          value: _priceBoardBySheet,
+          onChanged: (value) {
+            setState(() => _priceBoardBySheet = value);
+            _calculatePrice();
+          },
         ),
-        const SizedBox(height: 10),
-        _numberField('Harga kayu bilah per meter', _slatPrice, currency: true, invalidate: false),
-        const SizedBox(height: 14),
-        _materialSelector(
-          label: 'Master papan (satuan m²)',
-          unit: 'm²',
-          selectedId: _selectedBoardMaterialId,
-          onChanged: _selectBoardMaterial,
-        ),
-
-        const SizedBox(height: 10),
-        _numberField('Harga papan per m²', _boardPrice, currency: true, invalidate: false),
+        if (_priceBoardBySheet) ...[
+          _materialSelector(
+            label: 'Master papan (satuan lembar)',
+            unit: 'lembar',
+            selectedId: _selectedBoardSheetMaterialId,
+            onChanged: _selectBoardSheetMaterial,
+          ),
+          const SizedBox(height: 10),
+          _numberField('Harga per lembar papan', _boardSheetPrice, currency: true, invalidate: false),
+          const SizedBox(height: 10),
+          Text('Perkiraan lembar: ' + (_boardPlan?.sheetCount ?? 0).toString()),
+          _numberField('Lembar aktual dibeli', _actualBoardSheets, suffix: 'lembar', invalidate: false),
+          const SizedBox(height: 8),
+          TextField(controller: _boardSheetAdjustmentReason, maxLines: 2, decoration: const InputDecoration(labelText: 'Alasan perubahan jumlah lembar (wajib jika berbeda)', border: OutlineInputBorder())),
+        ] else ...[
+          _materialSelector(
+            label: 'Master papan (satuan m²)',
+            unit: 'm²',
+            selectedId: _selectedBoardMaterialId,
+            onChanged: _selectBoardMaterial,
+          ),
+          const SizedBox(height: 10),
+          _numberField('Harga papan per m²', _boardPrice, currency: true, invalidate: false),
+        ],
         const SizedBox(height: 10),
         _numberField('Biaya jasa', _labor, currency: true, invalidate: false),
         const SizedBox(height: 10),
