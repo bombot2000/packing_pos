@@ -13,10 +13,10 @@ void main() {
       ],
     );
 
-    expect(plan.stockCount, 2);
+    expect(plan.stockCount, 3);
     expect(plan.totalPieceLengthCm, closeTo(800, 0.000001));
-    expect(plan.totalKerfCm, closeTo(0.9, 0.000001));
-    expect(plan.leftoverLengthCm, closeTo(0.9, 0.000001));
+    expect(plan.totalKerfCm, closeTo(0.6, 0.000001));
+    expect(plan.leftoverLengthCm, closeTo(399.4, 0.000001));
   });
 
   test('rejects a cut longer than available stock', () {
