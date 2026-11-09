@@ -1,4 +1,5 @@
 import 'package:esc_pos_utils_plus/esc_pos_utils_plus.dart';
+import 'package:device_info_plus/device_info_plus.dart';
 import 'package:flutter/material.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:print_bluetooth_thermal/print_bluetooth_thermal.dart';
@@ -40,8 +41,10 @@ class _PrinterSettingsScreenState extends State<PrinterSettingsScreen> {
   Future<void> _refreshDevices() async {
     setState(() { _loading = true; _error = null; });
     try {
-      await Permission.bluetoothScan.request();
-      await Permission.bluetoothConnect.request();
+      final androidInfo = await DeviceInfoPlugin().androidInfo;
+      if (androidInfo.version.sdkInt >= 31) {
+        await Permission.bluetoothConnect.request();
+      }
       final granted = await PrintBluetoothThermal.isPermissionBluetoothGranted;
       if (!granted) {
         throw StateError('Izin Bluetooth belum diberikan. Aktifkan izin Bluetooth untuk Packing POS di pengaturan Android.');
