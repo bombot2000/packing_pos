@@ -171,6 +171,8 @@ class _PackingTransactionDetailScreenState extends State<PackingTransactionDetai
         final status = tx['status'] as String;
         final snapshotData = jsonDecode(tx['calculation_snapshot'] as String) as Map<String, dynamic>;
         final dimensions = snapshotData['dimensionsCm'] as Map<String, dynamic>? ?? {};
+        final frameData = snapshotData['frame'] as Map<String, dynamic>?;
+        final frameCuts = frameData?['cuts'] as List<dynamic>? ?? const [];
         return ListView(padding: const EdgeInsets.all(16), children: [
           Card(child: Padding(
             padding: const EdgeInsets.all(16),
@@ -185,6 +187,31 @@ class _PackingTransactionDetailScreenState extends State<PackingTransactionDetai
               if ((tx['note'] as String).isNotEmpty) Text('Catatan: ${tx['note']}'),
             ]),
           )),
+          if (frameData != null) ...[
+            const SizedBox(height: 8),
+            const Text('Rincian potongan rangka', style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold)),
+            Card(child: Column(children: [
+              ...frameCuts.map((raw) {
+                final cut = raw as Map<String, dynamic>;
+                return ListTile(
+                  dense: true,
+                  title: Text(cut['label']?.toString() ?? 'Potongan rangka'),
+                  subtitle: Text('${cut['count']} potong × ${(cut['cutLengthCm'] as num).toStringAsFixed(1)} cm'),
+                  trailing: Text('${(cut['totalMeters'] as num).toStringAsFixed(2)} m'),
+                );
+              }),
+              ListTile(
+                title: const Text('Total rangka dihitung'),
+                trailing: Text('${(frameData['calculatedMeters'] as num).toStringAsFixed(2)} m'),
+              ),
+              if (frameData['actualMeters'] != null)
+                ListTile(
+                  title: const Text('Pemakaian rangka aktual'),
+                  subtitle: Text(frameData['adjustmentReason']?.toString() ?? ''),
+                  trailing: Text('${(frameData['actualMeters'] as num).toStringAsFixed(2)} m'),
+                ),
+            ])),
+          ],
           const SizedBox(height: 8),
           const Text('Snapshot kebutuhan bahan', style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold)),
           Card(child: Column(children: _materials.isEmpty
