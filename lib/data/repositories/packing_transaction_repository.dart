@@ -279,8 +279,22 @@ class PackingTransactionRepository {
 
   /// Ringkasan laporan lintas transaksi. Transaksi batal tidak dihitung sebagai
   /// penjualan, tetapi tetap tersimpan pada riwayat.
-  Future<Map<String, Object?>> reportSummary() async {
+  Future<Map<String, Object?>> reportSummary({
+    DateTime? startDate,
+    DateTime? endDate,
+  }) async {
     final db = await _database.database;
+    final conditions = <String>[];
+    final args = <Object?>[];
+    if (startDate != null) {
+      conditions.add('created_at >= ?');
+      args.add(startDate.toUtc().toIso8601String());
+    }
+    if (endDate != null) {
+      conditions.add('created_at < ?');
+      args.add(endDate.toUtc().toIso8601String());
+    }
+    final dateFilter = conditions.isEmpty ? '' : ' AND ' + conditions.join(' AND ');
     final totals = await db.rawQuery('''
       SELECT
         COUNT(*) AS transaction_count,
@@ -289,10 +303,11 @@ class PackingTransactionRepository {
         COALESCE(SUM(selling_price - paid_amount), 0) AS receivable_total,
         SUM(CASE WHEN status = 'completed' THEN 1 ELSE 0 END) AS completed_count,
         SUM(CASE WHEN status = 'open' THEN 1 ELSE 0 END) AS open_count,
-        (SELECT COUNT(*) FROM packing_transactions WHERE status = 'cancelled') AS cancelled_count
+        (SELECT COUNT(*) FROM packing_transactions
+          WHERE status = 'cancelled'${dateFilter}) AS cancelled_count
       FROM packing_transactions
-      WHERE status != 'cancelled'
-    ''');
+      WHERE status != 'cancelled'${dateFilter}
+    ''', [...args, ...args]);
     final materials = await db.rawQuery('''
       SELECT material_name_snapshot AS name, unit_snapshot AS unit,
         COALESCE(SUM(actual_quantity), 0) AS quantity,
@@ -300,10 +315,10 @@ class PackingTransactionRepository {
       FROM transaction_materials
       INNER JOIN packing_transactions
         ON packing_transactions.id = transaction_materials.transaction_id
-      WHERE packing_transactions.status != 'cancelled'
+      WHERE packing_transactions.status != 'cancelled'${dateFilter}
       GROUP BY material_name_snapshot, unit_snapshot
       ORDER BY cost DESC, name COLLATE NOCASE
-    ''');
+    ''', args);
     return {
       'totals': totals.first,
       'materials': materials,
