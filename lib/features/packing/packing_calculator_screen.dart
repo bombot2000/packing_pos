@@ -677,6 +677,7 @@ class _PackingCalculatorScreenState extends State<PackingCalculatorScreen> {
         },
         'frame': {
           'method': 'eightCorner',
+          'jointMethod': _frameJointMethod,
           'cuts': _frameResult!.cutList.map((cut) => {
             'label': cut.label,
             'count': cut.count,
