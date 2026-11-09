@@ -337,8 +337,16 @@ class _PackingCalculatorScreenState extends State<PackingCalculatorScreen> {
             final size = dimensions.faceSize(face.face);
             return BoardCutPiece(
               label: 'Papan ' + _faceName(face.face),
-              widthCm: size.length,
-              heightCm: size.width,
+              widthCm: size.length + _number(
+                _faceBoardOverlapLength[face.face]!,
+                'Overlap panjang ' + _faceName(face.face),
+                allowZero: true,
+              ),
+              heightCm: size.width + _number(
+                _faceBoardOverlapWidth[face.face]!,
+                'Overlap lebar ' + _faceName(face.face),
+                allowZero: true,
+              ),
               quantity: 1,
             );
           }).toList();
