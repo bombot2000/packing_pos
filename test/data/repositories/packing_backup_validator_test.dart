@@ -71,7 +71,7 @@ void main() {
 
     test('rejects duplicate receipt numbers', () {
       final backup = validBackup();
-      final duplicate = Map<String, Object?>.from(
+      final duplicate = Map<String, Object>.from(
         backup['packing_transactions']![0] as Map,
       );
       duplicate['id'] = 2;
