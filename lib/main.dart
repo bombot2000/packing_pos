@@ -5,6 +5,7 @@ import 'features/packing/packing_transaction_history_screen.dart';
 import 'features/packing/material_master_screen.dart';
 import 'features/packing/packing_reports_screen.dart';
 import 'features/packing/packing_backup_screen.dart';
+import 'features/packing/printer_settings_screen.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
@@ -74,6 +75,13 @@ class HomePage extends StatelessWidget {
         subtitle: const Text('Ringkasan penjualan, pembayaran, piutang, dan pemakaian bahan.'),
         trailing: const Icon(Icons.chevron_right),
         onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const PackingReportsScreen())),
+      )),
+      Card(child: ListTile(
+        leading: const Icon(Icons.print),
+        title: const Text('Pengaturan printer'),
+        subtitle: const Text('Pasangkan printer Bluetooth dan pilih kertas 58 atau 80 mm.'),
+        trailing: const Icon(Icons.chevron_right),
+        onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const PrinterSettingsScreen())),
       )),
       Card(child: ListTile(
         leading: const Icon(Icons.backup),

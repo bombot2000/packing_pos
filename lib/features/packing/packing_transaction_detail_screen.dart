@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 
 import '../../data/repositories/packing_transaction_repository.dart';
+import '../../services/packing_receipt_printer.dart';
 
 class PackingTransactionDetailScreen extends StatefulWidget {
   const PackingTransactionDetailScreen({super.key, required this.transactionId});
@@ -51,6 +52,23 @@ class _PackingTransactionDetailScreenState extends State<PackingTransactionDetai
       RegExp(r'(?<=\d)(?=(\d{3})+(?!\d))'),
       (m) => '.',
     )}';
+  }
+
+
+  Future<void> _printReceipt() async {
+    try {
+      await PackingReceiptPrinter.printTransaction(
+        transaction: _transaction!,
+        materials: _materials,
+      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Nota berhasil dikirim ke printer.')),
+        );
+      }
+    } catch (error) {
+      if (mounted) setState(() => _error = 'Gagal mencetak nota: $error');
+    }
   }
 
   Future<void> _addPayment() async {
@@ -241,6 +259,11 @@ class _PackingTransactionDetailScreenState extends State<PackingTransactionDetai
           if (_error != null) Padding(
             padding: const EdgeInsets.symmetric(vertical: 8),
             child: Text(_error!, style: TextStyle(color: Theme.of(context).colorScheme.error)),
+          ),
+          OutlinedButton.icon(
+            onPressed: _printReceipt,
+            icon: const Icon(Icons.print_outlined),
+            label: const Text('Cetak nota Bluetooth'),
           ),
           if (status != 'cancelled' && balance > 0)
             FilledButton.icon(onPressed: _addPayment, icon: const Icon(Icons.payments_outlined), label: const Text('Tambah pembayaran')),
