@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import '../database/packing_database.dart';
+import 'packing_backup_validator.dart';
 
 class MaterialUsageDraft {
   const MaterialUsageDraft({
@@ -366,29 +367,7 @@ class PackingTransactionRepository {
   /// Replaces local data only after validating the backup envelope. All table
   /// changes run in one SQLite transaction; invalid files roll back entirely.
   Future<void> restoreBackup(Map<String, dynamic> backup) async {
-    if (backup['format'] != 'packing_pos_backup' || ![1, 2].contains(backup['version'])) {
-      throw const FormatException('Format atau versi backup tidak didukung.');
-    }
-    const tables = [
-      'packing_transactions',
-      'transaction_materials',
-      'transaction_payments',
-      'materials',
-      'app_settings',
-    ];
-    final data = <String, List<Map<String, Object?>>>{};
-    for (final table in tables) {
-      final raw = backup[table];
-      if (raw is! List) {
-        throw FormatException('Data tabel $table tidak ditemukan pada backup.');
-      }
-      data[table] = raw.map((row) {
-        if (row is! Map) {
-          throw FormatException('Baris tabel $table tidak valid.');
-        }
-        return Map<String, Object?>.from(row);
-      }).toList();
-    }
+    final data = PackingBackupValidator.validate(backup);
 
     final db = await _database.database;
     await db.transaction((txn) async {
