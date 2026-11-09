@@ -797,12 +797,8 @@ class _PackingCalculatorScreenState extends State<PackingCalculatorScreen> {
         const SizedBox(width: 8),
         Expanded(child: _numberField('Potong rel lebar', _frameWidthRail, suffix: 'cm')),
       ]),
-      Row(children: [
-        Expanded(child: _numberField('Panjang stok', _timberStockLength, suffix: 'cm')),
-        const SizedBox(width: 8),
-        Expanded(child: _numberField('Mata gergaji', _sawKerf, suffix: 'cm')),
-      ]),
-      const Text('Panjang stok dan lebar mata gergaji dipakai untuk estimasi jumlah batang. Optimasi menggunakan metode first-fit decreasing; hasil merupakan estimasi, bukan jaminan jumlah minimum.'),
+      _numberField('Lebar mata gergaji', _sawKerf, suffix: 'cm'),
+      const Text('Stok rangka dan bilah dihitung terpisah agar potongan dengan penampang berbeda tidak dicampur. Optimasi first-fit decreasing merupakan estimasi, bukan jaminan jumlah batang minimum.'),
       _sectionTitle('Ukuran lembar papan'),
       Row(children: [
         Expanded(child: _numberField('Panjang lembar', _boardSheetLength, suffix: 'cm')),
@@ -889,18 +885,34 @@ class _PackingCalculatorScreenState extends State<PackingCalculatorScreen> {
             )),
           ])),
         _sectionTitle('Rencana pemotongan stok kayu'),
-        if (_timberPlan != null)
+        if (_frameTimberPlan != null)
           Card(child: Column(children: [
+            const ListTile(title: Text('Kayu rangka', style: TextStyle(fontWeight: FontWeight.bold))),
             ListTile(
-              title: const Text('Perkiraan batang dibeli'),
-              trailing: Text(_timberPlan!.stockCount.toString(), style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+              title: const Text('Batang stok rangka'),
+              trailing: Text(_frameTimberPlan!.stockCount.toString(), style: const TextStyle(fontWeight: FontWeight.bold)),
             ),
-            ListTile(title: const Text('Panjang pembelian total'), trailing: Text(_timberPlan!.purchasedLengthMeters.toStringAsFixed(2) + ' m')),
-            ListTile(title: const Text('Sisa stok total (termasuk kerf)'), trailing: Text(_timberPlan!.leftoverLengthCm.toStringAsFixed(1) + ' cm')),
-            const Divider(height: 1),
-            ..._timberPlan!.bins.map((bin) => ListTile(
+            ListTile(title: const Text('Panjang stok per batang'), trailing: Text(_frameTimberPlan!.stockLengthCm.toStringAsFixed(1) + ' cm')),
+            ListTile(title: const Text('Sisa total'), trailing: Text(_frameTimberPlan!.leftoverLengthCm.toStringAsFixed(1) + ' cm')),
+            ..._frameTimberPlan!.bins.map((bin) => ListTile(
               dense: true,
-              title: Text('Batang ' + bin.number.toString()),
+              title: Text('Batang rangka ' + bin.number.toString()),
+              subtitle: Text(bin.cuts.map((cut) => cut.label + ' ' + cut.lengthCm.toStringAsFixed(1) + ' cm').join(' • ')),
+              trailing: Text('Sisa ' + bin.remainingLengthCm.toStringAsFixed(1) + ' cm'),
+            )),
+          ])),
+        if (_slatTimberPlan != null)
+          Card(child: Column(children: [
+            const ListTile(title: Text('Kayu bilah', style: TextStyle(fontWeight: FontWeight.bold))),
+            ListTile(
+              title: const Text('Batang stok bilah'),
+              trailing: Text(_slatTimberPlan!.stockCount.toString(), style: const TextStyle(fontWeight: FontWeight.bold)),
+            ),
+            ListTile(title: const Text('Panjang stok per batang'), trailing: Text(_slatTimberPlan!.stockLengthCm.toStringAsFixed(1) + ' cm')),
+            ListTile(title: const Text('Sisa total'), trailing: Text(_slatTimberPlan!.leftoverLengthCm.toStringAsFixed(1) + ' cm')),
+            ..._slatTimberPlan!.bins.map((bin) => ListTile(
+              dense: true,
+              title: Text('Batang bilah ' + bin.number.toString()),
               subtitle: Text(bin.cuts.map((cut) => cut.label + ' ' + cut.lengthCm.toStringAsFixed(1) + ' cm').join(' • ')),
               trailing: Text('Sisa ' + bin.remainingLengthCm.toStringAsFixed(1) + ' cm'),
             )),
