@@ -40,7 +40,7 @@ jobs:
         run: |
           if [ -f android/gradle/wrapper/gradle-wrapper.properties ]; then
             sed -i 's/-all.zip/-bin.zip/' android/gradle/wrapper/gradle-wrapper.properties
-            sed -i 's#https\\://services.gradle.org/distributions/#https\\://downloads.gradle.org/distributions/#' android/gradle/wrapper/gradle-wrapper.properties
+            sed -i 's#services.gradle.org#downloads.gradle.org#' android/gradle/wrapper/gradle-wrapper.properties
           fi
 
       - name: Install dependencies
