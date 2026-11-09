@@ -45,6 +45,9 @@ jobs:
       - name: Run tests
         run: flutter test --reporter expanded
 
+      - name: Build debug APK to validate Android plugins
+        run: flutter build apk --debug
+
       - name: Check persistent release signing secrets
         id: signing
         env:
