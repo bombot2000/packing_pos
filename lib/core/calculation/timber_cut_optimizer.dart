@@ -119,7 +119,7 @@ class TimberCutOptimizer {
       number: entry.key + 1,
       cuts: List.unmodifiable(entry.value.cuts),
       usedLengthCm: entry.value.usedLengthCm,
-      remainingLengthCm: (stockLengthCm - entry.value.usedLengthCm).clamp(0, stockLengthCm),
+      remainingLengthCm: (stockLengthCm - entry.value.usedLengthCm).clamp(0, stockLengthCm).toDouble(),
     )).toList();
 
     final totalKerf = result.fold<double>(
