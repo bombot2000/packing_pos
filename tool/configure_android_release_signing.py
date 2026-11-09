@@ -42,15 +42,15 @@ if is_kotlin:
         text = text.replace(marker, signing + marker, 1)
     if 'signingConfig = signingConfigs.getByName("release")' not in text:
         text = re.sub(
-            r'(release\\s*\\{[\\s\\S]*?)(signingConfig\\s*=\\s*signingConfigs\\.getByName\\(\"debug\"\\))',
-            r'\\1signingConfig = signingConfigs.getByName("release")',
+            r'(release\s*\{[\s\S]*?)(signingConfig\s*=\s*signingConfigs\.getByName\(\"debug\"\))',
+            r'\1signingConfig = signingConfigs.getByName("release")',
             text,
             count=1,
         )
         if 'signingConfig = signingConfigs.getByName("release")' not in text:
             text = re.sub(
-                r'(release\\s*\\{)',
-                r'\\1\\n            signingConfig = signingConfigs.getByName("release")',
+                r'(release\s*\{)',
+                r'\1\\n            signingConfig = signingConfigs.getByName("release")',
                 text,
                 count=1,
             )
@@ -81,8 +81,8 @@ else:
         text = text.replace(marker, signing + marker, 1)
     if "signingConfig signingConfigs.release" not in text:
         text = re.sub(
-            r"(release\\s*\\{)(?![\\s\\S]*?signingConfig)",
-            r"\\1\\n            signingConfig signingConfigs.release",
+            r"(release\s*\{)(?![\s\S]*?signingConfig)",
+            r"\1\\n            signingConfig signingConfigs.release",
             text,
             count=1,
         )
