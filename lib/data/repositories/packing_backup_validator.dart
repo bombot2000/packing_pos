@@ -138,7 +138,7 @@ class PackingBackupValidator {
     return data;
   }
 
-  static String _string(Object? value, String field) {
+  // Settings may intentionally store an empty string to clear an optional value.\n  static String _string(Object? value, String field) {
     if (value is! String) {
       throw FormatException('$field harus berupa teks.');
     }
