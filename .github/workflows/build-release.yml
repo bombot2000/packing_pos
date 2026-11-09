@@ -43,6 +43,17 @@ jobs:
             sed -i 's#services.gradle.org#downloads.gradle.org#' android/gradle/wrapper/gradle-wrapper.properties
           fi
 
+      - name: Pre-download Gradle distribution with retries
+        run: |
+          PROPERTIES="android/gradle/wrapper/gradle-wrapper.properties"
+          VERSION=$(grep '^distributionUrl=' "$PROPERTIES" | sed -E 's/.*gradle-([0-9.]+)-bin.zip.*/\1/')
+          ZIP="$RUNNER_TEMP/gradle-${VERSION}-bin.zip"
+          curl -fL --retry 10 --retry-all-errors --retry-delay 10 \
+            "https://downloads.gradle.org/distributions/gradle-${VERSION}-bin.zip" \
+            -o "$ZIP"
+          sed -i "s|^distributionUrl=.*|distributionUrl=file\\://$ZIP|" "$PROPERTIES"
+          grep '^distributionUrl=' "$PROPERTIES"
+
       - name: Install dependencies
         run: flutter pub get
 
