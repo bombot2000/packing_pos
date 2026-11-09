@@ -12,11 +12,26 @@ class PackingReportsScreen extends StatefulWidget {
 class _PackingReportsScreenState extends State<PackingReportsScreen> {
   final _repository = PackingTransactionRepository();
   late Future<Map<String, Object?>> _report;
+  String _period = 'all';
+
+  Future<Map<String, Object?>> _loadReport() {
+    final now = DateTime.now();
+    if (_period == 'today') {
+      final start = DateTime(now.year, now.month, now.day);
+      return _repository.reportSummary(startDate: start, endDate: start.add(const Duration(days: 1)));
+    }
+    if (_period == 'month') {
+      final start = DateTime(now.year, now.month);
+      final end = DateTime(now.year, now.month + 1);
+      return _repository.reportSummary(startDate: start, endDate: end);
+    }
+    return _repository.reportSummary();
+  }
 
   @override
   void initState() {
     super.initState();
-    _report = _repository.reportSummary();
+    _report = _loadReport();
   }
 
   String _money(Object? value) {
@@ -37,7 +52,7 @@ class _PackingReportsScreenState extends State<PackingReportsScreen> {
       actions: [
         IconButton(
           tooltip: 'Muat ulang',
-          onPressed: () => setState(() => _report = _repository.reportSummary()),
+          onPressed: () => setState(() => _report = _loadReport()),
           icon: const Icon(Icons.refresh),
         ),
       ],
@@ -62,8 +77,24 @@ class _PackingReportsScreenState extends State<PackingReportsScreen> {
         return ListView(
           padding: const EdgeInsets.all(16),
           children: [
-            const Text(
-              'Ringkasan seluruh transaksi aktif',
+            DropdownButtonFormField<String>(
+              initialValue: _period,
+              decoration: const InputDecoration(labelText: 'Periode laporan', border: OutlineInputBorder()),
+              items: const [
+                DropdownMenuItem(value: 'all', child: Text('Semua waktu')),
+                DropdownMenuItem(value: 'today', child: Text('Hari ini')),
+                DropdownMenuItem(value: 'month', child: Text('Bulan ini')),
+              ],
+              onChanged: (value) {
+                if (value != null) setState(() {
+                  _period = value;
+                  _report = _loadReport();
+                });
+              },
+            ),
+            const SizedBox(height: 12),
+            Text(
+              _period == 'today' ? 'Ringkasan hari ini' : _period == 'month' ? 'Ringkasan bulan ini' : 'Ringkasan seluruh transaksi aktif',
               style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 8),
@@ -113,7 +144,7 @@ class _PackingReportsScreenState extends State<PackingReportsScreen> {
                   )).toList())),
             const SizedBox(height: 16),
             const Text(
-              'Catatan: laporan ini merupakan ringkasan semua transaksi aktif sejak aplikasi digunakan. Transaksi yang dibatalkan tidak masuk total penjualan dan pemakaian bahan.',
+              'Catatan: transaksi yang dibatalkan tidak masuk total penjualan dan pemakaian bahan. Periode menggunakan tanggal transaksi lokal perangkat.',
             ),
           ],
         );
