@@ -213,6 +213,18 @@ class _PackingCalculatorScreenState extends State<PackingCalculatorScreen> {
   final Map<PackingFace, FaceBuildType> _modes = {
     for (final face in PackingFace.values) face: FaceBuildType.closedBoard,
   };
+  final Map<PackingFace, TextEditingController> _faceLeftMargin = {
+    for (final face in PackingFace.values) face: TextEditingController(text: '0'),
+  };
+  final Map<PackingFace, TextEditingController> _faceRightMargin = {
+    for (final face in PackingFace.values) face: TextEditingController(text: '0'),
+  };
+  final Map<PackingFace, TextEditingController> _faceBoardOverlapLength = {
+    for (final face in PackingFace.values) face: TextEditingController(text: '0'),
+  };
+  final Map<PackingFace, TextEditingController> _faceBoardOverlapWidth = {
+    for (final face in PackingFace.values) face: TextEditingController(text: '0'),
+  };
   PackingDimensions? _dimensions;
   FrameEstimate? _frameResult;
   TimberCutPlan? _timberPlan;
@@ -233,6 +245,10 @@ class _PackingCalculatorScreenState extends State<PackingCalculatorScreen> {
       _boardSheetPrice, _actualBoardSheets, _boardSheetAdjustmentReason,
       _slatPrice, _boardPrice, _labor, _overhead, _markup, _note,
       _actualSlatMeters, _actualBoardArea, _slatAdjustmentReason, _boardAdjustmentReason,
+      ..._faceLeftMargin.values,
+      ..._faceRightMargin.values,
+      ..._faceBoardOverlapLength.values,
+      ..._faceBoardOverlapWidth.values,
     ]) {
       controller.dispose();
     }
@@ -292,6 +308,10 @@ class _PackingCalculatorScreenState extends State<PackingCalculatorScreen> {
         buildType: _modes[face]!,
         slatWidthCm: slatWidth,
         gapCm: gap,
+        leftMarginCm: _number(_faceLeftMargin[face]!, 'Margin kiri ' + _faceName(face), allowZero: true),
+        rightMarginCm: _number(_faceRightMargin[face]!, 'Margin kanan ' + _faceName(face), allowZero: true),
+        boardOverlapLengthCm: _number(_faceBoardOverlapLength[face]!, 'Overlap panjang ' + _faceName(face), allowZero: true),
+        boardOverlapWidthCm: _number(_faceBoardOverlapWidth[face]!, 'Overlap lebar ' + _faceName(face), allowZero: true),
       )).toList();
       final result = PackingFacesCalculator.calculate(dimensions: dimensions, configs: configs);
       final cutPieces = <TimberCutPiece>[
@@ -537,6 +557,14 @@ class _PackingCalculatorScreenState extends State<PackingCalculatorScreen> {
           'width': _dimensions!.widthCm,
           'height': _dimensions!.heightCm,
         },
+        'faceSettings': PackingFace.values.map((face) => {
+          'face': face.name,
+          'buildType': _modes[face]!.name,
+          'leftMarginCm': _number(_faceLeftMargin[face]!, 'Margin kiri ' + _faceName(face), allowZero: true),
+          'rightMarginCm': _number(_faceRightMargin[face]!, 'Margin kanan ' + _faceName(face), allowZero: true),
+          'boardOverlapLengthCm': _number(_faceBoardOverlapLength[face]!, 'Overlap panjang ' + _faceName(face), allowZero: true),
+          'boardOverlapWidthCm': _number(_faceBoardOverlapWidth[face]!, 'Overlap lebar ' + _faceName(face), allowZero: true),
+        }).toList(),
         'faces': _result!.faces.map((face) => {
           'face': face.face.name,
           'buildType': face.buildType.name,
@@ -718,18 +746,38 @@ class _PackingCalculatorScreenState extends State<PackingCalculatorScreen> {
       _sectionTitle('Konstruksi setiap bidang'),
       ...PackingFace.values.map((face) => Card(
         child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-          child: Row(children: [
-            Expanded(child: Text(_faceName(face), style: const TextStyle(fontWeight: FontWeight.w600))),
-            DropdownButton<FaceBuildType>(
-              value: _modes[face],
-              items: FaceBuildType.values.map((mode) => DropdownMenuItem(
-                value: mode, child: Text(_modeName(mode)),
-              )).toList(),
-              onChanged: (value) {
-                if (value != null) setState(() { _modes[face] = value; _result = null; _price = null; });
-              },
-            ),
+          padding: const EdgeInsets.all(12),
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Row(children: [
+              Expanded(child: Text(_faceName(face), style: const TextStyle(fontWeight: FontWeight.w600))),
+              DropdownButton<FaceBuildType>(
+                value: _modes[face],
+                items: FaceBuildType.values.map((mode) => DropdownMenuItem(
+                  value: mode, child: Text(_modeName(mode)),
+                )).toList(),
+                onChanged: (value) {
+                  if (value != null) setState(() { _modes[face] = value; _result = null; _price = null; });
+                },
+              ),
+            ]),
+            if (_modes[face] == FaceBuildType.openSlat) ...[
+              const Text('Margin bidang pada sisi kiri dan kanan (cm).'),
+              const SizedBox(height: 8),
+              Row(children: [
+                Expanded(child: _numberField('Margin kiri', _faceLeftMargin[face]!, suffix: 'cm')),
+                const SizedBox(width: 8),
+                Expanded(child: _numberField('Margin kanan', _faceRightMargin[face]!, suffix: 'cm')),
+              ]),
+            ],
+            if (_modes[face] == FaceBuildType.closedBoard) ...[
+              const Text('Overlap adalah tambahan total pada ukuran bidang ini, bukan nilai per sisi.'),
+              const SizedBox(height: 8),
+              Row(children: [
+                Expanded(child: _numberField('Overlap panjang', _faceBoardOverlapLength[face]!, suffix: 'cm')),
+                const SizedBox(width: 8),
+                Expanded(child: _numberField('Overlap lebar', _faceBoardOverlapWidth[face]!, suffix: 'cm')),
+              ]),
+            ],
           ]),
         ),
       )),
