@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 
 import '../../core/calculation/packing_faces.dart';
 import '../../core/calculation/frame_calculator.dart';
+import '../../core/calculation/timber_cut_optimizer.dart';
 import '../../core/calculation/pricing_calculator.dart';
 import '../../data/repositories/packing_transaction_repository.dart';
 
@@ -28,6 +29,8 @@ class _PackingCalculatorScreenState extends State<PackingCalculatorScreen> {
   final _actualFrameMeters = TextEditingController();
   final _frameAdjustmentReason = TextEditingController();
   final _framePrice = TextEditingController(text: '0');
+  final _timberStockLength = TextEditingController(text: '400');
+  final _sawKerf = TextEditingController(text: '0.3');
   final _slatPrice = TextEditingController(text: '0');
   final _boardPrice = TextEditingController(text: '0');
   final _labor = TextEditingController(text: '0');
@@ -176,6 +179,7 @@ class _PackingCalculatorScreenState extends State<PackingCalculatorScreen> {
   };
   PackingDimensions? _dimensions;
   FrameEstimate? _frameResult;
+  TimberCutPlan? _timberPlan;
   PackingFacesResult? _result;
   PriceResult? _price;
   String? _error;
@@ -186,7 +190,7 @@ class _PackingCalculatorScreenState extends State<PackingCalculatorScreen> {
     for (final controller in [
       _customer, _item, _length, _width, _height, _slatWidth, _gap,
       _framePostLength, _frameLengthRail, _frameWidthRail, _actualFrameMeters,
-      _frameAdjustmentReason, _framePrice,
+      _frameAdjustmentReason, _framePrice, _timberStockLength, _sawKerf,
       _slatPrice, _boardPrice, _labor, _overhead, _markup, _note,
       _actualSlatMeters, _actualBoardArea, _slatAdjustmentReason, _boardAdjustmentReason,
     ]) {
@@ -242,9 +246,27 @@ class _PackingCalculatorScreenState extends State<PackingCalculatorScreen> {
         gapCm: gap,
       )).toList();
       final result = PackingFacesCalculator.calculate(dimensions: dimensions, configs: configs);
+      final cutPieces = <TimberCutPiece>[
+        ...frame.cutList.map((cut) => TimberCutPiece(
+          label: cut.label,
+          lengthCm: cut.lengthCm,
+          quantity: cut.count,
+        )),
+        ...result.faces.where((face) => face.slat != null && face.slat!.count > 0).map((face) => TimberCutPiece(
+          label: 'Bilah ' + _faceName(face.face),
+          lengthCm: dimensions.faceSize(face.face).length,
+          quantity: face.slat!.count,
+        )),
+      ];
+      final timberPlan = TimberCutOptimizer.optimize(
+        stockLengthCm: _number(_timberStockLength, 'Panjang stok kayu'),
+        kerfCm: _number(_sawKerf, 'Lebar mata gergaji', allowZero: true),
+        pieces: cutPieces,
+      );
       setState(() {
         _dimensions = dimensions;
         _frameResult = frame;
+        _timberPlan = timberPlan;
         _actualFrameMeters.text = frame.totalMeters.toStringAsFixed(3);
         _frameAdjustmentReason.clear();
         _result = result;
@@ -403,6 +425,25 @@ class _PackingCalculatorScreenState extends State<PackingCalculatorScreen> {
           'slatLinearMeters': face.slat?.totalLinearMeters,
           'boardAreaM2': face.boardAreaM2,
         }).toList(),
+        'timberCutPlan': {
+          'strategy': 'firstFitDecreasing',
+          'stockLengthCm': _timberPlan!.stockLengthCm,
+          'kerfCm': _timberPlan!.kerfCm,
+          'stockCount': _timberPlan!.stockCount,
+          'purchasedLengthMeters': _timberPlan!.purchasedLengthMeters,
+          'totalPieceLengthCm': _timberPlan!.totalPieceLengthCm,
+          'totalKerfCm': _timberPlan!.totalKerfCm,
+          'leftoverLengthCm': _timberPlan!.leftoverLengthCm,
+          'bins': _timberPlan!.bins.map((bin) => {
+            'number': bin.number,
+            'usedLengthCm': bin.usedLengthCm,
+            'remainingLengthCm': bin.remainingLengthCm,
+            'cuts': bin.cuts.map((cut) => {
+              'label': cut.label,
+              'lengthCm': cut.lengthCm,
+            }).toList(),
+          }).toList(),
+        },
         'frame': {
           'method': 'eightCorner',
           'cuts': _frameResult!.cutList.map((cut) => {
@@ -504,6 +545,12 @@ class _PackingCalculatorScreenState extends State<PackingCalculatorScreen> {
         const SizedBox(width: 8),
         Expanded(child: _numberField('Potong rel lebar', _frameWidthRail, suffix: 'cm')),
       ]),
+      Row(children: [
+        Expanded(child: _numberField('Panjang stok', _timberStockLength, suffix: 'cm')),
+        const SizedBox(width: 8),
+        Expanded(child: _numberField('Mata gergaji', _sawKerf, suffix: 'cm')),
+      ]),
+      const Text('Panjang stok dan lebar mata gergaji dipakai untuk estimasi jumlah batang. Optimasi menggunakan metode first-fit decreasing; hasil merupakan estimasi, bukan jaminan jumlah minimum.'),
       _sectionTitle('Pengaturan bilah kayu'),
       Row(children: [
         Expanded(child: _numberField('Lebar bilah', _slatWidth, suffix: 'cm')),
@@ -546,6 +593,23 @@ class _PackingCalculatorScreenState extends State<PackingCalculatorScreen> {
             )),
             const Divider(height: 1),
             ListTile(title: const Text('Total rangka'), trailing: Text(_frameResult!.totalMeters.toStringAsFixed(2) + ' m')),
+          ])),
+        _sectionTitle('Rencana pemotongan stok kayu'),
+        if (_timberPlan != null)
+          Card(child: Column(children: [
+            ListTile(
+              title: const Text('Perkiraan batang dibeli'),
+              trailing: Text(_timberPlan!.stockCount.toString(), style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+            ),
+            ListTile(title: const Text('Panjang pembelian total'), trailing: Text(_timberPlan!.purchasedLengthMeters.toStringAsFixed(2) + ' m')),
+            ListTile(title: const Text('Sisa stok total (termasuk kerf)'), trailing: Text(_timberPlan!.leftoverLengthCm.toStringAsFixed(1) + ' cm')),
+            const Divider(height: 1),
+            ..._timberPlan!.bins.map((bin) => ListTile(
+              dense: true,
+              title: Text('Batang ' + bin.number.toString()),
+              subtitle: Text(bin.cuts.map((cut) => cut.label + ' ' + cut.lengthCm.toStringAsFixed(1) + ' cm').join(' • ')),
+              trailing: Text('Sisa ' + bin.remainingLengthCm.toStringAsFixed(1) + ' cm'),
+            )),
           ])),
         _sectionTitle('Hasil kebutuhan bahan'),
         Card(child: Column(children: [
@@ -667,7 +731,7 @@ class _PackingCalculatorScreenState extends State<PackingCalculatorScreen> {
         Text(_error!, style: TextStyle(color: Theme.of(context).colorScheme.error)),
       ],
       const SizedBox(height: 20),
-      const Text('Catatan: rangka dihitung sebagai estimasi 8 sudut dengan ukuran potong yang dapat diubah. Belum termasuk optimasi pemotongan stok, waste, atau konversi pembelian batang/lembar. Biaya memakai satuan teoritis meter dan m².'),
+      const Text('Catatan: jumlah batang pada rencana pemotongan merupakan estimasi first-fit decreasing untuk rangka dan bilah. Harga kayu masih dihitung berdasarkan meter teoritis; harga pembelian per batang dan optimasi papan lembar akan ditambahkan pada tahap berikutnya.'),
     ]),
   );
 }
