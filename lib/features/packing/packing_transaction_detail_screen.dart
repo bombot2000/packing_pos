@@ -191,6 +191,8 @@ class _PackingTransactionDetailScreenState extends State<PackingTransactionDetai
         final dimensions = snapshotData['dimensionsCm'] as Map<String, dynamic>? ?? {};
         final frameData = snapshotData['frame'] as Map<String, dynamic>?;
         final timberPlan = snapshotData['timberCutPlan'] as Map<String, dynamic>?;
+        final boardPlan = snapshotData['boardSheetPlan'] as Map<String, dynamic>?;
+        final boardSheets = boardPlan?['sheets'] as List<dynamic>? ?? const [];
         final timberBins = timberPlan?['bins'] as List<dynamic>? ?? const [];
         final frameCuts = frameData?['cuts'] as List<dynamic>? ?? const [];
         return ListView(padding: const EdgeInsets.all(16), children: [
@@ -207,6 +209,29 @@ class _PackingTransactionDetailScreenState extends State<PackingTransactionDetai
               if ((tx['note'] as String).isNotEmpty) Text('Catatan: ${tx['note']}'),
             ]),
           )),
+          if (boardPlan != null) ...[
+            const SizedBox(height: 8),
+            const Text('Rencana nesting lembar papan', style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold)),
+            Card(child: Column(children: [
+              ListTile(title: const Text('Jumlah lembar'), trailing: Text((boardPlan['sheetCount'] as num).toString())),
+              ListTile(title: const Text('Ukuran lembar'), trailing: Text((boardPlan['sheetWidthCm'] as num).toStringAsFixed(1) + ' × ' + (boardPlan['sheetHeightCm'] as num).toStringAsFixed(1) + ' cm')),
+              ListTile(title: const Text('Utilisasi area'), trailing: Text((boardPlan['utilizationPercent'] as num).toStringAsFixed(1) + '%')),
+              ...boardSheets.map((rawSheet) {
+                final sheet = rawSheet as Map<String, dynamic>;
+                final placements = (sheet['placements'] as List<dynamic>? ?? const []).map((rawPlacement) {
+                  final placement = rawPlacement as Map<String, dynamic>;
+                  return (placement['label']?.toString() ?? 'Panel') + ' ' +
+                    (placement['widthCm'] as num).toStringAsFixed(1) + '×' +
+                    (placement['heightCm'] as num).toStringAsFixed(1) + ' cm';
+                }).join(' • ');
+                return ListTile(
+                  dense: true,
+                  title: Text('Lembar ' + sheet['number'].toString()),
+                  subtitle: Text(placements),
+                );
+              }),
+            ])),
+          ],
           if (timberPlan != null) ...[
             const SizedBox(height: 8),
             const Text('Rencana pembelian dan potong stok', style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold)),
