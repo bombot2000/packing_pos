@@ -544,7 +544,7 @@ class _PackingCalculatorScreenState extends State<PackingCalculatorScreen> {
           _slatStockAdjustmentReason.text.trim().isEmpty) {
         throw const FormatException('Alasan perubahan jumlah batang kayu bilah wajib diisi.');
       }
-      final actualBoardSheets = _actualQuantity(_actualBoardSheets, 'Jumlah lembar papan aktual');
+      final actualBoardSheets = _wholeQuantity(_actualBoardSheets, 'Jumlah lembar papan aktual');
       if (_priceBoardBySheet && _boardPlan != null &&
           _isAdjusted(actualBoardSheets, _boardPlan!.sheetCount.toDouble()) &&
           _boardSheetAdjustmentReason.text.trim().isEmpty) {
