@@ -1,6 +1,20 @@
 from pathlib import Path
 import re
-import sys
+
+def insert_after_plugins(source: str, snippet: str) -> str:
+    match = re.search(r"(?m)^plugins\s*\{", source)
+    if not match:
+        raise SystemExit("Could not locate the Gradle plugins block.")
+    opening = source.find("{", match.start())
+    depth = 0
+    for index in range(opening, len(source)):
+        if source[index] == "{":
+            depth += 1
+        elif source[index] == "}":
+            depth -= 1
+            if depth == 0:
+                return source[:index + 1] + "\n\n" + snippet + source[index + 1:]
+    raise SystemExit("Gradle plugins block is not balanced.")
 
 candidates = [
     Path("android/app/build.gradle.kts"),
@@ -14,17 +28,18 @@ text = gradle.read_text()
 is_kotlin = gradle.suffix == ".kts"
 
 if is_kotlin:
-    imports = (
-        "import java.io.FileInputStream\n"
-        "import java.util.Properties\n\n"
+    imports = "import java.io.FileInputStream\nimport java.util.Properties\n\n"
+    properties = (
         "val keystoreProperties = Properties()\n"
         "val keystorePropertiesFile = rootProject.file(\"key.properties\")\n"
         "if (keystorePropertiesFile.exists()) {\n"
         "    keystoreProperties.load(FileInputStream(keystorePropertiesFile))\n"
-        "}\n\n"
+        "}\n"
     )
-    if "val keystoreProperties = Properties()" not in text:
+    if "import java.util.Properties" not in text:
         text = imports + text
+    if "val keystoreProperties = Properties()" not in text:
+        text = insert_after_plugins(text, properties)
     signing = (
         "    signingConfigs {\n"
         "        create(\"release\") {\n"
@@ -38,11 +53,11 @@ if is_kotlin:
     if 'create("release")' not in text:
         marker = "    buildTypes {"
         if marker not in text:
-            raise SystemExit("Could not locate buildTypes block in Gradle Kotlin file.")
+            raise SystemExit("Could not locate buildTypes in Gradle Kotlin file.")
         text = text.replace(marker, signing + marker, 1)
     if 'signingConfig = signingConfigs.getByName("release")' not in text:
         text = re.sub(
-            r'(release\s*\{[\s\S]*?)(signingConfig\s*=\s*signingConfigs\.getByName\(\"debug\"\))',
+            r'(release\s*\{[^}]*?)signingConfig\s*=\s*signingConfigs\.getByName\("debug"\)',
             r'\1signingConfig = signingConfigs.getByName("release")',
             text,
             count=1,
@@ -50,20 +65,23 @@ if is_kotlin:
         if 'signingConfig = signingConfigs.getByName("release")' not in text:
             text = re.sub(
                 r'(release\s*\{)',
-                r'\1\\n            signingConfig = signingConfigs.getByName("release")',
+                r'\1\n            signingConfig = signingConfigs.getByName("release")',
                 text,
                 count=1,
             )
 else:
-    imports = (
+    imports = "import java.util.Properties\n\n"
+    properties = (
         "def keystoreProperties = new Properties()\n"
         "def keystorePropertiesFile = rootProject.file('key.properties')\n"
         "if (keystorePropertiesFile.exists()) {\n"
         "    keystoreProperties.load(new FileInputStream(keystorePropertiesFile))\n"
-        "}\n\n"
+        "}\n"
     )
-    if "def keystoreProperties = new Properties()" not in text:
+    if "import java.util.Properties" not in text:
         text = imports + text
+    if "def keystoreProperties = new Properties()" not in text:
+        text = insert_after_plugins(text, properties)
     signing = (
         "    signingConfigs {\n"
         "        release {\n"
@@ -77,16 +95,20 @@ else:
     if "signingConfigs {" not in text:
         marker = "    buildTypes {"
         if marker not in text:
-            raise SystemExit("Could not locate buildTypes block in Gradle file.")
+            raise SystemExit("Could not locate buildTypes in Gradle file.")
         text = text.replace(marker, signing + marker, 1)
     if "signingConfig signingConfigs.release" not in text:
         text = re.sub(
-            r"(release\s*\{)(?![\s\S]*?signingConfig)",
-            r"\1\\n            signingConfig signingConfigs.release",
+            r"(release\s*\{)",
+            r"\1\n            signingConfig signingConfigs.release",
             text,
             count=1,
         )
-        text = text.replace("signingConfig signingConfigs.debug", "signingConfig signingConfigs.release", 1)
+        text = text.replace(
+            "signingConfig signingConfigs.debug",
+            "signingConfig signingConfigs.release",
+            1,
+        )
 
 gradle.write_text(text)
 print(f"Configured persistent release signing in {gradle}.")

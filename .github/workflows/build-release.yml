@@ -70,7 +70,7 @@ jobs:
         run: |
           echo "$KEYSTORE_B64" | base64 --decode > android/app/packing-pos-release.jks
           cat > android/key.properties <<EOF
-          storeFile=app/packing-pos-release.jks
+          storeFile=packing-pos-release.jks
           keyAlias=$KEY_ALIAS
           keyPassword=$KEY_PASSWORD
           storePassword=$STORE_PASSWORD
