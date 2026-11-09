@@ -34,13 +34,22 @@ jobs:
           channel: stable
           cache: true
 
+      - name: Verify Java 17 toolchain
+        run: |
+          java -version
+          JAVA_MAJOR=$(java -version 2>&1 | sed -n '1s/.*version "\([0-9]*\).*/\1/p')
+          if [ "$JAVA_MAJOR" != "17" ]; then
+            echo "Expected Java 17, found Java ${JAVA_MAJOR:-unknown}."
+            exit 1
+          fi
+
       - name: Generate Android platform files when absent
         run: |
           if [ ! -d android ]; then
             flutter create . --platforms=android --org com.packingpos --project-name packing_pos
           fi
 
-      - name: Set Android compile SDK required by current plugins
+      - name: Set app compile SDK required by current plugins
         run: |
           python3 - <<'PY'
           from pathlib import Path
@@ -87,6 +96,9 @@ jobs:
 
       - name: Install dependencies
         run: flutter pub get
+
+      - name: Align Android plugin compile SDKs
+        run: python3 tool/align_plugin_compile_sdk.py
 
       - name: Analyze Dart code
         run: flutter analyze --no-fatal-infos
