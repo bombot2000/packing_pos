@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 
 import '../../core/calculation/packing_faces.dart';
+import '../../core/calculation/frame_calculator.dart';
 import '../../core/calculation/pricing_calculator.dart';
 import '../../data/repositories/packing_transaction_repository.dart';
 
@@ -21,6 +22,12 @@ class _PackingCalculatorScreenState extends State<PackingCalculatorScreen> {
   final _height = TextEditingController(text: '50');
   final _slatWidth = TextEditingController(text: '5');
   final _gap = TextEditingController(text: '5');
+  final _framePostLength = TextEditingController(text: '50');
+  final _frameLengthRail = TextEditingController(text: '100');
+  final _frameWidthRail = TextEditingController(text: '60');
+  final _actualFrameMeters = TextEditingController();
+  final _frameAdjustmentReason = TextEditingController();
+  final _framePrice = TextEditingController(text: '0');
   final _slatPrice = TextEditingController(text: '0');
   final _boardPrice = TextEditingController(text: '0');
   final _labor = TextEditingController(text: '0');
@@ -34,6 +41,7 @@ class _PackingCalculatorScreenState extends State<PackingCalculatorScreen> {
 
   final _repository = PackingTransactionRepository();
   List<Map<String, Object?>> _masterMaterials = [];
+  int? _selectedFrameMaterialId;
   int? _selectedSlatMaterialId;
   int? _selectedBoardMaterialId;
   bool _loadingMaterials = true;
@@ -77,6 +85,17 @@ class _PackingCalculatorScreenState extends State<PackingCalculatorScreen> {
       if (item['id'] == id) return item;
     }
     return null;
+  }
+
+  void _selectFrameMaterial(int? id) {
+    final material = _selectedMasterMaterial(id);
+    setState(() {
+      _selectedFrameMaterialId = id;
+      if (material != null) {
+        _framePrice.text = (material['current_unit_price'] as num).toInt().toString();
+      }
+    });
+    _calculatePrice();
   }
 
   void _selectSlatMaterial(int? id) {
@@ -156,6 +175,7 @@ class _PackingCalculatorScreenState extends State<PackingCalculatorScreen> {
     for (final face in PackingFace.values) face: FaceBuildType.closedBoard,
   };
   PackingDimensions? _dimensions;
+  FrameEstimate? _frameResult;
   PackingFacesResult? _result;
   PriceResult? _price;
   String? _error;
@@ -165,6 +185,8 @@ class _PackingCalculatorScreenState extends State<PackingCalculatorScreen> {
   void dispose() {
     for (final controller in [
       _customer, _item, _length, _width, _height, _slatWidth, _gap,
+      _framePostLength, _frameLengthRail, _frameWidthRail, _actualFrameMeters,
+      _frameAdjustmentReason, _framePrice,
       _slatPrice, _boardPrice, _labor, _overhead, _markup, _note,
       _actualSlatMeters, _actualBoardArea, _slatAdjustmentReason, _boardAdjustmentReason,
     ]) {
@@ -201,6 +223,11 @@ class _PackingCalculatorScreenState extends State<PackingCalculatorScreen> {
         widthCm: _number(_width, 'Lebar'),
         heightCm: _number(_height, 'Tinggi'),
       );
+      final frame = FrameEstimate.eightCorner(
+        postHeightCm: _number(_framePostLength, 'Panjang potong tiang'),
+        lengthRailCutCm: _number(_frameLengthRail, 'Panjang potong rel arah panjang'),
+        widthRailCutCm: _number(_frameWidthRail, 'Panjang potong rel arah lebar'),
+      );
       final slatWidth = _number(_slatWidth, 'Lebar bilah');
       final gap = _number(_gap, 'Celah', allowZero: true);
       final configs = PackingFace.values.map((face) => FaceBuildConfig(
@@ -212,6 +239,9 @@ class _PackingCalculatorScreenState extends State<PackingCalculatorScreen> {
       final result = PackingFacesCalculator.calculate(dimensions: dimensions, configs: configs);
       setState(() {
         _dimensions = dimensions;
+        _frameResult = frame;
+        _actualFrameMeters.text = frame.totalMeters.toStringAsFixed(3);
+        _frameAdjustmentReason.clear();
         _result = result;
         _actualSlatMeters.text = result.totalSlatMeters.toStringAsFixed(3);
         _actualBoardArea.text = result.totalBoardAreaM2.toStringAsFixed(3);
@@ -237,9 +267,11 @@ class _PackingCalculatorScreenState extends State<PackingCalculatorScreen> {
   void _calculatePrice() {
     if (_result == null) return;
     try {
+      final actualFrame = _actualQuantity(_actualFrameMeters, 'Jumlah aktual rangka');
       final actualSlat = _actualQuantity(_actualSlatMeters, 'Jumlah aktual kayu bilah');
       final actualBoard = _actualQuantity(_actualBoardArea, 'Jumlah aktual papan');
       final lines = <MaterialCostLine>[
+        MaterialCostLine(name: 'Kayu rangka', quantity: actualFrame, unitPrice: _integer(_framePrice, 'Harga kayu rangka per meter')),
         MaterialCostLine(name: 'Kayu bilah', quantity: actualSlat, unitPrice: _integer(_slatPrice, 'Harga kayu per meter')),
         MaterialCostLine(name: 'Papan', quantity: actualBoard, unitPrice: _integer(_boardPrice, 'Harga papan per m²')),
       ];
@@ -307,6 +339,10 @@ class _PackingCalculatorScreenState extends State<PackingCalculatorScreen> {
     }
     setState(() => _saving = true);
     try {
+      final actualFrame = _actualQuantity(_actualFrameMeters, 'Jumlah aktual rangka');
+      if (_frameResult != null && _isAdjusted(actualFrame, _frameResult!.totalMeters) && _frameAdjustmentReason.text.trim().isEmpty) {
+        throw const FormatException('Alasan perubahan jumlah kayu rangka wajib diisi.');
+      }
       final actualSlat = _actualQuantity(_actualSlatMeters, 'Jumlah aktual kayu bilah');
       final actualBoard = _actualQuantity(_actualBoardArea, 'Jumlah aktual papan');
       if (_isAdjusted(actualSlat, _result!.totalSlatMeters) && _slatAdjustmentReason.text.trim().isEmpty) {
@@ -316,6 +352,17 @@ class _PackingCalculatorScreenState extends State<PackingCalculatorScreen> {
         throw const FormatException('Alasan perubahan jumlah papan wajib diisi.');
       }
       final materials = <MaterialUsageDraft>[];
+      if (_frameResult != null && _frameResult!.totalMeters > 0) {
+        materials.add(MaterialUsageDraft(
+          materialId: _selectedFrameMaterialId,
+          name: _selectedMasterMaterial(_selectedFrameMaterialId)?['name']?.toString() ?? 'Kayu rangka',
+          unit: 'm',
+          calculatedQuantity: _frameResult!.totalMeters,
+          actualQuantity: actualFrame,
+          adjustmentNote: _frameAdjustmentReason.text.trim(),
+          unitPrice: _integer(_framePrice, 'Harga kayu rangka per meter'),
+        ));
+      }
       if (_result!.totalSlatMeters > 0) {
         materials.add(MaterialUsageDraft(
           materialId: _selectedSlatMaterialId,
@@ -351,7 +398,20 @@ class _PackingCalculatorScreenState extends State<PackingCalculatorScreen> {
           'slatLinearMeters': face.slat?.totalLinearMeters,
           'boardAreaM2': face.boardAreaM2,
         }).toList(),
+        'frame': {
+          'method': 'eightCorner',
+          'cuts': _frameResult!.cutList.map((cut) => {
+            'label': cut.label,
+            'count': cut.count,
+            'cutLengthCm': cut.lengthCm,
+            'totalMeters': cut.totalMeters,
+          }).toList(),
+          'calculatedMeters': _frameResult!.totalMeters,
+          'actualMeters': actualFrame,
+          'adjustmentReason': _frameAdjustmentReason.text.trim(),
+        },
         'totals': {
+          'frameMeters': _frameResult!.totalMeters,
           'slatMeters': _result!.totalSlatMeters,
           'boardAreaM2': _result!.totalBoardAreaM2,
         },
@@ -362,12 +422,15 @@ class _PackingCalculatorScreenState extends State<PackingCalculatorScreen> {
           'boardAdjustmentReason': _boardAdjustmentReason.text.trim(),
         },
         'masterMaterialSelection': {
+          'frameMaterialId': _selectedFrameMaterialId,
+          'frameMaterialName': _selectedMasterMaterial(_selectedFrameMaterialId)?['name'],
           'slatMaterialId': _selectedSlatMaterialId,
           'slatMaterialName': _selectedMasterMaterial(_selectedSlatMaterialId)?['name'],
           'boardMaterialId': _selectedBoardMaterialId,
           'boardMaterialName': _selectedMasterMaterial(_selectedBoardMaterialId)?['name'],
         },
         'pricing': {
+          'frameUnitPrice': _integer(_framePrice, 'Harga kayu rangka per meter'),
           'slatUnitPrice': _integer(_slatPrice, 'Harga kayu per meter'),
           'boardUnitPrice': _integer(_boardPrice, 'Harga papan per m²'),
           'markupPercent': _number(_markup, 'Markup', allowZero: true),
@@ -426,6 +489,16 @@ class _PackingCalculatorScreenState extends State<PackingCalculatorScreen> {
         const SizedBox(width: 8),
         Expanded(child: _numberField('Tinggi', _height, suffix: 'cm')),
       ]),
+      _sectionTitle('Rangka utama 8 sudut'),
+      const Text('Estimasi rangka: 4 tiang sudut, 4 rel arah panjang (atas/bawah), dan 4 rel arah lebar (atas/bawah). Ukuran potong dapat diubah sesuai sambungan dan orientasi kayu.'),
+      const SizedBox(height: 10),
+      Row(children: [
+        Expanded(child: _numberField('Potong tiang', _framePostLength, suffix: 'cm')),
+        const SizedBox(width: 8),
+        Expanded(child: _numberField('Potong rel panjang', _frameLengthRail, suffix: 'cm')),
+        const SizedBox(width: 8),
+        Expanded(child: _numberField('Potong rel lebar', _frameWidthRail, suffix: 'cm')),
+      ]),
       _sectionTitle('Pengaturan bilah kayu'),
       Row(children: [
         Expanded(child: _numberField('Lebar bilah', _slatWidth, suffix: 'cm')),
@@ -457,6 +530,18 @@ class _PackingCalculatorScreenState extends State<PackingCalculatorScreen> {
         label: const Text('Hitung kebutuhan dan harga'),
       ),
       if (_result != null) ...[
+        _sectionTitle('Daftar potongan rangka'),
+        if (_frameResult != null)
+          Card(child: Column(children: [
+            ..._frameResult!.cutList.map((cut) => ListTile(
+              dense: true,
+              title: Text(cut.label),
+              subtitle: Text(cut.count.toString() + ' potong × ' + cut.lengthCm.toStringAsFixed(1) + ' cm'),
+              trailing: Text(cut.totalMeters.toStringAsFixed(2) + ' m'),
+            )),
+            const Divider(height: 1),
+            ListTile(title: const Text('Total rangka'), trailing: Text(_frameResult!.totalMeters.toStringAsFixed(2) + ' m')),
+          ])),
         _sectionTitle('Hasil kebutuhan bahan'),
         Card(child: Column(children: [
           ..._result!.faces.map((face) => ListTile(
@@ -474,6 +559,14 @@ class _PackingCalculatorScreenState extends State<PackingCalculatorScreen> {
           ListTile(title: const Text('Total luas papan'), trailing: Text('${_result!.totalBoardAreaM2.toStringAsFixed(3)} m²')),
         ])),
         _sectionTitle('Penyesuaian jumlah bahan aktual'),
+        Card(child: Padding(padding: const EdgeInsets.all(12), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          const Text('Kayu rangka', style: TextStyle(fontWeight: FontWeight.w600)),
+          Text('Hasil hitung: ' + _frameResult!.totalMeters.toStringAsFixed(3) + ' m'),
+          const SizedBox(height: 8),
+          _numberField('Jumlah aktual rangka (m)', _actualFrameMeters, suffix: 'm', invalidate: false),
+          const SizedBox(height: 8),
+          TextField(controller: _frameAdjustmentReason, maxLines: 2, decoration: const InputDecoration(labelText: 'Alasan penyesuaian rangka (wajib jika berbeda)', border: OutlineInputBorder())),
+        ]))),
         const Text('Jumlah hasil hitung dapat disesuaikan sesuai pemakaian nyata. Jika berbeda, isi alasan agar perubahan tercatat pada nota.'),
         const SizedBox(height: 10),
         Card(child: Padding(padding: const EdgeInsets.all(12), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -504,6 +597,15 @@ class _PackingCalculatorScreenState extends State<PackingCalculatorScreen> {
               style: TextStyle(color: Theme.of(context).colorScheme.error),
             ),
           ),
+        _materialSelector(
+          label: 'Master kayu rangka (satuan meter)',
+          unit: 'm',
+          selectedId: _selectedFrameMaterialId,
+          onChanged: _selectFrameMaterial,
+        ),
+        const SizedBox(height: 10),
+        _numberField('Harga kayu rangka per meter', _framePrice, currency: true, invalidate: false),
+        const SizedBox(height: 14),
         _materialSelector(
           label: 'Master kayu bilah (satuan meter)',
           unit: 'm',
@@ -560,7 +662,7 @@ class _PackingCalculatorScreenState extends State<PackingCalculatorScreen> {
         Text(_error!, style: TextStyle(color: Theme.of(context).colorScheme.error)),
       ],
       const SizedBox(height: 20),
-      const Text('Catatan: estimasi ini belum memasukkan rangka, sambungan, waste, dan optimasi ukuran stok. Nilai biaya bahan mengikuti satuan teoritis meter dan m².'),
+      const Text('Catatan: rangka dihitung sebagai estimasi 8 sudut dengan ukuran potong yang dapat diubah. Belum termasuk optimasi pemotongan stok, waste, atau konversi pembelian batang/lembar. Biaya memakai satuan teoritis meter dan m².'),
     ]),
   );
 }
