@@ -118,12 +118,13 @@ class _PackingCalculatorScreenState extends State<PackingCalculatorScreen> {
       );
       if (!mounted) return;
       final total = _grandTotal;
+      final count = _jobs.length;
       setState(() {
         _jobs.clear(); _customer.clear(); _receiptNote.clear();
         _item.clear(); _length.clear(); _width.clear(); _height.clear(); _note.clear();
       });
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text('Nota tersimpan • $receipt • ${_money(total)} • ${_jobs.length} pekerjaan'),
+        content: Text('Nota tersimpan • $receipt • ${_money(total)} • $count pekerjaan'),
         duration: const Duration(seconds: 5),
       ));
     } catch (e) {
