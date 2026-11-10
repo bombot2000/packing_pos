@@ -113,13 +113,13 @@ void main() {
 
     test('rejects completed transaction with a partial payment history', () {
       final backup = validBackup();
-      backup['packing_transactions']![0]['paid_amount'] = 20000;
+      backup['packing_transactions']![0]['paid_amount'] = 10000;
       backup['packing_transactions']![0]['status'] = 'completed';
       backup['transaction_payments'] = [
         {
           'id': 1,
           'transaction_id': 1,
-          'amount': 20000,
+          'amount': 10000,
           'payment_method': 'cash',
           'created_at': '2026-11-09T00:00:00.000Z',
         },
