@@ -14,7 +14,7 @@ class PackingDatabase {
     return instance;
   }
   static final PackingDatabase instance = PackingDatabase._();
-  static const int schemaVersion = 3;
+  static const int schemaVersion = 4;
   Database? _database;
 
   Future<Database> get database async {
@@ -34,7 +34,7 @@ class PackingDatabase {
   Future<void> _createSchema(Database db, int version) async {
     await db.execute('''
       CREATE TABLE packing_transactions (
-        id INTEGER PRIMARY KEY AUTOINCREMENT, receipt_no TEXT NOT NULL UNIQUE,
+        id INTEGER PRIMARY KEY AUTOINCREMENT, receipt_no TEXT NOT NULL UNIQUE, receipt_id INTEGER,
         customer_name TEXT NOT NULL DEFAULT '', item_description TEXT NOT NULL DEFAULT '',
         length_cm REAL NOT NULL, width_cm REAL NOT NULL, height_cm REAL NOT NULL,
         calculation_snapshot TEXT NOT NULL, material_cost INTEGER NOT NULL DEFAULT 0,
@@ -71,6 +71,7 @@ class PackingDatabase {
       )
     ''');
     await _createServiceTypes(db);
+    await _createReceiptTables(db);
     await db.execute('CREATE TABLE app_settings (key TEXT PRIMARY KEY, value TEXT NOT NULL, updated_at TEXT NOT NULL)');
     await _createIndexes(db);
   }
@@ -95,6 +96,8 @@ class PackingDatabase {
 
   Future<void> _createIndexes(Database db) async {
     await db.execute('CREATE INDEX IF NOT EXISTS idx_transactions_created ON packing_transactions(created_at)');
+    await db.execute('CREATE INDEX IF NOT EXISTS idx_transactions_receipt ON packing_transactions(receipt_id)');
+    await db.execute('CREATE INDEX IF NOT EXISTS idx_receipt_payments_receipt ON receipt_payments(receipt_id)');
     await db.execute('CREATE INDEX IF NOT EXISTS idx_transactions_status ON packing_transactions(status)');
     await db.execute('CREATE INDEX IF NOT EXISTS idx_material_usage_transaction ON transaction_materials(transaction_id)');
     await db.execute('CREATE INDEX IF NOT EXISTS idx_payments_transaction ON transaction_payments(transaction_id)');
@@ -105,5 +108,70 @@ class PackingDatabase {
       await db.execute("ALTER TABLE packing_transactions ADD COLUMN cancellation_reason TEXT NOT NULL DEFAULT ''");
     }
     if (oldVersion < 3) await _createServiceTypes(db);
+    if (oldVersion < 4) await _upgradeToReceiptHeaders(db);
+  }
+
+  Future<void> _createReceiptTables(Database db) async {
+    await db.execute('''
+      CREATE TABLE packing_receipts (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        receipt_no TEXT NOT NULL UNIQUE,
+        customer_name TEXT NOT NULL DEFAULT '',
+        total_amount INTEGER NOT NULL DEFAULT 0 CHECK(total_amount >= 0),
+        paid_amount INTEGER NOT NULL DEFAULT 0 CHECK(paid_amount >= 0),
+        status TEXT NOT NULL DEFAULT 'open' CHECK(status IN ('open', 'completed', 'cancelled')),
+        note TEXT NOT NULL DEFAULT '',
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      )
+    ''');
+    await db.execute('''
+      CREATE TABLE receipt_payments (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        receipt_id INTEGER NOT NULL,
+        amount INTEGER NOT NULL CHECK(amount > 0),
+        payment_method TEXT NOT NULL DEFAULT 'cash',
+        note TEXT NOT NULL DEFAULT '',
+        created_at TEXT NOT NULL,
+        FOREIGN KEY(receipt_id) REFERENCES packing_receipts(id) ON DELETE RESTRICT
+      )
+    ''');
+  }
+
+  Future<void> _upgradeToReceiptHeaders(Database db) async {
+    await db.execute('ALTER TABLE packing_transactions ADD COLUMN receipt_id INTEGER REFERENCES packing_receipts(id)');
+    await _createReceiptTables(db);
+    final rows = await db.query('packing_transactions', orderBy: 'id ASC');
+    for (final row in rows) {
+      final transactionId = (row['id'] as num).toInt();
+      final now = (row['created_at'] as String?) ?? DateTime.now().toUtc().toIso8601String();
+      final paid = (row['paid_amount'] as num?)?.toInt() ?? 0;
+      final total = (row['selling_price'] as num?)?.toInt() ?? 0;
+      final receiptId = await db.insert('packing_receipts', {
+        'receipt_no': row['receipt_no'],
+        'customer_name': row['customer_name'] ?? '',
+        'total_amount': total,
+        'paid_amount': paid,
+        'status': row['status'] == 'cancelled' ? 'cancelled' : (paid >= total ? 'completed' : 'open'),
+        'note': row['note'] ?? '',
+        'created_at': now,
+        'updated_at': row['updated_at'] ?? now,
+      });
+      await db.update('packing_transactions', {'receipt_id': receiptId},
+          where: 'id = ?', whereArgs: [transactionId]);
+      final oldPayments = await db.query('transaction_payments',
+          where: 'transaction_id = ?', whereArgs: [transactionId], orderBy: 'id ASC');
+      for (final payment in oldPayments) {
+        await db.insert('receipt_payments', {
+          'receipt_id': receiptId,
+          'amount': payment['amount'],
+          'payment_method': payment['payment_method'],
+          'note': payment['note'] ?? '',
+          'created_at': payment['created_at'] ?? now,
+        });
+      }
+    }
+    await db.execute('CREATE INDEX IF NOT EXISTS idx_transactions_receipt ON packing_transactions(receipt_id)');
+    await db.execute('CREATE INDEX IF NOT EXISTS idx_receipt_payments_receipt ON receipt_payments(receipt_id)');
   }
 }
