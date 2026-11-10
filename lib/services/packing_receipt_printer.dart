@@ -1,4 +1,6 @@
-import 'dart:convert';\n\nimport 'package:esc_pos_utils_plus/esc_pos_utils_plus.dart';
+import 'dart:convert';
+
+import 'package:esc_pos_utils_plus/esc_pos_utils_plus.dart';
 import 'package:intl/intl.dart';
 import 'package:print_bluetooth_thermal/print_bluetooth_thermal.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -26,7 +28,9 @@ class PackingReceiptPrinter {
     }
     if (!await PrintBluetoothThermal.connectionStatus) {
       final connected = await connect(mac);
-      if (!connected) throw StateError('Tidak dapat terhubung ke printer Bluetooth.');
+      if (!connected) {
+        throw StateError('Tidak dapat terhubung ke printer Bluetooth.');
+      }
     }
 
     final paperWidth = preferences.getInt(paperWidthKey) ?? 58;
@@ -34,13 +38,25 @@ class PackingReceiptPrinter {
     final profile = await CapabilityProfile.load();
     final generator = Generator(paper, profile);
     final bytes = <int>[];
+
     String money(Object? raw) {
       final amount = (raw as num?)?.toInt() ?? 0;
-      return 'Rp ' + amount.toString().replaceAllMapped(
-        RegExp(r'(?<=\d)(?=(\d{3})+(?!\d))'),
+      return 'Rp ${amount.toString().replaceAllMapped(
+        RegExp(r'(?<=\\d)(?=(\\d{3})+(?!\\d))'),
         (_) => '.',
-      );
+      )}';
     }
+
+    Map? snapshot;
+    try {
+      snapshot = jsonDecode(
+        transaction['calculation_snapshot']?.toString() ?? '{}',
+      ) as Map;
+    } catch (_) {
+      snapshot = null;
+    }
+    final jobType = snapshot?['jobType']?.toString() ?? '';
+    final isManualService = snapshot?['mode'] == 'manual_service_charge';
 
     bytes.addAll(generator.reset());
     bytes.addAll(generator.text(
@@ -58,52 +74,107 @@ class PackingReceiptPrinter {
       styles: const PosStyles(align: PosAlign.center, bold: true),
     ));
     bytes.addAll(generator.hr());
-    final createdAt = DateTime.tryParse(transaction['created_at']?.toString() ?? '');
+
+    final createdAt = DateTime.tryParse(
+      transaction['created_at']?.toString() ?? '',
+    );
     if (createdAt != null) {
-      bytes.addAll(generator.text('Tanggal: ' + DateFormat('dd/MM/yyyy HH:mm').format(createdAt.toLocal())));
+      bytes.addAll(generator.text(
+        'Tanggal: ${DateFormat('dd/MM/yyyy HH:mm').format(createdAt.toLocal())}',
+      ));
     }
-    bytes.addAll(generator.text('Pelanggan: ' + (transaction['customer_name']?.toString() ?? '-')));\n    try {\n      final snap = jsonDecode(transaction['calculation_snapshot']?.toString() ?? '{}') as Map;\n      final job = snap['jobType']?.toString() ?? '';\n      if (job.isNotEmpty) bytes.addAll(generator.text('Jenis pekerjaan: ' + job));\n    } catch (_) {}
-    bytes.addAll(generator.text('Barang: ' + (transaction['item_description']?.toString() ?? '-')));
     bytes.addAll(generator.text(
-      'Ukuran: ' + (transaction['length_cm']?.toString() ?? '-') +
-      ' x ' + (transaction['width_cm']?.toString() ?? '-') +
-      ' x ' + (transaction['height_cm']?.toString() ?? '') + ' cm',
+      'Pelanggan: ${transaction['customer_name']?.toString() ?? '-'}',
     ));
-    if ((transaction['note']?.toString() ?? '').trim().isNotEmpty) {
-      bytes.addAll(generator.text('Catatan: ' + transaction['note'].toString()));
+    if (jobType.isNotEmpty) {
+      bytes.addAll(generator.text('Jenis pekerjaan: $jobType'));
     }
-    if ((transaction['cancellation_reason']?.toString() ?? '').trim().isNotEmpty) {
-      bytes.addAll(generator.text('Alasan batal: ' + transaction['cancellation_reason'].toString()));
+    bytes.addAll(generator.text(
+      'Barang: ${transaction['item_description']?.toString() ?? '-'}',
+    ));
+    bytes.addAll(generator.text(
+      'Ukuran: ${transaction['length_cm']?.toString() ?? '-'} x '
+      '${transaction['width_cm']?.toString() ?? '-'} x '
+      '${transaction['height_cm']?.toString() ?? ''} cm',
+    ));
+
+    final note = transaction['note']?.toString() ?? '';
+    if (note.trim().isNotEmpty) {
+      bytes.addAll(generator.text('Catatan: $note'));
     }
+    final cancellationReason =
+        transaction['cancellation_reason']?.toString() ?? '';
+    if (cancellationReason.trim().isNotEmpty) {
+      bytes.addAll(generator.text('Alasan batal: $cancellationReason'));
+    }
+
     bytes.addAll(generator.hr());
-    bool manualService = false;
-    try { manualService = (jsonDecode(transaction['calculation_snapshot']?.toString() ?? '{}') as Map)['mode'] == 'manual_service_charge'; } catch (_) {}
-    if (manualService) bytes.addAll(generator.text('Ongkos pekerjaan: ' + money(transaction['selling_price']), styles: const PosStyles(bold: true)));
-    if (materials.isNotEmpty) bytes.addAll(generator.text('RINCIAN BAHAN', styles: const PosStyles(bold: true)));
+    if (isManualService) {
+      bytes.addAll(generator.text(
+        'Ongkos pekerjaan: ${money(transaction['selling_price'])}',
+        styles: const PosStyles(bold: true),
+      ));
+    }
+
+    if (materials.isNotEmpty) {
+      bytes.addAll(generator.text(
+        'RINCIAN BAHAN',
+        styles: const PosStyles(bold: true),
+      ));
+    }
     for (final material in materials) {
       final name = material['material_name_snapshot']?.toString() ?? 'Bahan';
-      final qty = (material['actual_quantity'] as num?)?.toDouble() ?? 0;
+      final quantity =
+          (material['actual_quantity'] as num?)?.toDouble() ?? 0;
       final unit = material['unit_snapshot']?.toString() ?? '';
       bytes.addAll(generator.text(name));
       bytes.addAll(generator.text(
-        qty.toStringAsFixed(3) + ' ' + unit + ' x ' +
-        money(material['unit_price_snapshot']) + ' = ' + money(material['subtotal']),
+        '${quantity.toStringAsFixed(3)} $unit x '
+        '${money(material['unit_price_snapshot'])} = '
+        '${money(material['subtotal'])}',
       ));
     }
+
     bytes.addAll(generator.hr());
-    if (materials.isNotEmpty || ((transaction['material_cost'] as num?)?.toInt() ?? 0) > 0) bytes.addAll(generator.text('Biaya bahan: ' + money(transaction['material_cost'])));\n    if (materials.isNotEmpty || ((transaction['labor_cost'] as num?)?.toInt() ?? 0) > 0) bytes.addAll(generator.text('Jasa: ' + money(transaction['labor_cost'])));\n    if ((transaction['overhead_cost'] as num?)?.toInt() != 0) bytes.addAll(generator.text('Tambahan: ' + money(transaction['overhead_cost'])));
-    bytes.addAll(generator.text('TOTAL: ' + money(transaction['selling_price']),
-      styles: const PosStyles(bold: true, height: PosTextSize.size2)));
-    bytes.addAll(generator.text('Dibayar: ' + money(transaction['paid_amount'])));
+    final materialCost =
+        (transaction['material_cost'] as num?)?.toInt() ?? 0;
+    final laborCost = (transaction['labor_cost'] as num?)?.toInt() ?? 0;
+    final overheadCost =
+        (transaction['overhead_cost'] as num?)?.toInt() ?? 0;
+    if (materials.isNotEmpty || materialCost > 0) {
+      bytes.addAll(generator.text('Biaya bahan: ${money(materialCost)}'));
+    }
+    if (materials.isNotEmpty || laborCost > 0) {
+      bytes.addAll(generator.text('Jasa: ${money(laborCost)}'));
+    }
+    if (overheadCost != 0) {
+      bytes.addAll(generator.text('Tambahan: ${money(overheadCost)}'));
+    }
+
+    bytes.addAll(generator.text(
+      'TOTAL: ${money(transaction['selling_price'])}',
+      styles: const PosStyles(
+        bold: true,
+        height: PosTextSize.size2,
+      ),
+    ));
+    bytes.addAll(generator.text(
+      'Dibayar: ${money(transaction['paid_amount'])}',
+    ));
     final total = (transaction['selling_price'] as num?)?.toInt() ?? 0;
     final paid = (transaction['paid_amount'] as num?)?.toInt() ?? 0;
-    bytes.addAll(generator.text('Sisa: ' + money(total - paid)));
+    bytes.addAll(generator.text('Sisa: ${money(total - paid)}'));
     bytes.addAll(generator.hr());
-    bytes.addAll(generator.text('Terima kasih', styles: const PosStyles(align: PosAlign.center)));
+    bytes.addAll(generator.text(
+      'Terima kasih',
+      styles: const PosStyles(align: PosAlign.center),
+    ));
     bytes.addAll(generator.feed(3));
 
     final printed = await PrintBluetoothThermal.writeBytes(bytes);
-    if (!printed) throw StateError('Printer menolak data cetak.');
+    if (!printed) {
+      throw StateError('Printer menolak data cetak.');
+    }
     return true;
   }
 }
