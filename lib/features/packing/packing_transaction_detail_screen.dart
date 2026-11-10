@@ -5,6 +5,131 @@ import 'package:flutter/material.dart';
 import '../../data/repositories/packing_transaction_repository.dart';
 import '../../services/packing_receipt_printer.dart';
 
+class _PaymentInput {
+  const _PaymentInput({
+    required this.amount,
+    required this.method,
+    required this.note,
+  });
+
+  final int amount;
+  final String method;
+  final String note;
+}
+
+/// Dialog owns its controllers and validation state. Keeping the payment form
+/// out of a nested Form/GlobalKey + StatefulBuilder avoids inherited-element
+/// lifecycle assertions when the dialog route is dismissed on Android.
+class _PaymentDialog extends StatefulWidget {
+  const _PaymentDialog({super.key, required this.maxAmount});
+
+  final int maxAmount;
+
+  @override
+  State<_PaymentDialog> createState() => _PaymentDialogState();
+}
+
+class _PaymentDialogState extends State<_PaymentDialog> {
+  final _amountController = TextEditingController();
+  final _noteController = TextEditingController();
+  String _method = 'cash';
+  String? _error;
+
+  @override
+  void dispose() {
+    _amountController.dispose();
+    _noteController.dispose();
+    super.dispose();
+  }
+
+  int? _parseAmount(String value) {
+    final normalized = value.replaceAll('.', '').replaceAll(',', '').trim();
+    return int.tryParse(normalized);
+  }
+
+  void _submit() {
+    final amount = _parseAmount(_amountController.text);
+    if (amount == null || amount <= 0) {
+      setState(() => _error = 'Masukkan nominal pembayaran yang valid.');
+      return;
+    }
+    if (amount > widget.maxAmount) {
+      setState(() => _error = 'Melebihi sisa tagihan (' + widget.maxAmount.toString() + ').');
+      return;
+    }
+    Navigator.of(context).pop(_PaymentInput(
+      amount: amount,
+      method: _method,
+      note: _noteController.text.trim(),
+    ));
+  }
+
+  @override
+  Widget build(BuildContext context) => AlertDialog(
+    title: const Text('Tambah pembayaran'),
+    content: SingleChildScrollView(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          TextField(
+            controller: _amountController,
+            autofocus: true,
+            keyboardType: TextInputType.number,
+            decoration: const InputDecoration(
+              labelText: 'Nominal pembayaran',
+              prefixText: 'Rp ',
+            ),
+          ),
+          const SizedBox(height: 12),
+          InputDecorator(
+            decoration: const InputDecoration(labelText: 'Metode'),
+            child: DropdownButtonHideUnderline(
+              child: DropdownButton<String>(
+                value: _method,
+                isExpanded: true,
+                items: const [
+                  DropdownMenuItem(value: 'cash', child: Text('Tunai')),
+                  DropdownMenuItem(value: 'transfer', child: Text('Transfer')),
+                  DropdownMenuItem(value: 'qris', child: Text('QRIS')),
+                  DropdownMenuItem(value: 'other', child: Text('Lainnya')),
+                ],
+                onChanged: (value) {
+                  if (value != null) setState(() => _method = value);
+                },
+              ),
+            ),
+          ),
+          const SizedBox(height: 12),
+          TextField(
+            controller: _noteController,
+            decoration: const InputDecoration(labelText: 'Catatan (opsional)'),
+          ),
+          if (_error != null) ...[
+            const SizedBox(height: 8),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: Text(
+                _error!,
+                style: TextStyle(color: Theme.of(context).colorScheme.error),
+              ),
+            ),
+          ],
+        ],
+      ),
+    ),
+    actions: [
+      TextButton(
+        onPressed: () => Navigator.of(context).pop(),
+        child: const Text('Batal'),
+      ),
+      FilledButton(
+        onPressed: _submit,
+        child: const Text('Simpan'),
+      ),
+    ],
+  );
+}
+
 class PackingTransactionDetailScreen extends StatefulWidget {
   const PackingTransactionDetailScreen({super.key, required this.transactionId});
   final int transactionId;
@@ -117,79 +242,29 @@ class _PackingTransactionDetailScreenState extends State<PackingTransactionDetai
   }
 
   Future<void> _addPayment() async {
-    final amountController = TextEditingController();
-    final noteController = TextEditingController();
-    String method = 'cash';
-    final formKey = GlobalKey<FormState>();
-    final amount = await showDialog<int>(
+    final total = (_transaction!['selling_price'] as num).toInt();
+    final paid = (_transaction!['paid_amount'] as num).toInt();
+    final payment = await showDialog<_PaymentInput>(
       context: context,
-      builder: (dialogContext) => StatefulBuilder(
-        builder: (context, setDialogState) => AlertDialog(
-          title: const Text('Tambah pembayaran'),
-          content: Form(
-            key: formKey,
-            child: Column(mainAxisSize: MainAxisSize.min, children: [
-              TextFormField(
-                controller: amountController,
-                autofocus: true,
-                keyboardType: TextInputType.number,
-                decoration: const InputDecoration(labelText: 'Nominal pembayaran', prefixText: 'Rp '),
-                validator: (value) {
-                  final parsed = int.tryParse((value ?? '').replaceAll('.', '').replaceAll(',', '').trim());
-                  if (parsed == null || parsed <= 0) return 'Masukkan nominal yang valid.';
-                  final total = (_transaction!['selling_price'] as num).toInt();
-                  final paid = (_transaction!['paid_amount'] as num).toInt();
-                  if (parsed > total - paid) return 'Melebihi sisa tagihan.';
-                  return null;
-                },
-              ),
-              const SizedBox(height: 12),
-              DropdownButtonFormField<String>(
-                value: method,
-                decoration: const InputDecoration(labelText: 'Metode'),
-                items: const [
-                  DropdownMenuItem(value: 'cash', child: Text('Tunai')),
-                  DropdownMenuItem(value: 'transfer', child: Text('Transfer')),
-                  DropdownMenuItem(value: 'qris', child: Text('QRIS')),
-                  DropdownMenuItem(value: 'other', child: Text('Lainnya')),
-                ],
-                onChanged: (value) => setDialogState(() => method = value ?? 'cash'),
-              ),
-              const SizedBox(height: 12),
-              TextField(controller: noteController, decoration: const InputDecoration(labelText: 'Catatan (opsional)')),
-            ]),
-          ),
-          actions: [
-            TextButton(onPressed: () => Navigator.pop(dialogContext), child: const Text('Batal')),
-            FilledButton(
-              onPressed: () {
-                if (formKey.currentState!.validate()) {
-                  Navigator.pop(dialogContext, int.parse(amountController.text.replaceAll('.', '').replaceAll(',', '').trim()));
-                }
-              },
-              child: const Text('Simpan'),
-            ),
-          ],
-        ),
-      ),
+      builder: (_) => _PaymentDialog(maxAmount: total - paid),
     );
-    amountController.dispose();
-    if (amount == null || !mounted) {
-      noteController.dispose();
-      return;
-    }
+    if (payment == null || !mounted) return;
+
     try {
       await _repository.addPayment(
         transactionId: widget.transactionId,
-        amount: amount,
-        paymentMethod: method,
-        note: noteController.text,
+        amount: payment.amount,
+        paymentMethod: payment.method,
+        note: payment.note,
       );
       if (mounted) await _refresh();
     } catch (e) {
-      if (mounted) setState(() => _error = e.toString());
-    } finally {
-      noteController.dispose();
+      if (mounted) {
+        setState(() => _error = e.toString());
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Gagal menyimpan pembayaran: $e')),
+        );
+      }
     }
   }
 
