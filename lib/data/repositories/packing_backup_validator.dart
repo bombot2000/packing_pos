@@ -25,7 +25,8 @@ class PackingBackupValidator {
 
     final data = <String, List<Map<String, Object?>>>{};
     for (final table in tables) {
-      final raw = backup[table] ?? (table == 'service_types' && version != 3 ? const [] : null);
+      if (table == 'service_types' && version != 3 && backup[table] == null) continue;
+      final raw = backup[table];
       if (raw is! List) {
         throw FormatException('Data tabel $table tidak ditemukan pada backup.');
       }
@@ -115,7 +116,7 @@ class PackingBackupValidator {
 
     final serviceIds = <int>{};
     final serviceNames = <String>{};
-    for (final row in data['service_types']!) {
+    for (final row in data['service_types'] ?? const <Map<String, Object?>>[]) {
       final id = _positiveInt(row['id'], 'ID jenis pekerjaan');
       if (!serviceIds.add(id)) throw FormatException('ID jenis pekerjaan duplikat: $id.');
       final name = _text(row['name'], 'Nama jenis pekerjaan');
