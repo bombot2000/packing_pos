@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../data/repositories/packing_transaction_repository.dart';
+import 'service_type_master_screen.dart';
 
 class PackingCalculatorScreen extends StatefulWidget {
   const PackingCalculatorScreen({super.key});
@@ -54,7 +55,14 @@ class _PackingCalculatorScreenState extends State<PackingCalculatorScreen> {
     });
   }
 
-  Map<String, Object?>? _serviceById(int? id) {\n    for (final row in _services) { if (row['id'] == id) return row; }\n    return null;\n  }\n\n  double? _dimension(TextEditingController c) {
+  Map<String, Object?>? _serviceById(int? id) {
+    for (final row in _services) {
+      if (row['id'] == id) return row;
+    }
+    return null;
+  }
+
+  double? _dimension(TextEditingController c) {
     final n = double.tryParse(c.text.trim().replaceAll(',', '.'));
     return n != null && n.isFinite && n > 0 ? n : null;
   }
@@ -121,7 +129,7 @@ class _PackingCalculatorScreenState extends State<PackingCalculatorScreen> {
         onTap: () async { await Navigator.of(context).push(MaterialPageRoute(builder: (_) => const ServiceTypeMasterScreen())); await _loadServices(); },
       ))
       else DropdownButtonFormField<int>(
-        value: _serviceId,
+        initialValue: _serviceId,
         isExpanded: true,
         decoration: const InputDecoration(labelText: 'Jenis pekerjaan', border: OutlineInputBorder()),
         items: _services.map((e) => DropdownMenuItem<int>(
