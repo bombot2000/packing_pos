@@ -459,7 +459,7 @@ class PackingTransactionRepository {
         SUM(CASE WHEN status = 'open' THEN 1 ELSE 0 END) AS open_count,
         (SELECT COUNT(*) FROM packing_receipts WHERE status = 'cancelled'${dateFilter}) AS cancelled_count
       FROM packing_transactions WHERE status != 'cancelled'${dateFilter}
-    ''', [...args, ...args]);
+    ''', [...args, ...args, ...args, ...args, ...args]);
     final materials = await db.rawQuery('''
       SELECT material_name_snapshot AS name, unit_snapshot AS unit,
         COALESCE(SUM(actual_quantity), 0) AS quantity,
