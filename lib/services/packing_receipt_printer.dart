@@ -42,7 +42,7 @@ class PackingReceiptPrinter {
     String money(Object? raw) {
       final amount = (raw as num?)?.toInt() ?? 0;
       return 'Rp ${amount.toString().replaceAllMapped(
-        RegExp(r'(?<=\\d)(?=(\\d{3})+(?!\\d))'),
+        RegExp(r'(?<=\d)(?=(\d{3})+(?!\d))'),
         (_) => '.',
       )}';
     }
