@@ -21,7 +21,7 @@ class _PaymentInput {
 /// out of a nested Form/GlobalKey + StatefulBuilder avoids inherited-element
 /// lifecycle assertions when the dialog route is dismissed on Android.
 class _PaymentDialog extends StatefulWidget {
-  const _PaymentDialog({super.key, required this.maxAmount});
+  const _PaymentDialog({required this.maxAmount});
 
   final int maxAmount;
 
