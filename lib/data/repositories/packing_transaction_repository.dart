@@ -62,6 +62,54 @@ class PackingTransactionRepository {
 
   final PackingDatabase _database;
 
+  /// Master catalog of packing service types and their default prices.
+  Future<List<Map<String, Object?>>> listServiceTypes({bool activeOnly = true}) async {
+    final db = await _database.database;
+    return db.query('service_types',
+      where: activeOnly ? 'is_active = 1' : null,
+      orderBy: 'name COLLATE NOCASE ASC');
+  }
+
+  Future<int> saveServiceType({
+    int? id,
+    required String name,
+    required int defaultPrice,
+  }) async {
+    final cleanName = name.trim();
+    if (cleanName.isEmpty) throw ArgumentError('Nama pekerjaan wajib diisi.');
+    if (defaultPrice < 0) throw ArgumentError('Harga standar tidak boleh negatif.');
+    final db = await _database.database;
+    final now = DateTime.now().toUtc().toIso8601String();
+    try {
+      if (id == null) {
+        return await db.insert('service_types', {
+          'name': cleanName, 'default_price': defaultPrice, 'is_active': 1,
+          'created_at': now, 'updated_at': now,
+        });
+      }
+      final changed = await db.update('service_types', {
+        'name': cleanName, 'default_price': defaultPrice, 'updated_at': now,
+      }, where: 'id = ?', whereArgs: [id]);
+      if (changed == 0) throw StateError('Jenis pekerjaan tidak ditemukan.');
+      return id;
+    } catch (error) {
+      if (error.toString().toLowerCase().contains('unique')) {
+        throw ArgumentError('Nama jenis pekerjaan sudah digunakan.');
+      }
+      rethrow;
+    }
+  }
+
+  Future<void> setServiceTypeActive(int id, bool active) async {
+    final db = await _database.database;
+    final changed = await db.update('service_types', {
+      'is_active': active ? 1 : 0,
+      'updated_at': DateTime.now().toUtc().toIso8601String(),
+    }, where: 'id = ?', whereArgs: [id]);
+    if (changed == 0) throw StateError('Jenis pekerjaan tidak ditemukan.');
+  }
+
+
 
   /// Daftar master bahan. Secara default hanya bahan aktif yang ditampilkan.
   Future<List<Map<String, Object?>>> listMaterials({bool activeOnly = true}) async {
@@ -363,6 +411,7 @@ class PackingTransactionRepository {
         'transaction_materials': await rows('transaction_materials'),
         'transaction_payments': await rows('transaction_payments'),
         'materials': await rows('materials'),
+        'service_types': await rows('service_types'),
         'app_settings': await txn.query('app_settings', orderBy: 'key'),
       };
     });
@@ -379,10 +428,14 @@ class PackingTransactionRepository {
       await txn.delete('transaction_materials');
       await txn.delete('packing_transactions');
       await txn.delete('materials');
+      if (data.containsKey('service_types')) await txn.delete('service_types');
       await txn.delete('app_settings');
 
       for (final row in data['materials']!) {
         await txn.insert('materials', row);
+      }
+      for (final row in data['service_types'] ?? const <Map<String, Object?>>[]) {
+        await txn.insert('service_types', row);
       }
       for (final row in data['packing_transactions']!) {
         await txn.insert('packing_transactions', row);

@@ -10,6 +10,7 @@ class PackingBackupValidator {
     'transaction_materials',
     'transaction_payments',
     'materials',
+    'service_types',
     'app_settings',
   ];
 
@@ -18,13 +19,13 @@ class PackingBackupValidator {
   ) {
     final version = backup['version'];
     if (backup['format'] != 'packing_pos_backup' ||
-        (version != 1 && version != 2)) {
+        (version != 1 && version != 2 && version != 3)) {
       throw const FormatException('Format atau versi backup tidak didukung.');
     }
 
     final data = <String, List<Map<String, Object?>>>{};
     for (final table in tables) {
-      final raw = backup[table];
+      final raw = backup[table] ?? (table == 'service_types' && version != 3 ? const [] : null);
       if (raw is! List) {
         throw FormatException('Data tabel $table tidak ditemukan pada backup.');
       }
@@ -109,6 +110,21 @@ class PackingBackupValidator {
       if (active > 1) throw const FormatException('Status bahan tidak valid.');
       _text(row['created_at'], 'Tanggal bahan');
       _text(row['updated_at'], 'Tanggal pembaruan bahan');
+    }
+
+
+    final serviceIds = <int>{};
+    final serviceNames = <String>{};
+    for (final row in data['service_types']!) {
+      final id = _positiveInt(row['id'], 'ID jenis pekerjaan');
+      if (!serviceIds.add(id)) throw FormatException('ID jenis pekerjaan duplikat: $id.');
+      final name = _text(row['name'], 'Nama jenis pekerjaan');
+      if (!serviceNames.add(name.toLowerCase())) throw FormatException('Nama jenis pekerjaan duplikat: $name.');
+      _nonNegativeInt(row['default_price'], 'Harga standar pekerjaan');
+      final active = _nonNegativeInt(row['is_active'], 'Status jenis pekerjaan');
+      if (active > 1) throw const FormatException('Status jenis pekerjaan tidak valid.');
+      _text(row['created_at'], 'Tanggal jenis pekerjaan');
+      _text(row['updated_at'], 'Tanggal pembaruan jenis pekerjaan');
     }
 
     final materialRowIds = <int>{};

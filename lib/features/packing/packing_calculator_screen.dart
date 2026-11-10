@@ -47,14 +47,14 @@ class _PackingCalculatorScreenState extends State<PackingCalculatorScreen> {
   }
 
   void _selectService(int? id) {
-    final selected = _services.where((e) => e['id'] == id).firstOrNull;
+    final selected = _serviceById(id);
     setState(() {
       _serviceId = id;
       if (selected != null) _charge.text = (selected['default_price'] as num).toInt().toString();
     });
   }
 
-  double? _dimension(TextEditingController c) {
+  Map<String, Object?>? _serviceById(int? id) {\n    for (final row in _services) { if (row['id'] == id) return row; }\n    return null;\n  }\n\n  double? _dimension(TextEditingController c) {
     final n = double.tryParse(c.text.trim().replaceAll(',', '.'));
     return n != null && n.isFinite && n > 0 ? n : null;
   }
@@ -66,7 +66,7 @@ class _PackingCalculatorScreenState extends State<PackingCalculatorScreen> {
 
   Future<void> _save() async {
     FocusScope.of(context).unfocus();
-    final service = _services.where((e) => e['id'] == _serviceId).firstOrNull;
+    final service = _serviceById(_serviceId);
     final l = _dimension(_length), w = _dimension(_width), h = _dimension(_height), amount = _price();
     String? error;
     if (service == null) error = 'Tambahkan jenis pekerjaan terlebih dahulu pada Master Jenis Pekerjaan.';

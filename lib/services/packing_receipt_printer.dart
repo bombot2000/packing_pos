@@ -1,4 +1,4 @@
-import 'package:esc_pos_utils_plus/esc_pos_utils_plus.dart';
+import 'dart:convert';\n\nimport 'package:esc_pos_utils_plus/esc_pos_utils_plus.dart';
 import 'package:intl/intl.dart';
 import 'package:print_bluetooth_thermal/print_bluetooth_thermal.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -62,7 +62,7 @@ class PackingReceiptPrinter {
     if (createdAt != null) {
       bytes.addAll(generator.text('Tanggal: ' + DateFormat('dd/MM/yyyy HH:mm').format(createdAt.toLocal())));
     }
-    bytes.addAll(generator.text('Pelanggan: ' + (transaction['customer_name']?.toString() ?? '-')));
+    bytes.addAll(generator.text('Pelanggan: ' + (transaction['customer_name']?.toString() ?? '-')));\n    try {\n      final snap = jsonDecode(transaction['calculation_snapshot']?.toString() ?? '{}') as Map;\n      final job = snap['jobType']?.toString() ?? '';\n      if (job.isNotEmpty) bytes.addAll(generator.text('Jenis pekerjaan: ' + job));\n    } catch (_) {}
     bytes.addAll(generator.text('Barang: ' + (transaction['item_description']?.toString() ?? '-')));
     bytes.addAll(generator.text(
       'Ukuran: ' + (transaction['length_cm']?.toString() ?? '-') +
@@ -76,7 +76,7 @@ class PackingReceiptPrinter {
       bytes.addAll(generator.text('Alasan batal: ' + transaction['cancellation_reason'].toString()));
     }
     bytes.addAll(generator.hr());
-    bytes.addAll(generator.text('RINCIAN BAHAN', styles: const PosStyles(bold: true)));
+    if (materials.isNotEmpty) bytes.addAll(generator.text('RINCIAN BAHAN', styles: const PosStyles(bold: true)));
     for (final material in materials) {
       final name = material['material_name_snapshot']?.toString() ?? 'Bahan';
       final qty = (material['actual_quantity'] as num?)?.toDouble() ?? 0;
@@ -88,9 +88,7 @@ class PackingReceiptPrinter {
       ));
     }
     bytes.addAll(generator.hr());
-    bytes.addAll(generator.text('Biaya bahan: ' + money(transaction['material_cost'])));
-    bytes.addAll(generator.text('Jasa: ' + money(transaction['labor_cost'])));
-    bytes.addAll(generator.text('Tambahan: ' + money(transaction['overhead_cost'])));
+    if (materials.isNotEmpty || ((transaction['material_cost'] as num?)?.toInt() ?? 0) > 0) bytes.addAll(generator.text('Biaya bahan: ' + money(transaction['material_cost'])));\n    if (materials.isNotEmpty || ((transaction['labor_cost'] as num?)?.toInt() ?? 0) > 0) bytes.addAll(generator.text('Jasa: ' + money(transaction['labor_cost'])));\n    if ((transaction['overhead_cost'] as num?)?.toInt() != 0) bytes.addAll(generator.text('Tambahan: ' + money(transaction['overhead_cost'])));
     bytes.addAll(generator.text('TOTAL: ' + money(transaction['selling_price']),
       styles: const PosStyles(bold: true, height: PosTextSize.size2)));
     bytes.addAll(generator.text('Dibayar: ' + money(transaction['paid_amount'])));
