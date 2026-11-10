@@ -34,6 +34,7 @@ class _PaymentDialogState extends State<_PaymentDialog> {
   final _noteController = TextEditingController();
   String _method = 'cash';
   String? _error;
+  bool _paymentInProgress = false;
 
   @override
   void dispose() {
@@ -242,15 +243,18 @@ class _PackingTransactionDetailScreenState extends State<PackingTransactionDetai
   }
 
   Future<void> _addPayment() async {
-    final total = (_transaction!['selling_price'] as num).toInt();
-    final paid = (_transaction!['paid_amount'] as num).toInt();
-    final payment = await showDialog<_PaymentInput>(
-      context: context,
-      builder: (_) => _PaymentDialog(maxAmount: total - paid),
-    );
-    if (payment == null || !mounted) return;
-
+    // Prevent opening multiple payment dialogs from rapid taps.
+    if (_paymentInProgress || _transaction == null) return;
+    setState(() => _paymentInProgress = true);
     try {
+      final total = (_transaction!['selling_price'] as num).toInt();
+      final paid = (_transaction!['paid_amount'] as num).toInt();
+      final payment = await showDialog<_PaymentInput>(
+        context: context,
+        builder: (_) => _PaymentDialog(maxAmount: total - paid),
+      );
+      if (payment == null || !mounted) return;
+
       await _repository.addPayment(
         transactionId: widget.transactionId,
         amount: payment.amount,
@@ -265,6 +269,8 @@ class _PackingTransactionDetailScreenState extends State<PackingTransactionDetai
           SnackBar(content: Text('Gagal menyimpan pembayaran: $e')),
         );
       }
+    } finally {
+      if (mounted) setState(() => _paymentInProgress = false);
     }
   }
 
@@ -459,7 +465,7 @@ class _PackingTransactionDetailScreenState extends State<PackingTransactionDetai
             label: const Text('Cetak nota Bluetooth'),
           ),
           if (status != 'cancelled' && balance > 0)
-            FilledButton.icon(onPressed: _addPayment, icon: const Icon(Icons.payments_outlined), label: const Text('Tambah pembayaran')),
+            FilledButton.icon(onPressed: _paymentInProgress ? null : _addPayment, icon: const Icon(Icons.payments_outlined), label: Text(_paymentInProgress ? 'Memproses pembayaran…' : 'Tambah pembayaran')),
           if (status != 'cancelled')
             OutlinedButton.icon(onPressed: _cancelTransaction, icon: const Icon(Icons.cancel_outlined), label: const Text('Batalkan transaksi')),
           const SizedBox(height: 16),
