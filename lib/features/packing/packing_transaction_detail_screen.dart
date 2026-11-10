@@ -233,7 +233,9 @@ class _PackingTransactionDetailScreenState extends State<PackingTransactionDetai
         final balance = total - paid;
         final status = tx['status'] as String;
         final snapshotData = jsonDecode(tx['calculation_snapshot'] as String) as Map<String, dynamic>;
-        final dimensions = snapshotData['dimensionsCm'] as Map<String, dynamic>? ?? {};\n        final jobType = snapshotData['jobType']?.toString() ?? '';\n        final isManualService = snapshotData['mode'] == 'manual_service_charge';
+        final dimensions = snapshotData['dimensionsCm'] as Map<String, dynamic>? ?? {};
+        final jobType = snapshotData['jobType']?.toString() ?? '';
+        final isManualService = snapshotData['mode'] == 'manual_service_charge';
         final faceSettings = snapshotData['faceSettings'] as List<dynamic>? ?? const [];
         final frameData = snapshotData['frame'] as Map<String, dynamic>?;
         final timberPlans = snapshotData['timberCutPlans'] as Map<String, dynamic>?;
@@ -251,7 +253,8 @@ class _PackingTransactionDetailScreenState extends State<PackingTransactionDetai
               const SizedBox(height: 6),
               Text('Status: ${status == 'completed' ? 'Lunas' : status == 'cancelled' ? 'Dibatalkan' : 'Belum lunas'}'),
               Text('Pelanggan: ${(tx['customer_name'] as String).isEmpty ? '-' : tx['customer_name']}'),
-              if (jobType.isNotEmpty) Text('Jenis pekerjaan: $jobType'),\n              Text('Barang: ${(tx['item_description'] as String).isEmpty ? '-' : tx['item_description']}'),
+              if (jobType.isNotEmpty) Text('Jenis pekerjaan: $jobType'),
+              Text('Barang: ${(tx['item_description'] as String).isEmpty ? '-' : tx['item_description']}'),
               Text('Ukuran: ${dimensions['length'] ?? tx['length_cm']} × ${dimensions['width'] ?? tx['width_cm']} × ${dimensions['height'] ?? tx['height_cm']} cm'),
               Text('Tanggal: ${tx['created_at']}'),
               if ((tx['note'] as String).isNotEmpty) Text('Catatan: ${tx['note']}'),
@@ -259,7 +262,13 @@ class _PackingTransactionDetailScreenState extends State<PackingTransactionDetai
                 Text('Alasan pembatalan: ${tx['cancellation_reason']}'),
             ]),
           )),
-          if (isManualService) ...[\n            Card(child: Column(children: [\n              ListTile(title: const Text('Ongkos pekerjaan'), trailing: Text(_money(total), style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18))),\n              const ListTile(title: Text('Perhitungan ukuran'), subtitle: Text('Panjang, lebar, dan tinggi hanya dicatat sebagai informasi. Harga diisi manual.')),\n            ])),\n          ],\n          if (faceSettings.isNotEmpty) ...[
+          if (isManualService) ...[
+            Card(child: Column(children: [
+              ListTile(title: const Text('Ongkos pekerjaan'), trailing: Text(_money(total), style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18))),
+              const ListTile(title: Text('Perhitungan ukuran'), subtitle: Text('Panjang, lebar, dan tinggi hanya dicatat sebagai informasi. Harga diisi manual.')),
+            ])),
+          ],
+          if (faceSettings.isNotEmpty) ...[
             const SizedBox(height: 8),
             const Text('Pengaturan keenam bidang', style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold)),
             Card(child: Column(children: faceSettings.map((raw) {
