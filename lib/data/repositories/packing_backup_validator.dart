@@ -100,6 +100,30 @@ class PackingBackupValidator {
       paymentTotals[transactionId] = sum;
     }
 
+    // If payment detail rows exist, their sum must match the cached invoice
+    // balance. Legacy backups without payment rows remain importable.
+    for (final entry in paymentTotals.entries) {
+      final transaction = transactions[entry.key]!;
+      final paidAmount = _int(transaction['paid_amount'], 'paid_amount');
+      if (entry.value != paidAmount) {
+        throw FormatException(
+          'Riwayat pembayaran transaksi ${entry.key} tidak cocok dengan paid_amount.',
+        );
+      }
+      final status = transaction['status'];
+      final total = _int(transaction['selling_price'], 'selling_price');
+      if (status == 'completed' && paidAmount != total) {
+        throw FormatException(
+          'Status lunas transaksi ${entry.key} tidak cocok dengan jumlah pembayaran.',
+        );
+      }
+      if (status == 'open' && paidAmount >= total) {
+        throw FormatException(
+          'Status transaksi ${entry.key} seharusnya lunas atau dibatalkan.',
+        );
+      }
+    }
+
     final materialIds = <int>{};
     for (final row in data['materials']!) {
       final id = _positiveInt(row['id'], 'ID master bahan');
