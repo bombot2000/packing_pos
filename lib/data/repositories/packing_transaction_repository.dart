@@ -160,58 +160,138 @@ class PackingTransactionRepository {
     }
   }
 
-  /// Saves header and material snapshots atomically. A failure rolls back all
-  /// rows, so an incomplete receipt is never left in the local database.
-  Future<String> save(PackingTransactionDraft draft) async {
-    _validate(draft);
+  /// Saves one receipt header and all of its packing jobs atomically.
+  /// Each legacy transaction row remains a job detail; payment belongs to the
+  /// receipt header and is recorded only once for the combined total.
+  Future<String> saveReceipt(
+    List<PackingTransactionDraft> drafts, {
+    String customerName = '',
+    String note = '',
+  }) async {
+    if (drafts.isEmpty) throw ArgumentError('Nota harus memiliki minimal satu pekerjaan.');
+    for (final draft in drafts) {
+      _validate(draft);
+    }
     final db = await _database.database;
     final now = DateTime.now().toUtc().toIso8601String();
-
     return db.transaction((txn) async {
-      final temporaryReceipt = 'PENDING-${DateTime.now().microsecondsSinceEpoch}';
-      final id = await txn.insert('packing_transactions', {
-        'receipt_no': temporaryReceipt,
-        'customer_name': draft.customerName.trim(),
-        'item_description': draft.itemDescription.trim(),
-        'length_cm': draft.lengthCm,
-        'width_cm': draft.widthCm,
-        'height_cm': draft.heightCm,
-        'calculation_snapshot': jsonEncode(draft.calculationSnapshot),
-        'material_cost': draft.materialCost,
-        'labor_cost': draft.laborCost,
-        'overhead_cost': draft.overheadCost,
-        'selling_price': draft.sellingPrice,
+      final receiptId = await txn.insert('packing_receipts', {
+        'receipt_no': 'PENDING-${DateTime.now().microsecondsSinceEpoch}',
+        'customer_name': customerName.trim().isNotEmpty
+            ? customerName.trim()
+            : drafts.first.customerName.trim(),
+        'total_amount': drafts.fold<int>(0, (sum, item) => sum + item.sellingPrice),
         'paid_amount': 0,
         'status': 'open',
-        'note': draft.note.trim(),
+        'note': note.trim(),
         'created_at': now,
         'updated_at': now,
       });
-
       final date = DateTime.now();
-      final receipt = 'PKG-${date.year}${date.month.toString().padLeft(2, '0')}${date.day.toString().padLeft(2, '0')}-${id.toString().padLeft(6, '0')}';
-      await txn.update(
-        'packing_transactions',
-        {'receipt_no': receipt, 'updated_at': now},
-        where: 'id = ?',
-        whereArgs: [id],
-      );
+      final receiptNo = 'RCP-${date.year}${date.month.toString().padLeft(2, '0')}${date.day.toString().padLeft(2, '0')}-${receiptId.toString().padLeft(6, '0')}';
+      await txn.update('packing_receipts', {'receipt_no': receiptNo},
+          where: 'id = ?', whereArgs: [receiptId]);
 
-      for (final material in draft.materials) {
-        await txn.insert('transaction_materials', {
-          'transaction_id': id,
-          'material_id': material.materialId,
-          'material_name_snapshot': material.name.trim(),
-          'unit_snapshot': material.unit.trim(),
-          'calculated_quantity': material.calculatedQuantity,
-          'actual_quantity': material.actualQuantity,
-          'unit_price_snapshot': material.unitPrice,
-          'subtotal': material.subtotal,
-          'adjustment_note': material.adjustmentNote.trim(),
+      for (final draft in drafts) {
+        final id = await txn.insert('packing_transactions', {
+          'receipt_no': 'PENDING-${DateTime.now().microsecondsSinceEpoch}-${drafts.indexOf(draft)}',
+          'receipt_id': receiptId,
+          'customer_name': customerName.trim().isNotEmpty ? customerName.trim() : draft.customerName.trim(),
+          'item_description': draft.itemDescription.trim(),
+          'length_cm': draft.lengthCm,
+          'width_cm': draft.widthCm,
+          'height_cm': draft.heightCm,
+          'calculation_snapshot': jsonEncode(draft.calculationSnapshot),
+          'material_cost': draft.materialCost,
+          'labor_cost': draft.laborCost,
+          'overhead_cost': draft.overheadCost,
+          'selling_price': draft.sellingPrice,
+          'paid_amount': 0,
+          'status': 'open',
+          'note': draft.note.trim(),
           'created_at': now,
+          'updated_at': now,
         });
+        final jobNo = 'PKG-${date.year}${date.month.toString().padLeft(2, '0')}${date.day.toString().padLeft(2, '0')}-${id.toString().padLeft(6, '0')}';
+        await txn.update('packing_transactions', {'receipt_no': jobNo},
+            where: 'id = ?', whereArgs: [id]);
+        for (final material in draft.materials) {
+          await txn.insert('transaction_materials', {
+            'transaction_id': id,
+            'material_id': material.materialId,
+            'material_name_snapshot': material.name.trim(),
+            'unit_snapshot': material.unit.trim(),
+            'calculated_quantity': material.calculatedQuantity,
+            'actual_quantity': material.actualQuantity,
+            'unit_price_snapshot': material.unitPrice,
+            'subtotal': material.subtotal,
+            'adjustment_note': material.adjustmentNote.trim(),
+            'created_at': now,
+          });
+        }
       }
-      return receipt;
+      return receiptNo;
+    });
+  }
+
+  /// Backward-compatible single-job save; it now creates a one-job receipt.
+  Future<String> save(PackingTransactionDraft draft) =>
+      saveReceipt([draft], customerName: draft.customerName, note: draft.note);
+
+  Future<List<Map<String, Object?>>> listReceipts({int limit = 100}) async {
+    if (limit < 1 || limit > 500) {
+      throw ArgumentError.value(limit, 'limit', 'Harus antara 1 dan 500.');
+    }
+    final db = await _database.database;
+    return db.query('packing_receipts', orderBy: 'id DESC', limit: limit);
+  }
+
+  Future<Map<String, Object?>?> findReceiptById(int id) async {
+    final db = await _database.database;
+    final rows = await db.query('packing_receipts', where: 'id = ?', whereArgs: [id], limit: 1);
+    return rows.isEmpty ? null : rows.first;
+  }
+
+  Future<List<Map<String, Object?>>> jobsForReceipt(int receiptId) async {
+    final db = await _database.database;
+    return db.query('packing_transactions', where: 'receipt_id = ?', whereArgs: [receiptId], orderBy: 'id ASC');
+  }
+
+  Future<List<Map<String, Object?>>> receiptPaymentsFor(int receiptId) async {
+    final db = await _database.database;
+    return db.query('receipt_payments', where: 'receipt_id = ?', whereArgs: [receiptId], orderBy: 'id DESC');
+  }
+
+  /// Records one full settlement for the entire receipt, never per job.
+  Future<void> settleReceipt({
+    required int receiptId,
+    required int amount,
+    required String paymentMethod,
+    String note = '',
+  }) async {
+    if (amount <= 0) throw ArgumentError('Nominal pembayaran harus lebih dari nol.');
+    if (paymentMethod.trim().isEmpty) throw ArgumentError('Metode pembayaran wajib dipilih.');
+    final db = await _database.database;
+    final now = DateTime.now().toUtc().toIso8601String();
+    await db.transaction((txn) async {
+      final rows = await txn.query('packing_receipts', where: 'id = ?', whereArgs: [receiptId], limit: 1);
+      if (rows.isEmpty) throw StateError('Nota tidak ditemukan.');
+      final receipt = rows.first;
+      if (receipt['status'] == 'cancelled') throw StateError('Nota yang dibatalkan tidak dapat dibayar.');
+      final total = (receipt['total_amount'] as num).toInt();
+      final paid = (receipt['paid_amount'] as num).toInt();
+      if (paid > 0) throw StateError('Nota ini sudah memiliki pembayaran.');
+      if (amount != total) throw ArgumentError('Pembayaran harus sama dengan total nota ($total).');
+      await txn.insert('receipt_payments', {
+        'receipt_id': receiptId, 'amount': amount,
+        'payment_method': paymentMethod.trim(), 'note': note.trim(), 'created_at': now,
+      });
+      await txn.update('packing_receipts', {
+        'paid_amount': amount, 'status': 'completed', 'updated_at': now,
+      }, where: 'id = ?', whereArgs: [receiptId]);
+      await txn.update('packing_transactions', {
+        'paid_amount': 0, 'status': 'completed', 'updated_at': now,
+      }, where: 'receipt_id = ?', whereArgs: [receiptId]);
     });
   }
 
