@@ -9,6 +9,8 @@ class PackingBackupValidator {
     'packing_transactions',
     'transaction_materials',
     'transaction_payments',
+    'packing_receipts',
+    'receipt_payments',
     'materials',
     'service_types',
     'app_settings',
@@ -19,13 +21,13 @@ class PackingBackupValidator {
   ) {
     final version = backup['version'];
     if (backup['format'] != 'packing_pos_backup' ||
-        (version != 1 && version != 2 && version != 3)) {
+        (version != 1 && version != 2 && version != 3 && version != 4)) {
       throw const FormatException('Format atau versi backup tidak didukung.');
     }
 
     final data = <String, List<Map<String, Object?>>>{};
     for (final table in tables) {
-      if (table == 'service_types' && version != 3 && backup[table] == null) continue;
+      if ((table == 'service_types' && version < 3 && backup[table] == null) || (version < 4 && ['packing_receipts', 'receipt_payments'].contains(table))) continue;
       final raw = backup[table];
       if (raw is! List) {
         throw FormatException('Data tabel $table tidak ditemukan pada backup.');
@@ -124,6 +126,53 @@ class PackingBackupValidator {
       }
     }
 
+
+    if (version < 4) {
+      final headers = <Map<String, Object?>>[];
+      final receiptPayments = <Map<String, Object?>>[];
+      for (final tx in data['packing_transactions']!) {
+        final id = _positiveInt(tx['id'], 'ID transaksi');
+        headers.add({'id': id, 'receipt_no': tx['receipt_no'], 'customer_name': tx['customer_name'] ?? '', 'total_amount': tx['selling_price'], 'paid_amount': tx['paid_amount'], 'status': tx['status'], 'note': tx['note'] ?? '', 'created_at': tx['created_at'], 'updated_at': tx['updated_at']});
+        tx['receipt_id'] = id;
+        for (final payment in data['transaction_payments']!) {
+          if (payment['transaction_id'] == id) receiptPayments.add({'id': payment['id'], 'receipt_id': id, 'amount': payment['amount'], 'payment_method': payment['payment_method'], 'note': payment['note'] ?? '', 'created_at': payment['created_at']});
+        }
+      }
+      data['packing_receipts'] = headers; data['receipt_payments'] = receiptPayments;
+    }
+    final headerIds = <int>{}; final headerNos = <String>{}; final headerMap = <int, Map<String, Object?>>{};
+    for (final row in data['packing_receipts']!) {
+      final id = _positiveInt(row['id'], 'ID nota'); final no = _text(row['receipt_no'], 'Nomor nota');
+      if (!headerIds.add(id) || !headerNos.add(no)) throw FormatException('ID atau nomor nota duplikat: ' + no);
+      final total = _nonNegativeInt(row['total_amount'], 'Total nota'); final paid = _nonNegativeInt(row['paid_amount'], 'Pembayaran nota');
+      if (paid > total) throw FormatException('Pembayaran nota melebihi total: ' + no);
+      final status = _text(row['status'], 'Status nota');
+      if (!['open', 'completed', 'cancelled'].contains(status)) throw FormatException('Status nota tidak dikenal: ' + no);
+      _text(row['created_at'], 'Tanggal nota'); _text(row['updated_at'], 'Pembaruan nota'); headerMap[id] = row;
+    }
+    final sums = <int, int>{};
+    for (final tx in data['packing_transactions']!) {
+      final rid = _positiveInt(tx['receipt_id'], 'ID nota pekerjaan');
+      if (!headerMap.containsKey(rid)) throw const FormatException('Pekerjaan merujuk nota yang tidak ada.');
+      if (tx['status'] != 'cancelled') sums[rid] = (sums[rid] ?? 0) + _int(tx['selling_price'], 'Harga pekerjaan');
+    }
+    for (final e in headerMap.entries) {
+      if (e.value['status'] != 'cancelled' && (sums[e.key] ?? 0) != _int(e.value['total_amount'], 'Total nota')) throw const FormatException('Total pekerjaan tidak cocok dengan total nota.');
+    }
+    final payIds = <int>{}; final paidSums = <int, int>{}; final payCounts = <int, int>{};
+    for (final row in data['receipt_payments']!) {
+      final id = _positiveInt(row['id'], 'ID pembayaran nota'); if (!payIds.add(id)) throw const FormatException('ID pembayaran nota duplikat.');
+      final rid = _positiveInt(row['receipt_id'], 'ID nota pembayaran'); if (!headerMap.containsKey(rid)) throw const FormatException('Pembayaran merujuk nota yang tidak ada.');
+      final amount = _positiveInt(row['amount'], 'Nominal pembayaran nota'); _text(row['payment_method'], 'Metode pembayaran nota'); _text(row['created_at'], 'Tanggal pembayaran nota');
+      paidSums[rid] = (paidSums[rid] ?? 0) + amount; payCounts[rid] = (payCounts[rid] ?? 0) + 1;
+    }
+    for (final e in headerMap.entries) {
+      final paid = _int(e.value['paid_amount'], 'Pembayaran nota');
+      if ((paidSums[e.key] ?? 0) != 0 && paidSums[e.key] != paid) throw const FormatException('Riwayat pembayaran nota tidak cocok.');
+      if ((payCounts[e.key] ?? 0) > 1) throw const FormatException('Nota hanya boleh memiliki satu pembayaran.');
+      if (e.value['status'] == 'completed' && paid != _int(e.value['total_amount'], 'Total nota')) throw const FormatException('Status lunas tidak cocok.');
+      if (e.value['status'] == 'open' && paid != 0) throw const FormatException('Nota terbuka tidak boleh memiliki pembayaran.');
+    }
     final materialIds = <int>{};
     for (final row in data['materials']!) {
       final id = _positiveInt(row['id'], 'ID master bahan');

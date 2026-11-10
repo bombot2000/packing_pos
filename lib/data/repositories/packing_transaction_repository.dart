@@ -361,6 +361,7 @@ class PackingTransactionRepository {
       );
       if (rows.isEmpty) throw StateError('Transaksi tidak ditemukan.');
       final transaction = rows.first;
+      if (transaction['receipt_id'] != null) throw StateError('Pembayaran dilakukan pada tingkat nota, bukan pekerjaan.');
       if (transaction['status'] == 'cancelled') {
         throw StateError('Transaksi yang dibatalkan tidak dapat menerima pembayaran.');
       }
@@ -402,6 +403,9 @@ class PackingTransactionRepository {
 
   Future<void> cancel(int transactionId, {String reason = ''}) async {
     final db = await _database.database;
+    final found = await db.query('packing_transactions', columns: ['receipt_id'], where: 'id = ?', whereArgs: [transactionId], limit: 1);
+    if (found.isEmpty) throw StateError('Transaksi tidak ditemukan.');
+    if (found.first['receipt_id'] != null) throw StateError('Batalkan nota secara keseluruhan, bukan satu pekerjaan.');
     final now = DateTime.now().toUtc().toIso8601String();
     final changed = await db.update(
       'packing_transactions',
@@ -442,21 +446,19 @@ class PackingTransactionRepository {
         ? ''
         : ' AND ' + materialDateConditions.join(' AND ');
     final totals = await db.rawQuery('''
-      SELECT
-        COUNT(*) AS transaction_count,
+      SELECT COUNT(*) AS transaction_count,
+        (SELECT COUNT(*) FROM packing_receipts WHERE status != 'cancelled'${dateFilter}) AS receipt_count,
         COALESCE(SUM(selling_price), 0) AS sales_total,
         COALESCE(SUM(material_cost), 0) AS material_cost_total,
         COALESCE(SUM(labor_cost), 0) AS labor_cost_total,
         COALESCE(SUM(overhead_cost), 0) AS overhead_cost_total,
         COALESCE(SUM(selling_price - material_cost - labor_cost - overhead_cost), 0) AS gross_profit,
-        COALESCE(SUM(paid_amount), 0) AS paid_total,
-        COALESCE(SUM(selling_price - paid_amount), 0) AS receivable_total,
+        (SELECT COALESCE(SUM(paid_amount), 0) FROM packing_receipts WHERE status != 'cancelled'${dateFilter}) AS paid_total,
+        (SELECT COALESCE(SUM(total_amount - paid_amount), 0) FROM packing_receipts WHERE status != 'cancelled'${dateFilter}) AS receivable_total,
         SUM(CASE WHEN status = 'completed' THEN 1 ELSE 0 END) AS completed_count,
         SUM(CASE WHEN status = 'open' THEN 1 ELSE 0 END) AS open_count,
-        (SELECT COUNT(*) FROM packing_transactions
-          WHERE status = 'cancelled'${dateFilter}) AS cancelled_count
-      FROM packing_transactions
-      WHERE status != 'cancelled'${dateFilter}
+        (SELECT COUNT(*) FROM packing_receipts WHERE status = 'cancelled'${dateFilter}) AS cancelled_count
+      FROM packing_transactions WHERE status != 'cancelled'${dateFilter}
     ''', [...args, ...args]);
     final materials = await db.rawQuery('''
       SELECT material_name_snapshot AS name, unit_snapshot AS unit,
@@ -485,9 +487,11 @@ class PackingTransactionRepository {
           txn.query(table, orderBy: 'id');
       return {
         'format': 'packing_pos_backup',
-        'version': 3,
+        'version': 4,
         'createdAt': DateTime.now().toUtc().toIso8601String(),
         'packing_transactions': await rows('packing_transactions'),
+        'packing_receipts': await rows('packing_receipts'),
+        'receipt_payments': await rows('receipt_payments'),
         'transaction_materials': await rows('transaction_materials'),
         'transaction_payments': await rows('transaction_payments'),
         'materials': await rows('materials'),
@@ -504,9 +508,11 @@ class PackingTransactionRepository {
 
     final db = await _database.database;
     await db.transaction((txn) async {
+      await txn.delete('receipt_payments');
       await txn.delete('transaction_payments');
       await txn.delete('transaction_materials');
       await txn.delete('packing_transactions');
+      await txn.delete('packing_receipts');
       await txn.delete('materials');
       if (data.containsKey('service_types')) await txn.delete('service_types');
       await txn.delete('app_settings');
@@ -517,9 +523,11 @@ class PackingTransactionRepository {
       for (final row in data['service_types'] ?? const <Map<String, Object?>>[]) {
         await txn.insert('service_types', row);
       }
+      for (final row in data['packing_receipts']!) { await txn.insert('packing_receipts', row); }
       for (final row in data['packing_transactions']!) {
         await txn.insert('packing_transactions', row);
       }
+      for (final row in data['receipt_payments']!) { await txn.insert('receipt_payments', row); }
       for (final row in data['transaction_materials']!) {
         await txn.insert('transaction_materials', row);
       }
