@@ -177,4 +177,67 @@ class PackingReceiptPrinter {
     }
     return true;
   }
+
+  /// Prints one combined receipt containing every job and a single payment summary.
+  static Future<bool> printReceipt({
+    required Map<String, Object?> receipt,
+    required List<Map<String, Object?>> jobs,
+    required Map<int, List<Map<String, Object?>>> materialsByJob,
+    required List<Map<String, Object?>> payments,
+  }) async {
+    final prefs = await SharedPreferences.getInstance();
+    final mac = prefs.getString(printerMacKey);
+    if (mac == null || mac.trim().isEmpty) throw StateError('Pilih printer terlebih dahulu pada Pengaturan Printer.');
+    if (!await PrintBluetoothThermal.connectionStatus && !await connect(mac)) {
+      throw StateError('Tidak dapat terhubung ke printer Bluetooth.');
+    }
+    final paper = (prefs.getInt(paperWidthKey) ?? 58) == 80 ? PaperSize.mm80 : PaperSize.mm58;
+    final generator = Generator(paper, await CapabilityProfile.load());
+    final bytes = <int>[];
+    String money(Object? raw) {
+      final n = (raw as num?)?.toInt() ?? 0;
+      return 'Rp ' + n.toString().replaceAllMapped(RegExp(r'(?<=\\d)(?=(\\d{3})+(?!\\d))'), (_) => '.');
+    }
+    bytes.addAll(generator.reset());
+    bytes.addAll(generator.text('PACKING POS', styles: const PosStyles(align: PosAlign.center, bold: true, height: PosTextSize.size2, width: PosTextSize.size2), linesAfter: 1));
+    bytes.addAll(generator.text(receipt['receipt_no']?.toString() ?? '-', styles: const PosStyles(align: PosAlign.center, bold: true)));
+    bytes.addAll(generator.hr());
+    final created = DateTime.tryParse(receipt['created_at']?.toString() ?? '');
+    if (created != null) bytes.addAll(generator.text('Tanggal: ${DateFormat('dd/MM/yyyy HH:mm').format(created.toLocal())}'));
+    bytes.addAll(generator.text('Pelanggan: ${receipt['customer_name'] ?? '-'}'));
+    bytes.addAll(generator.hr());
+    for (var i = 0; i < jobs.length; i++) {
+      final job = jobs[i];
+      final desc = job['item_description']?.toString().trim();
+      bytes.addAll(generator.text('${i + 1}. ${desc == null || desc.isEmpty ? 'Pekerjaan' : desc}', styles: const PosStyles(bold: true)));
+      bytes.addAll(generator.text('Ukuran: ${job['length_cm']} x ${job['width_cm']} x ${job['height_cm']} cm'));
+      final materials = materialsByJob[(job['id'] as num).toInt()] ?? const [];
+      for (final m in materials) {
+        bytes.addAll(generator.text('  ${m['material_name_snapshot']}: ${m['actual_quantity']} ${m['unit_snapshot']} = ${money(m['subtotal'])}'));
+      }
+      bytes.addAll(generator.text('  Harga pekerjaan: ${money(job['selling_price'])}'));
+      if (i != jobs.length - 1) bytes.addAll(generator.hr(ch: '-'));
+    }
+    bytes.addAll(generator.hr());
+    final total = (receipt['total_amount'] as num?)?.toInt() ?? 0;
+    final paid = (receipt['paid_amount'] as num?)?.toInt() ?? 0;
+    bytes.addAll(generator.text('TOTAL NOTA: ${money(total)}', styles: const PosStyles(bold: true, height: PosTextSize.size2)));
+    bytes.addAll(generator.text('Dibayar: ${money(paid)}'));
+    bytes.addAll(generator.text('Sisa: ${money(total - paid)}'));
+    if (payments.isNotEmpty) {
+      final payment = payments.first;
+      bytes.addAll(generator.text('Metode: ${payment['payment_method'] ?? '-'}'));
+      bytes.addAll(generator.text('Waktu bayar: ${payment['created_at'] ?? '-'}'));
+    } else {
+      bytes.addAll(generator.text('Status: Belum dibayar'));
+    }
+    final note = receipt['note']?.toString() ?? '';
+    if (note.trim().isNotEmpty) bytes.addAll(generator.text('Catatan: $note'));
+    bytes.addAll(generator.hr());
+    bytes.addAll(generator.text('Terima kasih', styles: const PosStyles(align: PosAlign.center)));
+    bytes.addAll(generator.feed(3));
+    if (!await PrintBluetoothThermal.writeBytes(bytes)) throw StateError('Printer menolak data cetak.');
+    return true;
+  }
+
 }

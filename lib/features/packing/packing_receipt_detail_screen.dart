@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../data/repositories/packing_transaction_repository.dart';
+import '../../services/packing_receipt_printer.dart';
 
 class PackingReceiptDetailScreen extends StatefulWidget {
   const PackingReceiptDetailScreen({super.key, required this.receiptId});
@@ -40,7 +41,7 @@ class _PackingReceiptDetailScreenState extends State<PackingReceiptDetailScreen>
     return 'Rp ' + n.toString().replaceAllMapped(RegExp(r'(?<=\\d)(?=(\\d{3})+(?!\\d))'), (_) => '.');
   }
 
-  Future<void> _settle() async {
+  Future<void> _printReceipt() async {\n    if (_receipt == null || _busy) return;\n    setState(() => _busy = true);\n    try {\n      final materials = <int, List<Map<String, Object?>>>{};\n      for (final job in _jobs) { final id = (job['id'] as num).toInt(); materials[id] = await _repo.materialsFor(id); }\n      await PackingReceiptPrinter.printReceipt(receipt: _receipt!, jobs: _jobs, materialsByJob: materials, payments: _payments);\n      if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Nota dikirim ke printer.')));\n    } catch (e) { if (mounted) setState(() => _error = e.toString()); }\n    finally { if (mounted) setState(() => _busy = false); }\n  }\n\n  Future<void> _settle() async {
     if (_busy || _receipt == null) return;
     final total = (_receipt!['total_amount'] as num).toInt();
     final amount = int.tryParse(_amount.text.replaceAll('.', '').replaceAll(',', '').trim());
@@ -60,7 +61,7 @@ class _PackingReceiptDetailScreenState extends State<PackingReceiptDetailScreen>
   @override
   Widget build(BuildContext context) {
     final receipt = _receipt;
-    if (receipt == null) return Scaffold(appBar: AppBar(title: const Text('Detail nota')), body: Center(child: _error == null ? const CircularProgressIndicator() : Text(_error!)));
+    if (receipt == null) return Scaffold(appBar: AppBar(title: const Text('Detail nota'), actions: [IconButton(tooltip: 'Cetak nota', onPressed: _busy ? null : _printReceipt, icon: const Icon(Icons.print))]), body: Center(child: _error == null ? const CircularProgressIndicator() : Text(_error!)));
     final total = (receipt['total_amount'] as num).toInt();
     final paid = (receipt['paid_amount'] as num).toInt();
     final status = receipt['status'] as String;

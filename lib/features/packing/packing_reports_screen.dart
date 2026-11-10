@@ -94,7 +94,7 @@ class _PackingReportsScreenState extends State<PackingReportsScreen> {
             ),
             const SizedBox(height: 12),
             Text(
-              _period == 'today' ? 'Ringkasan hari ini' : _period == 'month' ? 'Ringkasan bulan ini' : 'Ringkasan seluruh transaksi aktif',
+              _period == 'today' ? 'Ringkasan hari ini' : _period == 'month' ? 'Ringkasan bulan ini' : 'Ringkasan seluruh nota aktif',
               style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 8),
@@ -113,7 +113,8 @@ class _PackingReportsScreenState extends State<PackingReportsScreen> {
                 _metric('Biaya tambahan', _money(totals['overhead_cost_total']), Icons.more_horiz),
                 _metric('Pembayaran diterima', _money(totals['paid_total']), Icons.payments_outlined),
                 _metric('Piutang tersisa', _money(totals['receivable_total']), Icons.account_balance_wallet_outlined),
-                _metric('Transaksi aktif', (totals['transaction_count'] as num? ?? 0).toString(), Icons.receipt_long),
+                _metric('Nota aktif', (totals['receipt_count'] as num? ?? 0).toString(), Icons.receipt_long),
+                _metric('Jumlah pekerjaan', (totals['transaction_count'] as num? ?? 0).toString(), Icons.inventory_2_outlined),
               ],
             ),
             const SizedBox(height: 12),
