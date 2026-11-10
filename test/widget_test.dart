@@ -7,6 +7,6 @@ void main() {
     expect(find.text('Packing POS'), findsOneWidget);
     expect(find.text('Transaksi packing baru'), findsOneWidget);
     expect(find.text('Riwayat transaksi'), findsOneWidget);
-    expect(find.text('Master bahan'), findsOneWidget);
+    expect(find.text('Master bahan (arsip)'), findsOneWidget);
   });
 }
