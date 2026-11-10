@@ -114,7 +114,7 @@ class _PackingBackupScreenState extends State<PackingBackupScreen> {
             ),
             const SizedBox(height: 8),
             const Text(
-              'Mencakup transaksi, rincian bahan dan harga snapshot, pembayaran, master bahan, serta pengaturan. File disimpan sebagai JSON dan dapat dibagikan ke penyimpanan lain.',
+              'Mencakup transaksi, rincian bahan dan harga snapshot, pembayaran, master bahan, master jenis pekerjaan dan harga jasa, serta pengaturan. File disimpan sebagai JSON dan dapat dibagikan ke penyimpanan lain.',
             ),
             const SizedBox(height: 12),
             FilledButton.icon(
