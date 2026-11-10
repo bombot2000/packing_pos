@@ -76,6 +76,9 @@ class PackingReceiptPrinter {
       bytes.addAll(generator.text('Alasan batal: ' + transaction['cancellation_reason'].toString()));
     }
     bytes.addAll(generator.hr());
+    bool manualService = false;
+    try { manualService = (jsonDecode(transaction['calculation_snapshot']?.toString() ?? '{}') as Map)['mode'] == 'manual_service_charge'; } catch (_) {}
+    if (manualService) bytes.addAll(generator.text('Ongkos pekerjaan: ' + money(transaction['selling_price']), styles: const PosStyles(bold: true)));
     if (materials.isNotEmpty) bytes.addAll(generator.text('RINCIAN BAHAN', styles: const PosStyles(bold: true)));
     for (final material in materials) {
       final name = material['material_name_snapshot']?.toString() ?? 'Bahan';
