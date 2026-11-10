@@ -4,6 +4,15 @@ import 'package:sqflite/sqflite.dart';
 /// Local database. Schema changes use migrations; existing transactions remain intact.
 class PackingDatabase {
   PackingDatabase._();
+
+  /// Creates an isolated in-memory database for repository regression tests.
+  static Future<PackingDatabase> createForTesting(Database database) async {
+    final instance = PackingDatabase._();
+    await instance._createSchema(database, schemaVersion);
+    await database.execute('PRAGMA foreign_keys = ON');
+    instance._database = database;
+    return instance;
+  }
   static final PackingDatabase instance = PackingDatabase._();
   static const int schemaVersion = 3;
   Database? _database;
