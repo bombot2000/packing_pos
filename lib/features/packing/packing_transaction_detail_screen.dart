@@ -34,7 +34,6 @@ class _PaymentDialogState extends State<_PaymentDialog> {
   final _noteController = TextEditingController();
   String _method = 'cash';
   String? _error;
-  bool _paymentInProgress = false;
 
   @override
   void dispose() {
@@ -146,6 +145,7 @@ class _PackingTransactionDetailScreenState extends State<PackingTransactionDetai
   List<Map<String, Object?>> _materials = [];
   List<Map<String, Object?>> _payments = [];
   String? _error;
+  bool _paymentInProgress = false;
 
   @override
   void initState() {
