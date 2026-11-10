@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import '../../data/repositories/packing_transaction_repository.dart';
 import '../../services/packing_receipt_printer.dart';
@@ -38,10 +40,37 @@ class _PackingReceiptDetailScreenState extends State<PackingReceiptDetailScreen>
 
   String _money(Object? value) {
     final n = (value as num?)?.toInt() ?? 0;
-    return 'Rp ' + n.toString().replaceAllMapped(RegExp(r'(?<=\\d)(?=(\\d{3})+(?!\\d))'), (_) => '.');
+    return 'Rp ' + n.toString().replaceAllMapped(RegExp(r'(?<=\d)(?=(\d{3})+(?!\d))'), (_) => '.');
   }
 
-  Future<void> _printReceipt() async {\n    if (_receipt == null || _busy) return;\n    setState(() => _busy = true);\n    try {\n      final materials = <int, List<Map<String, Object?>>>{};\n      for (final job in _jobs) { final id = (job['id'] as num).toInt(); materials[id] = await _repo.materialsFor(id); }\n      await PackingReceiptPrinter.printReceipt(receipt: _receipt!, jobs: _jobs, materialsByJob: materials, payments: _payments);\n      if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Nota dikirim ke printer.')));\n    } catch (e) { if (mounted) setState(() => _error = e.toString()); }\n    finally { if (mounted) setState(() => _busy = false); }\n  }\n\n  Future<void> _settle() async {
+  Future<void> _printReceipt() async {
+    if (_receipt == null || _busy) return;
+    setState(() => _busy = true);
+    try {
+      final materials = <int, List<Map<String, Object?>>>{};
+      for (final job in _jobs) {
+        final id = (job['id'] as num).toInt();
+        materials[id] = await _repo.materialsFor(id);
+      }
+      await PackingReceiptPrinter.printReceipt(
+        receipt: _receipt!,
+        jobs: _jobs,
+        materialsByJob: materials,
+        payments: _payments,
+      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Nota dikirim ke printer.')),
+        );
+      }
+    } catch (e) {
+      if (mounted) setState(() => _error = e.toString());
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  Future<void> _settle() async {
     if (_busy || _receipt == null) return;
     final total = (_receipt!['total_amount'] as num).toInt();
     final amount = int.tryParse(_amount.text.replaceAll('.', '').replaceAll(',', '').trim());
@@ -66,7 +95,7 @@ class _PackingReceiptDetailScreenState extends State<PackingReceiptDetailScreen>
     final paid = (receipt['paid_amount'] as num).toInt();
     final status = receipt['status'] as String;
     return Scaffold(
-      appBar: AppBar(title: const Text('Detail nota')),
+      appBar: AppBar(title: const Text('Detail nota'), actions: [IconButton(tooltip: 'Cetak nota', onPressed: _busy ? null : _printReceipt, icon: const Icon(Icons.print))]),
       body: ListView(padding: const EdgeInsets.all(16), children: [
         Card(child: Padding(padding: const EdgeInsets.all(16), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           Text(receipt['receipt_no'] as String, style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold)),
