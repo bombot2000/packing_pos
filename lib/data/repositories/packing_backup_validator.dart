@@ -13,6 +13,7 @@ class PackingBackupValidator {
     'receipt_payments',
     'materials',
     'service_types',
+    'customers',
     'app_settings',
   ];
 
@@ -21,13 +22,13 @@ class PackingBackupValidator {
   ) {
     final version = backup['version'];
     if (backup['format'] != 'packing_pos_backup' ||
-        (version != 1 && version != 2 && version != 3 && version != 4 && version != 5)) {
+        (version != 1 && version != 2 && version != 3 && version != 4 && version != 5 && version != 6)) {
       throw const FormatException('Format atau versi backup tidak didukung.');
     }
 
     final data = <String, List<Map<String, Object?>>>{};
     for (final table in tables) {
-      if ((table == 'service_types' && version < 3 && backup[table] == null) || (version < 4 && ['packing_receipts', 'receipt_payments'].contains(table))) continue;
+      if ((table == 'service_types' && version < 3 && backup[table] == null) || (version < 4 && ['packing_receipts', 'receipt_payments'].contains(table)) || (table == 'customers' && version < 6)) continue;
       final raw = backup[table];
       if (raw is! List) {
         throw FormatException('Data tabel $table tidak ditemukan pada backup.');
@@ -241,6 +242,24 @@ class PackingBackupValidator {
       _nonNegativeInt(row['unit_price_snapshot'], 'Harga snapshot bahan');
       _nonNegativeInt(row['subtotal'], 'Subtotal bahan');
       _text(row['created_at'], 'Tanggal rincian bahan');
+    }
+
+    final customerIds = <int>{};
+    final customerNames = <String>{};
+    for (final row in data['customers'] ?? const <Map<String, Object?>>[]) {
+      final id = _positiveInt(row['id'], 'ID pelanggan');
+      if (!customerIds.add(id)) throw FormatException('ID pelanggan duplikat: $id.');
+      final name = _text(row['name'], 'Nama pelanggan');
+      if (!customerNames.add(name.trim().toLowerCase())) {
+        throw FormatException('Nama pelanggan duplikat: $name.');
+      }
+      _string(row['phone'], 'Telepon pelanggan');
+      _string(row['address'], 'Alamat pelanggan');
+      _string(row['note'], 'Catatan pelanggan');
+      final active = _nonNegativeInt(row['is_active'], 'Status pelanggan');
+      if (active > 1) throw const FormatException('Status pelanggan tidak valid.');
+      _text(row['created_at'], 'Tanggal pelanggan');
+      _text(row['updated_at'], 'Pembaruan pelanggan');
     }
 
     final settingKeys = <String>{};
