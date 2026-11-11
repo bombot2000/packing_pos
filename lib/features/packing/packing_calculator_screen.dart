@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import '../../core/format/rupiah.dart';
 import '../../data/repositories/packing_transaction_repository.dart';
 import 'packing_receipt_detail_screen.dart';
 import 'service_type_master_screen.dart';
@@ -73,7 +72,7 @@ class _PackingCalculatorScreenState extends State<PackingCalculatorScreen> {
     final n = int.tryParse(_charge.text.replaceAll('Rp', '').replaceAll('.', '').replaceAll(',', '').replaceAll(' ', '').trim());
     return n != null && n >= 0 ? n : null;
   }
-  String _money(int n) => 'Rp ' + n.toString().replaceAllMapped(RegExp(r'(?<=\\d)(?=(\\d{3})+(?!\\d))'), (_) => '.');
+  String _money(int n) => 'Rp ${n.toString().replaceAllMapped(RegExp(r'(?<=\\d)(?=(\\d{3})+(?!\\d))'), (_) => '.')}';
   int get _grandTotal => _jobs.fold<int>(0, (sum, job) => sum + job.sellingPrice);
 
   void _addJob() {
@@ -81,9 +80,13 @@ class _PackingCalculatorScreenState extends State<PackingCalculatorScreen> {
     final service = _serviceById(_serviceId);
     final l = _dimension(_length), w = _dimension(_width), h = _dimension(_height), amount = _price();
     String? error;
-    if (service == null) error = 'Tambahkan jenis pekerjaan terlebih dahulu.';
-    else if (l == null || w == null || h == null) error = 'Panjang, lebar, dan tinggi harus diisi angka lebih dari nol.';
-    else if (amount == null) error = 'Ongkos harus berupa nominal Rupiah yang valid.';
+    if (service == null) {
+      error = 'Tambahkan jenis pekerjaan terlebih dahulu.';
+    } else if (l == null || w == null || h == null) {
+      error = 'Panjang, lebar, dan tinggi harus diisi angka lebih dari nol.';
+    } else if (amount == null) {
+      error = 'Ongkos harus berupa nominal Rupiah yang valid.';
+    }
     if (error != null) { setState(() => _error = error); return; }
     final job = service!['name'].toString();
     final description = _item.text.trim().isEmpty ? job : '$job • ${_item.text.trim()}';
