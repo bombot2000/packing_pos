@@ -17,6 +17,7 @@ class _PackingCashClosingScreenState extends State<PackingCashClosingScreen> {
   final _expenseNote = TextEditingController();
   final _counted = TextEditingController();
   Map<String, Object?>? _summary;
+  List<Map<String, Object?>> _history = const [];
   bool _busy = false;
   String? _error;
 
@@ -42,7 +43,12 @@ class _PackingCashClosingScreenState extends State<PackingCashClosingScreen> {
       final summary = session == null
           ? null
           : await _repository.cashSessionSummary((session['id'] as num).toInt());
-      if (mounted) setState(() { _summary = summary; _error = null; });
+      final history = await _repository.listCashSessions(limit: 30);
+      if (mounted) setState(() {
+        _summary = summary;
+        _history = history;
+        _error = null;
+      });
     } catch (error) {
       if (mounted) setState(() => _error = error.toString());
     }
@@ -153,6 +159,36 @@ class _PackingCashClosingScreenState extends State<PackingCashClosingScreen> {
         ],
         if (_busy) const Padding(padding: EdgeInsets.all(20), child: Center(child: CircularProgressIndicator())),
         const SizedBox(height: 12),
+        const Divider(height: 28),
+        Text('Riwayat tutup kas', style: Theme.of(context).textTheme.titleMedium),
+        if (_history.isEmpty)
+          const ListTile(
+            contentPadding: EdgeInsets.zero,
+            title: Text('Belum ada riwayat sesi kas.'),
+          )
+        else
+          ..._history.map((item) {
+            final dateKey = item['date_key'] as String;
+            final dateParts = dateKey.split('-');
+            final dateLabel = dateParts.length == 3
+                ? '${dateParts[2]}-${dateParts[1]}-${dateParts[0]}'
+                : dateKey;
+            final closed = item['status'] == 'closed';
+            return Card(
+              child: ListTile(
+                leading: Icon(closed ? Icons.lock : Icons.lock_open),
+                title: Text(dateLabel),
+                subtitle: Text(closed
+                    ? 'Saldo fisik: ${_money(item['counted_balance'])} • Selisih: ${_money(item['difference'])}'
+                    : 'Sesi masih terbuka'),
+                trailing: Text(
+                  _money(closed ? item['expected_balance'] : item['opening_balance']),
+                  style: const TextStyle(fontWeight: FontWeight.w600),
+                ),
+              ),
+            );
+          }),
+        const SizedBox(height: 8),
         const Text('Saldo seharusnya = saldo awal + seluruh pembayaran tunai hari ini − pengeluaran tunai yang dicatat. Transfer dan QRIS tidak masuk saldo laci.'),
       ]),
     );
