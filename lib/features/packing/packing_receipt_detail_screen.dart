@@ -183,7 +183,8 @@ class _PackingReceiptDetailScreenState extends State<PackingReceiptDetailScreen>
       appBar: AppBar(title: const Text('Detail nota'), actions: [
         if (status == 'open' && paid == 0 && _payments.isEmpty)
           IconButton(tooltip: 'Edit nota', onPressed: _busy ? null : _editReceipt, icon: const Icon(Icons.edit_outlined)),
-        if (status == 'open') IconButton(tooltip: 'Batalkan nota', onPressed: _busy ? null : _cancel, icon: const Icon(Icons.cancel_outlined)),
+        if (status == 'open' && paid == 0 && _payments.isEmpty)
+          IconButton(tooltip: 'Batalkan nota', onPressed: _busy ? null : _cancel, icon: const Icon(Icons.cancel_outlined)),
       ]),
       body: ListView(padding: const EdgeInsets.all(16), children: [
         Card(child: Padding(padding: const EdgeInsets.all(16), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -262,8 +263,6 @@ class _PackingReceiptDetailScreenState extends State<PackingReceiptDetailScreen>
           ],
           const SizedBox(height: 8),
           TextField(controller: _note, decoration: const InputDecoration(labelText: 'Catatan pembayaran (opsional)')),
-          const SizedBox(height: 12),
-          FilledButton.icon(onPressed: _busy ? null : _pay, icon: _busy ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2)) : const Icon(Icons.payments), label: Text(_busy ? 'Menyimpan...' : 'Simpan pembayaran')),
         ],
         Text('Riwayat pembayaran', style: Theme.of(context).textTheme.titleMedium),
         Card(child: Column(children: _payments.isEmpty
@@ -276,18 +275,38 @@ class _PackingReceiptDetailScreenState extends State<PackingReceiptDetailScreen>
       ]),
       bottomNavigationBar: SafeArea(
         minimum: const EdgeInsets.fromLTRB(16, 8, 16, 12),
-        child: SizedBox(
-          width: double.infinity,
-          child: FilledButton.icon(
-            onPressed: _busy ? null : _printReceipt,
-            icon: _busy
-                ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
-                : const Icon(Icons.print),
-            label: Text(_busy ? 'Menyiapkan nota...' : 'Cetak nota'),
-            style: FilledButton.styleFrom(
-              padding: const EdgeInsets.symmetric(vertical: 16),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (status == 'open' && total - paid > 0)
+              SizedBox(
+                width: double.infinity,
+                child: FilledButton.icon(
+                  onPressed: _busy ? null : _pay,
+                  icon: _busy
+                      ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
+                      : const Icon(Icons.payments),
+                  label: Text(_busy ? 'Menyimpan pembayaran...' : 'Simpan pembayaran'),
+                  style: FilledButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(vertical: 16),
+                  ),
+                ),
+              ),
+            if (status == 'open' && total - paid > 0) const SizedBox(height: 8),
+            SizedBox(
+              width: double.infinity,
+              child: OutlinedButton.icon(
+                onPressed: _busy ? null : _printReceipt,
+                icon: _busy
+                    ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
+                    : const Icon(Icons.print),
+                label: const Text('Cetak nota'),
+                style: OutlinedButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(vertical: 15),
+                ),
+              ),
             ),
-          ),
+          ],
         ),
       ),
     );
