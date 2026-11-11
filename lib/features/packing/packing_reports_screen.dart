@@ -88,16 +88,18 @@ class _PackingReportsScreenState extends State<PackingReportsScreen> {
                 DropdownMenuItem(value: 'month', child: Text('Bulan ini')),
               ],
               onChanged: (value) {
-                if (value != null) setState(() {
+                if (value != null) {
+                  setState(() {
                   _period = value;
                   _report = _loadReport();
-                });
+                  });
+                }
               },
             ),
             const SizedBox(height: 12),
             Text(
               _period == 'today' ? 'Ringkasan hari ini' : _period == 'month' ? 'Ringkasan bulan ini' : 'Ringkasan seluruh nota aktif',
-              style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold),
+              style: const TextStyle(fontSize: 17, fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 8),
             GridView.count(
@@ -149,7 +151,7 @@ class _PackingReportsScreenState extends State<PackingReportsScreen> {
                 : materials.map((item) => ListTile(
                     title: Text(item['name']?.toString() ?? '-'),
                     subtitle: Text(
-                      _quantity(item['quantity']) + ' ' + (item['unit']?.toString() ?? ''),
+                      '${_quantity(item['quantity'])} ${item['unit']?.toString() ?? ''}',
                     ),
                     trailing: Text(_money(item['cost'])),
                   )).toList())),
