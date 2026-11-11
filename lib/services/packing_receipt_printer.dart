@@ -246,10 +246,12 @@ class PackingReceiptPrinter {
     bytes.addAll(generator.text('Sisa: ${money(total - paid)}'));
 
     final receiptStatus = receipt['status']?.toString() ?? 'open';
-    final statusLabel = receiptStatus == 'completed'
-        ? 'LUNAS'
-        : receiptStatus == 'cancelled'
-            ? 'DIBATALKAN'
+    // Derive the payment label from the amounts so a stale status value
+    // cannot print a partially paid receipt as fully settled.
+    final statusLabel = receiptStatus == 'cancelled'
+        ? 'DIBATALKAN'
+        : total > 0 && paid >= total
+            ? 'LUNAS'
             : paid > 0
                 ? 'DIBAYAR SEBAGIAN'
                 : 'BELUM DIBAYAR';
