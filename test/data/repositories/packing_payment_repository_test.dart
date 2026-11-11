@@ -128,7 +128,7 @@ void main() {
 
     test('menggabungkan banyak pekerjaan dalam satu nota dan satu pembayaran', () async {
       final receiptNo = await repository.saveReceipt([
-        PackingTransactionDraft(
+        const PackingTransactionDraft(
           customerName: 'Pelanggan gabungan',
           itemDescription: 'Kardus A',
           lengthCm: 100,
