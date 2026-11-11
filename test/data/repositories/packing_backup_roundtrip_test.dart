@@ -45,6 +45,12 @@ void main() {
 
   test('export and restore round-trip keeps multi-job receipt and settlement', () async {
     await repository.saveServiceType(name: 'Packing ekspor backup', defaultPrice: 15000);
+    await repository.saveCustomer(
+      name: 'Pelanggan backup',
+      phone: '08123456789',
+      address: 'Malang',
+      note: 'Pelanggan tetap',
+    );
     final receiptNo = await repository.saveReceipt(
       [
         draft(description: 'Kardus A', price: 60000),
@@ -65,7 +71,8 @@ void main() {
     );
 
     final backup = await repository.exportBackup();
-    expect(backup['version'], 5);
+    expect(backup['version'], 6);
+    expect(backup['customers'], hasLength(1));
     final backupReceipts = backup['packing_receipts'] as List<dynamic>;
     expect(backupReceipts, hasLength(1));
     expect(backup['receipt_payments'], hasLength(1));
@@ -111,6 +118,10 @@ void main() {
     );
     expect(restoredMaterials, hasLength(1));
     expect(restoredMaterials.single['material_name_snapshot'], 'Kayu');
+    final customers = await repository.listCustomers();
+    expect(customers, hasLength(1));
+    expect(customers.single['name'], 'Pelanggan backup');
+    expect(customers.single['phone'], '08123456789');
     final serviceTypes = await repository.listServiceTypes();
     expect(serviceTypes, hasLength(2));
     expect(
