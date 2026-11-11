@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import '../../core/format/rupiah.dart';
 import '../../data/repositories/packing_transaction_repository.dart';
@@ -17,6 +19,7 @@ class _PackingTransactionHistoryScreenState
   static const _pageSize = 30;
   final _repo = PackingTransactionRepository();
   final _search = TextEditingController();
+  Timer? _searchTimer;
   String _status = 'all';
   DateTime? _startDate;
   DateTime? _endDate;
@@ -31,6 +34,7 @@ class _PackingTransactionHistoryScreenState
 
   @override
   void dispose() {
+    _searchTimer?.cancel();
     _search.dispose();
     super.dispose();
   }
@@ -48,6 +52,28 @@ class _PackingTransactionHistoryScreenState
     if (resetPage) _page = 0;
     setState(() => _future = _load());
   }
+
+  void _onSearchChanged(String _) {
+    setState(() {});
+    _searchTimer?.cancel();
+    _searchTimer = Timer(const Duration(milliseconds: 350), () {
+      if (mounted) _refresh(resetPage: true);
+    });
+  }
+
+  void _clearFilters() {
+    _searchTimer?.cancel();
+    _search.clear();
+    setState(() {
+      _status = 'all';
+      _startDate = null;
+      _endDate = null;
+      _page = 0;
+      _future = _load();
+    });
+  }
+
+  bool get _hasFilters => _search.text.trim().isNotEmpty || _status != 'all' || _startDate != null || _endDate != null;
 
   String _money(Object? value) => formatRupiah(value);
 
@@ -115,7 +141,7 @@ class _PackingTransactionHistoryScreenState
               padding: const EdgeInsets.fromLTRB(12, 12, 12, 6),
               child: TextField(
                 controller: _search,
-                onChanged: (_) => _refresh(resetPage: true),
+                onChanged: _onSearchChanged,
                 decoration: InputDecoration(
                   hintText: 'Cari nomor nota atau pelanggan...',
                   prefixIcon: const Icon(Icons.search),
@@ -192,6 +218,18 @@ class _PackingTransactionHistoryScreenState
                 ],
               ),
             ),
+            if (_hasFilters)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(12, 0, 12, 4),
+                child: Align(
+                  alignment: Alignment.centerRight,
+                  child: TextButton.icon(
+                    onPressed: _clearFilters,
+                    icon: const Icon(Icons.filter_alt_off, size: 18),
+                    label: const Text('Hapus semua filter'),
+                  ),
+                ),
+              ),
             Expanded(
               child: FutureBuilder<Map<String, Object?>>(
                 future: _future,
