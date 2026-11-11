@@ -420,8 +420,20 @@ class PackingTransactionRepository {
     final args = <Object?>[];
     final cleanQuery = query.trim().toLowerCase();
     if (cleanQuery.isNotEmpty) {
-      conditions.add("(LOWER(receipt_no) LIKE ? OR LOWER(customer_name) LIKE ?)");
-      args.addAll(['%$cleanQuery%', '%$cleanQuery%']);
+      conditions.add("""(
+        LOWER(receipt_no) LIKE ?
+        OR LOWER(customer_name) LIKE ?
+        OR EXISTS (
+          SELECT 1 FROM packing_transactions AS jobs
+          WHERE jobs.receipt_id = packing_receipts.id
+            AND (
+              LOWER(jobs.receipt_no) LIKE ?
+              OR LOWER(jobs.item_description) LIKE ?
+            )
+        )
+      )""");
+      final pattern = '%$cleanQuery%';
+      args.addAll([pattern, pattern, pattern, pattern]);
     }
     switch (status) {
       case 'unpaid':
