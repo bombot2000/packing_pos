@@ -4,6 +4,7 @@ import 'features/packing/packing_transaction_history_screen.dart';
 import 'features/packing/material_master_screen.dart';
 import 'features/packing/service_type_master_screen.dart';
 import 'features/packing/packing_reports_screen.dart';
+import 'features/packing/packing_cash_closing_screen.dart';
 import 'features/packing/packing_backup_screen.dart';
 import 'features/packing/printer_settings_screen.dart';
 import 'features/packing/packing_identity_settings_screen.dart';
@@ -65,6 +66,7 @@ class _HomePageState extends State<HomePage> {
       const Card(child: ListTile(leading: Icon(Icons.wifi_off), title: Text('Mode offline'), subtitle: Text('Transaksi dan pembayaran disimpan di perangkat.'))),
       Card(child: ListTile(leading: const Icon(Icons.inventory_2), title: const Text('Master bahan (arsip)'), subtitle: const Text('Data bahan lama tetap dipertahankan.'), trailing: const Icon(Icons.chevron_right), onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const MaterialMasterScreen())))),
       Card(child: ListTile(leading: const Icon(Icons.bar_chart), title: const Text('Laporan usaha'), subtitle: const Text('Penjualan, pembayaran, piutang, dan biaya.'), trailing: const Icon(Icons.chevron_right), onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const PackingReportsScreen())))),
+      Card(child: ListTile(leading: const Icon(Icons.point_of_sale), title: const Text('Tutup kas harian'), subtitle: const Text('Saldo awal, penerimaan tunai, pengeluaran, dan selisih kas.'), trailing: const Icon(Icons.chevron_right), onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const PackingCashClosingScreen())))),
       Card(child: ListTile(leading: const Icon(Icons.storefront_outlined), title: const Text('Identitas aplikasi dan nota'), subtitle: const Text('Ubah nama usaha, alamat, dan nomor telepon.'), trailing: const Icon(Icons.chevron_right), onTap: _openIdentitySettings)),
       Card(child: ListTile(leading: const Icon(Icons.print), title: const Text('Pengaturan printer'), subtitle: const Text('Printer Bluetooth 58 atau 80 mm.'), trailing: const Icon(Icons.chevron_right), onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const PrinterSettingsScreen())))),
       Card(child: ListTile(leading: const Icon(Icons.backup), title: const Text('Backup dan restore'), subtitle: const Text('Ekspor dan pulihkan data lokal.'), trailing: const Icon(Icons.chevron_right), onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const PackingBackupScreen())))),
