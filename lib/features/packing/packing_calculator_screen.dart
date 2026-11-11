@@ -16,6 +16,8 @@ class _PackingCalculatorScreenState extends State<PackingCalculatorScreen> {
   final _width = TextEditingController();
   final _height = TextEditingController();
   final _charge = TextEditingController();
+  final _quantity = TextEditingController(text: '1');
+  final _discount = TextEditingController(text: '0');
   final _note = TextEditingController();
   final _receiptNote = TextEditingController();
   final _repo = PackingTransactionRepository();
@@ -30,7 +32,7 @@ class _PackingCalculatorScreenState extends State<PackingCalculatorScreen> {
   @override
   void dispose() {
     _customer.dispose(); _item.dispose(); _length.dispose(); _width.dispose();
-    _height.dispose(); _charge.dispose(); _note.dispose(); _receiptNote.dispose();
+    _height.dispose(); _charge.dispose(); _quantity.dispose(); _discount.dispose(); _note.dispose(); _receiptNote.dispose();
     super.dispose();
   }
 
@@ -79,11 +81,14 @@ class _PackingCalculatorScreenState extends State<PackingCalculatorScreen> {
     FocusScope.of(context).unfocus();
     final service = _serviceById(_serviceId);
     final l = _dimension(_length), w = _dimension(_width), h = _dimension(_height), amount = _price();
+    final quantity = int.tryParse(_quantity.text.trim());
     String? error;
     if (service == null) {
       error = 'Tambahkan jenis pekerjaan terlebih dahulu.';
     } else if (l == null || w == null || h == null) {
       error = 'Panjang, lebar, dan tinggi harus diisi angka lebih dari nol.';
+    } else if (quantity == null || quantity < 1) {
+      error = 'Qty pekerjaan harus berupa bilangan bulat minimal 1.';
     } else if (amount == null) {
       error = 'Ongkos harus berupa nominal Rupiah yang valid.';
     }
@@ -92,6 +97,7 @@ class _PackingCalculatorScreenState extends State<PackingCalculatorScreen> {
     final description = _item.text.trim().isEmpty ? job : '$job • ${_item.text.trim()}';
     final draft = PackingTransactionDraft(
       customerName: _customer.text.trim(), itemDescription: description,
+      quantity: quantity!,
       lengthCm: l!, widthCm: w!, heightCm: h!,
       calculationSnapshot: {
         'mode': 'manual_service_charge', 'jobTypeId': _serviceId,
@@ -105,7 +111,7 @@ class _PackingCalculatorScreenState extends State<PackingCalculatorScreen> {
     setState(() {
       _jobs.add(draft);
       _error = null;
-      _item.clear(); _length.clear(); _width.clear(); _height.clear(); _note.clear();
+      _item.clear(); _length.clear(); _width.clear(); _height.clear(); _quantity.text = '1'; _note.clear();
     });
   }
 
@@ -113,6 +119,10 @@ class _PackingCalculatorScreenState extends State<PackingCalculatorScreen> {
 
   Future<void> _saveReceipt() async {
     if (_jobs.isEmpty) { setState(() => _error = 'Tambahkan minimal satu pekerjaan ke nota.'); return; }
+    if (_discountAmount < 0 || _discountAmount > _grandSubtotal) {
+      setState(() => _error = 'Diskon tidak boleh melebihi subtotal pekerjaan.');
+      return;
+    }
     FocusScope.of(context).unfocus();
     setState(() { _saving = true; _error = null; });
     try {
@@ -120,6 +130,7 @@ class _PackingCalculatorScreenState extends State<PackingCalculatorScreen> {
         List<PackingTransactionDraft>.unmodifiable(_jobs),
         customerName: _customer.text.trim(),
         note: _receiptNote.text.trim(),
+        discountAmount: _discountAmount,
       );
       if (!mounted) return;
       final total = _grandTotal;
@@ -198,7 +209,9 @@ class _PackingCalculatorScreenState extends State<PackingCalculatorScreen> {
         Expanded(child: _field('Tinggi', _height, suffix: 'cm', type: const TextInputType.numberWithOptions(decimal: true))),
       ]),
       const SizedBox(height: 16),
-      _field('Ongkos pekerjaan', _charge, hint: 'Harga standar dapat diubah', suffix: 'Rupiah', type: TextInputType.number),
+      _field('Qty / jumlah koli', _quantity, hint: 'Contoh: 3', suffix: 'koli', type: TextInputType.number),
+      const SizedBox(height: 12),
+      _field('Harga per koli / pekerjaan', _charge, hint: 'Harga standar dapat diubah', suffix: 'Rupiah', type: TextInputType.number),
       const SizedBox(height: 12),
       _field('Catatan pekerjaan', _note, hint: 'Opsional'),
       const SizedBox(height: 12),
@@ -214,16 +227,36 @@ class _PackingCalculatorScreenState extends State<PackingCalculatorScreen> {
           return Card(child: ListTile(
             leading: CircleAvatar(child: Text('${i + 1}')),
             title: Text(job.itemDescription),
-            subtitle: Text('${job.lengthCm} × ${job.widthCm} × ${job.heightCm} cm'),
+            subtitle: Text('Qty ${job.quantity} • ${job.lengthCm} × ${job.widthCm} × ${job.heightCm} cm • ${_money(job.sellingPrice)} / koli'),
             trailing: Row(mainAxisSize: MainAxisSize.min, children: [
-              Text(_money(job.sellingPrice), style: const TextStyle(fontWeight: FontWeight.bold)),
+              Text(_money(job.sellingPrice * job.quantity), style: const TextStyle(fontWeight: FontWeight.bold)),
               IconButton(tooltip: 'Hapus pekerjaan', onPressed: () => _removeJob(i), icon: const Icon(Icons.delete_outline)),
             ]),
           ));
         }),
-        Card(child: ListTile(
-          title: const Text('TOTAL NOTA', style: TextStyle(fontWeight: FontWeight.bold)),
-          trailing: Text(_money(_grandTotal), style: Theme.of(context).textTheme.titleLarge),
+        Card(child: Padding(
+          padding: const EdgeInsets.all(12),
+          child: Column(children: [
+            ListTile(
+              dense: true,
+              title: const Text('Subtotal pekerjaan'),
+              trailing: Text(_money(_grandSubtotal)),
+            ),
+            TextField(
+              controller: _discount,
+              keyboardType: TextInputType.number,
+              onChanged: (_) => setState(() {}),
+              decoration: const InputDecoration(
+                labelText: 'Diskon nota (Rupiah)',
+                prefixText: 'Rp ',
+                border: OutlineInputBorder(),
+              ),
+            ),
+            ListTile(
+              title: const Text('TOTAL NOTA', style: TextStyle(fontWeight: FontWeight.bold)),
+              trailing: Text(_money(_grandTotal), style: Theme.of(context).textTheme.titleLarge),
+            ),
+          ]),
         )),
         const SizedBox(height: 8),
         _field('Catatan nota', _receiptNote, hint: 'Opsional, berlaku untuk seluruh nota'),
