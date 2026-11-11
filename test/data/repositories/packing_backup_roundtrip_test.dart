@@ -65,10 +65,16 @@ void main() {
     );
 
     final backup = await repository.exportBackup();
-    expect(backup['version'], 4);
+    expect(backup['version'], 5);
     expect(backup['packing_receipts'], hasLength(1));
     expect(backup['receipt_payments'], hasLength(1));
     expect(backup['packing_transactions'], hasLength(2));
+    expect(backup['packing_receipts'].single['discount_amount'], 0);
+    expect(
+      (backup['packing_transactions'] as List)
+          .every((job) => job['quantity'] == 1 && job['unit_price'] == job['selling_price']),
+      isTrue,
+    );
 
     await repository.save(draft(description: 'Data setelah backup', price: 9000));
     expect(await repository.listReceipts(limit: 10), hasLength(2));
