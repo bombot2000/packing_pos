@@ -379,6 +379,10 @@ void main() {
       expect(cash['payment_count'], 1);
       expect(transfer['amount'], 20000);
       expect(transfer['payment_count'], 1);
+      final totals = report['totals'] as Map<String, Object?>;
+      expect(totals['paid_total'], 50000);
+      expect(totals['cash_received_total'], 30000);
+      expect(totals['non_cash_received_total'], 20000);
 
       final tomorrow = DateTime.now().add(const Duration(days: 1));
       final future = await repository.reportSummary(
