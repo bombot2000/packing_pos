@@ -403,6 +403,27 @@ void main() {
       expect(await repository.paymentsFor(transactionId), hasLength(1));
     });
 
+    test('menampilkan riwayat sesi kas terbaru lebih dahulu', () async {
+      final older = DateTime(2026, 10, 1);
+      final newer = DateTime(2026, 10, 2);
+      await repository.startCashSession(date: older, openingBalance: 10000);
+      final newerId = await repository.startCashSession(
+        date: newer,
+        openingBalance: 20000,
+      );
+      await repository.closeCashSession(
+        sessionId: newerId,
+        countedBalance: 20000,
+      );
+
+      final history = await repository.listCashSessions();
+      expect(history, hasLength(2));
+      expect(history.first['date_key'], '2026-10-02');
+      expect(history.first['status'], 'closed');
+      expect(history.last['date_key'], '2026-10-01');
+      expect(history.last['status'], 'open');
+    });
+
     test('menolak pembayaran tunai setelah sesi kas ditutup', () async {
       final receipt = await createReceipt();
       final sessionId = await repository.startCashSession(date: DateTime.now(), openingBalance: 0);
