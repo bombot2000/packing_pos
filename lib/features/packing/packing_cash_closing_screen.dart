@@ -73,7 +73,10 @@ class _PackingCashClosingScreenState extends State<PackingCashClosingScreen> {
 
   Future<void> _start() async {
     final amount = int.tryParse(_opening.text.trim());
-    if (amount == null || amount < 0) { setState(() => _error = 'Masukkan saldo awal berupa angka nol atau lebih.'); return; }
+    if (amount == null || amount < 0) {
+      setState(() => _error = 'Masukkan saldo awal berupa angka nol atau lebih.');
+      return;
+    }
     await _run(() async { await _repository.startCashSession(date: DateTime.now(), openingBalance: amount); });
   }
 
