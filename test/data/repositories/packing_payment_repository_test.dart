@@ -126,6 +126,50 @@ void main() {
       );
     });
 
+    test('menggabungkan banyak pekerjaan dalam satu nota dan satu pembayaran', () async {
+      final receiptNo = await repository.saveReceipt([
+        PackingTransactionDraft(
+          customerName: 'Pelanggan gabungan',
+          itemDescription: 'Kardus A',
+          lengthCm: 100,
+          widthCm: 80,
+          heightCm: 60,
+          calculationSnapshot: const {'mode': 'test'},
+          sellingPrice: 60000,
+        ),
+        PackingTransactionDraft(
+          customerName: 'Pelanggan gabungan',
+          itemDescription: 'Kardus B',
+          lengthCm: 50,
+          widthCm: 40,
+          heightCm: 30,
+          calculationSnapshot: const {'mode': 'test'},
+          sellingPrice: 40000,
+        ),
+      ]);
+      final receipts = await repository.listReceipts(limit: 10);
+      final receipt = receipts.singleWhere((row) => row['receipt_no'] == receiptNo);
+      final receiptId = receipt['id'] as int;
+      expect(receiptNo, startsWith('RCP-'));
+      expect(receipt['total_amount'], 100000);
+      expect(await repository.jobsForReceipt(receiptId), hasLength(2));
+
+      await repository.settleReceipt(
+        receiptId: receiptId,
+        amount: 100000,
+        paymentMethod: 'qris',
+      );
+
+      expect(await repository.receiptPaymentsFor(receiptId), hasLength(1));
+      final saved = await repository.findReceiptById(receiptId);
+      expect(saved!['paid_amount'], 100000);
+      expect(saved['status'], 'completed');
+      final report = await repository.reportSummary();
+      expect(report['totals']['receipt_count'], 1);
+      expect(report['totals']['paid_total'], 100000);
+      expect(report['totals']['sales_total'], 100000);
+    });
+
     test('menolak pembayaran untuk ID pekerjaan yang tidak dikenal', () async {
       await expectLater(
         repository.addPayment(
