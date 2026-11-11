@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../../data/repositories/packing_transaction_repository.dart';
 import 'packing_receipt_detail_screen.dart';
 import 'service_type_master_screen.dart';
+import 'packing_customer_master_screen.dart';
 
 class PackingCalculatorScreen extends StatefulWidget {
   const PackingCalculatorScreen({super.key});
@@ -23,12 +24,22 @@ class _PackingCalculatorScreenState extends State<PackingCalculatorScreen> {
   final _repo = PackingTransactionRepository();
   final List<PackingTransactionDraft> _jobs = [];
   List<Map<String, Object?>> _services = [];
+  List<Map<String, Object?>> _customers = [];
   int? _serviceId;
   bool _loadingServices = true, _saving = false;
   String? _error;
 
   @override
-  void initState() { super.initState(); _loadServices(); }
+  void initState() { super.initState(); _loadServices(); _loadCustomers(); }
+
+  Future<void> _loadCustomers() async {
+    try {
+      final rows = await _repo.listCustomers();
+      if (mounted) setState(() => _customers = rows);
+    } catch (e) {
+      if (mounted) setState(() => _error = 'Master pelanggan gagal dimuat: $e');
+    }
+  }
   @override
   void dispose() {
     _customer.dispose(); _item.dispose(); _length.dispose(); _width.dispose();
@@ -170,7 +181,51 @@ class _PackingCalculatorScreenState extends State<PackingCalculatorScreen> {
     body: ListView(padding: const EdgeInsets.all(16), children: [
       const Text('Satu nota dapat berisi banyak pekerjaan. Tambahkan pekerjaan satu per satu, lalu simpan dan lakukan pembayaran untuk total seluruh nota.'),
       const SizedBox(height: 16),
-      _field('Nama pelanggan', _customer, hint: 'Nama pelanggan untuk seluruh nota'),
+      Row(
+        children: [
+          Expanded(
+            child: Autocomplete<String>(
+              initialValue: TextEditingValue(text: _customer.text),
+              optionsBuilder: (value) {
+                final query = value.text.trim().toLowerCase();
+                if (query.isEmpty) return _customers.map((row) => row['name'] as String);
+                return _customers
+                    .map((row) => row['name'] as String)
+                    .where((name) => name.toLowerCase().contains(query));
+              },
+              onSelected: (value) => _customer.text = value,
+              fieldViewBuilder: (context, controller, focusNode, onSubmitted) {
+                if (controller.text != _customer.text && !focusNode.hasFocus) {
+                  controller.text = _customer.text;
+                }
+                controller.addListener(() {
+                  if (_customer.text != controller.text) _customer.text = controller.text;
+                });
+                return TextField(
+                  controller: controller,
+                  focusNode: focusNode,
+                  decoration: const InputDecoration(
+                    labelText: 'Nama pelanggan',
+                    hintText: 'Pilih pelanggan atau ketik nama baru',
+                    border: OutlineInputBorder(),
+                  ),
+                );
+              },
+            ),
+          ),
+          const SizedBox(width: 8),
+          IconButton(
+            tooltip: 'Kelola master pelanggan',
+            onPressed: () async {
+              await Navigator.of(context).push(MaterialPageRoute(
+                builder: (_) => const PackingCustomerMasterScreen(),
+              ));
+              await _loadCustomers();
+            },
+            icon: const Icon(Icons.contacts_outlined),
+          ),
+        ],
+      ),
       const SizedBox(height: 12),
       if (_loadingServices) const LinearProgressIndicator()
       else if (_services.isEmpty) Card(child: ListTile(
