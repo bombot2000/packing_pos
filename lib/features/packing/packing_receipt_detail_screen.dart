@@ -17,6 +17,7 @@ class _PackingReceiptDetailScreenState extends State<PackingReceiptDetailScreen>
   final _repo = PackingTransactionRepository();
   final _amount = TextEditingController();
   final _note = TextEditingController();
+  final _received = TextEditingController();
   String _method = 'cash';
   bool _busy = false;
   Map<String, Object?>? _receipt;
@@ -43,6 +44,15 @@ class _PackingReceiptDetailScreenState extends State<PackingReceiptDetailScreen>
   String _money(Object? value) {
     final n = (value as num?)?.toInt() ?? 0;
     return 'Rp ' + n.toString().replaceAllMapped(RegExp(r'(?<=\d)(?=(\d{3})+(?!\d))'), (_) => '.');
+  }
+
+  int? _parse(String text) => int.tryParse(
+    text.replaceAll('Rp', '').replaceAll('.', '').replaceAll(',', '').replaceAll(' ', '').trim(),
+  );
+
+  String _date(Object? raw) {
+    final date = DateTime.tryParse(raw?.toString() ?? '');
+    return date == null ? '-' : DateFormat('dd/MM/yyyy HH:mm').format(date.toLocal());
   }
 
   Future<void> _printReceipt() async {
@@ -151,8 +161,8 @@ class _PackingReceiptDetailScreenState extends State<PackingReceiptDetailScreen>
           Text(receipt['receipt_no'] as String, style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold)),
           const SizedBox(height: 8),
           Text('Pelanggan: ${(receipt['customer_name'] as String).isEmpty ? '-' : receipt['customer_name']}'),
-          Text('Tanggal: ${receipt['created_at']}'),
-          Text('Status: ${status == 'completed' ? 'Lunas' : status == 'cancelled' ? 'Dibatalkan' : paid > 0 ? 'Pembayaran sebagian (nota lama)' : 'Belum dibayar'}'),
+          Text('Tanggal: ${_date(receipt['created_at'])}'),
+          Text('Status: ${status == 'completed' ? 'Lunas' : status == 'cancelled' ? 'Dibatalkan' : paid > 0 ? 'Dibayar sebagian' : 'Belum dibayar'}'),
           if ((receipt['note'] as String).isNotEmpty) Text('Catatan: ${receipt['note']}'),
         ]))),
         Text('Rincian pekerjaan • ${_jobs.length}', style: Theme.of(context).textTheme.titleMedium),
@@ -190,10 +200,30 @@ class _PackingReceiptDetailScreenState extends State<PackingReceiptDetailScreen>
             ],
             onChanged: (v) { if (v != null) setState(() => _method = v); },
           ),
+          if (_method == 'cash') ...[
+            const SizedBox(height: 8),
+            TextField(
+              controller: _received,
+              keyboardType: TextInputType.number,
+              onChanged: (_) => setState(() {}),
+              decoration: InputDecoration(
+                labelText: 'Uang diterima (opsional)',
+                prefixText: 'Rp ',
+                border: const OutlineInputBorder(),
+                helperText: () {
+                  final received = _parse(_received.text);
+                  final amount = _parse(_amount.text);
+                  return received != null && amount != null && received >= amount
+                      ? 'Kembalian ${_money(received - amount)}'
+                      : null;
+                }(),
+              ),
+            ),
+          ],
           const SizedBox(height: 8),
           TextField(controller: _note, decoration: const InputDecoration(labelText: 'Catatan pembayaran (opsional)')),
           const SizedBox(height: 12),
-          FilledButton.icon(onPressed: _busy ? null : _settle, icon: _busy ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2)) : const Icon(Icons.payments), label: Text(_busy ? 'Menyimpan...' : 'Bayar seluruh nota')),
+          FilledButton.icon(onPressed: _busy ? null : _pay, icon: _busy ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2)) : const Icon(Icons.payments), label: Text(_busy ? 'Menyimpan...' : 'Bayar seluruh nota')),
         ],
         if (status == 'open' && paid > 0) const Padding(padding: EdgeInsets.symmetric(vertical: 8), child: Text('Nota ini berasal dari data lama dengan pembayaran bertahap. Riwayat tetap disimpan, tetapi pembayaran baru melalui alur satu kali tidak tersedia untuk nota ini.')),
         Text('Riwayat pembayaran', style: Theme.of(context).textTheme.titleMedium),
@@ -201,7 +231,7 @@ class _PackingReceiptDetailScreenState extends State<PackingReceiptDetailScreen>
           ? [const ListTile(title: Text('Belum ada pembayaran'))]
           : _payments.map((p) => ListTile(
               title: Text(_money(p['amount'])),
-              subtitle: Text('${p['payment_method']} • ${p['created_at']}'),
+              subtitle: Text('${p['payment_method']} • ${_date(p['created_at'])}${(p['note'] ?? '').toString().isEmpty ? '' : '\n${p['note']}'}'),
             )).toList())),
         if (_error != null) Padding(padding: const EdgeInsets.symmetric(vertical: 8), child: Text(_error!, style: TextStyle(color: Theme.of(context).colorScheme.error))),
       ]),
