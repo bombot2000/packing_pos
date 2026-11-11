@@ -59,7 +59,7 @@ void main() {
       final totals = report['totals'] as Map<String, Object?>;
       expect(totals['sales_total'], 55000);
       final backup = await repository.exportBackup();
-      expect(backup['version'], 5);
+      expect(backup['version'], 6);
       await repository.restoreBackup(backup);
       final restored = (await repository.findReceiptByNo(receiptNo))!;
       expect(restored['total_amount'], 55000);
