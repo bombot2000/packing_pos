@@ -240,9 +240,15 @@ class PackingBackupValidator {
       _text(row['material_name_snapshot'], 'Nama snapshot bahan');
       _text(row['unit_snapshot'], 'Satuan snapshot bahan');
       _nonNegativeNumber(row['calculated_quantity'], 'Jumlah hasil hitung');
-      _nonNegativeNumber(row['actual_quantity'], 'Jumlah aktual');
-      _nonNegativeInt(row['unit_price_snapshot'], 'Harga snapshot bahan');
-      _nonNegativeInt(row['subtotal'], 'Subtotal bahan');
+      final actualQuantity = _nonNegativeNumber(row['actual_quantity'], 'Jumlah aktual');
+      final unitPrice = _nonNegativeInt(row['unit_price_snapshot'], 'Harga snapshot bahan');
+      final subtotal = _nonNegativeInt(row['subtotal'], 'Subtotal bahan');
+      final expectedSubtotal = (actualQuantity * unitPrice).round();
+      if (subtotal != expectedSubtotal) {
+        throw FormatException(
+          'Subtotal bahan pada rincian $id tidak cocok dengan jumlah aktual dan harga snapshot.',
+        );
+      }
       _text(row['created_at'], 'Tanggal rincian bahan');
     }
 
