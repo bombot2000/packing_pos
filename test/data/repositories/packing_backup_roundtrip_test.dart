@@ -69,6 +69,22 @@ void main() {
   });
 
 
+  test('receipt history treats percent and underscore as literal search characters', () async {
+    await repository.saveReceipt(
+      [draft(description: 'Barang 100%_siap', price: 10000)],
+      customerName: 'Pelanggan simbol',
+    );
+    await repository.saveReceipt(
+      [draft(description: 'Barang 100Xasiap', price: 10000)],
+      customerName: 'Pelanggan lain',
+    );
+
+    final result = await repository.searchReceipts(query: '100%_');
+    expect(result['total'], 1);
+    expect((result['rows'] as List), hasLength(1));
+    expect((result['rows'] as List).single['customer_name'], 'Pelanggan simbol');
+  });
+
   test('receipt history filters all supported statuses correctly', () async {
     Future<int> create(String description) async {
       final number = await repository.saveReceipt(
