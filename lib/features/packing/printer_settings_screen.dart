@@ -116,7 +116,7 @@ class _PrinterSettingsScreenState extends State<PrinterSettingsScreen> {
       bytes.addAll(generator.text('PACKING POS', styles: const PosStyles(align: PosAlign.center, bold: true)));
       bytes.addAll(generator.text('TES CETAK', styles: const PosStyles(align: PosAlign.center)));
       bytes.addAll(generator.hr());
-      bytes.addAll(generator.text('Kertas ' + _paperWidth.toString() + ' mm'));
+      bytes.addAll(generator.text('Kertas $_paperWidth mm'));
       bytes.addAll(generator.text('Bluetooth OK'));
       bytes.addAll(generator.feed(3));
       final ok = await PrintBluetoothThermal.writeBytes(bytes);
@@ -157,7 +157,7 @@ class _PrinterSettingsScreenState extends State<PrinterSettingsScreen> {
           decoration: const InputDecoration(labelText: 'Pilih printer', border: OutlineInputBorder()),
           items: _devices.map((device) => DropdownMenuItem(
             value: device.macAdress,
-            child: Text(device.name + ' • ' + device.macAdress, overflow: TextOverflow.ellipsis),
+            child: Text('${device.name} • ${device.macAdress}', overflow: TextOverflow.ellipsis),
           )).toList(),
           onChanged: (value) => setState(() => _selectedMac = value),
         )
