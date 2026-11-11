@@ -44,7 +44,7 @@ void main() {
   }
 
   test('export and restore round-trip keeps multi-job receipt and settlement', () async {
-    await repository.saveServiceType(name: 'Packing kayu', defaultPrice: 15000);
+    await repository.saveServiceType(name: 'Packing ekspor backup', defaultPrice: 15000);
     final receiptNo = await repository.saveReceipt(
       [
         draft(description: 'Kardus A', price: 60000),
@@ -104,7 +104,12 @@ void main() {
     );
     expect(restoredMaterials, hasLength(1));
     expect(restoredMaterials.single['material_name_snapshot'], 'Kayu');
-    expect(await repository.listServiceTypes(), hasLength(1));
+    final serviceTypes = await repository.listServiceTypes();
+    expect(serviceTypes, hasLength(2));
+    expect(
+      serviceTypes.map((row) => row['name']),
+      contains('Packing ekspor backup'),
+    );
   });
 
   test('invalid restore leaves existing local records untouched', () async {
