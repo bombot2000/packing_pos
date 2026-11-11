@@ -172,6 +172,97 @@ void main() {
     expect(jobs.single['cancellation_reason'], 'Salah input');
   });
 
+  test('restore preserves sparse high IDs and allows new records afterward', () async {
+    final receiptNo = await repository.saveReceipt(
+      [draft(description: 'Peti ID lama', price: 12000)],
+      customerName: 'Pelanggan ID',
+    );
+    final oldReceipt = (await repository.listReceipts(limit: 10))
+        .singleWhere((row) => row['receipt_no'] == receiptNo);
+    final oldReceiptId = (oldReceipt['id'] as num).toInt();
+    await repository.addReceiptPayment(
+      receiptId: oldReceiptId,
+      amount: 2000,
+      paymentMethod: 'transfer',
+      note: 'DP sebelum backup',
+    );
+
+    final oldCashSessionId = await repository.startCashSession(
+      date: DateTime.now(),
+      openingBalance: 5000,
+    );
+    await repository.addCashExpense(
+      sessionId: oldCashSessionId,
+      amount: 1000,
+      category: 'Operasional',
+    );
+
+    final backup = Map<String, dynamic>.from(await repository.exportBackup());
+
+    void moveIds(String table, {String? foreignKey}) {
+      final rows = (backup[table] as List).cast<Map<String, Object?>>();
+      for (final row in rows) {
+        row['id'] = (row['id'] as num).toInt() + 1000;
+        if (foreignKey != null) {
+          row[foreignKey] = (row[foreignKey] as num).toInt() + 1000;
+        }
+      }
+    }
+
+    moveIds('packing_receipts');
+    moveIds('packing_transactions', foreignKey: 'receipt_id');
+    moveIds('transaction_materials', foreignKey: 'transaction_id');
+    moveIds('receipt_payments', foreignKey: 'receipt_id');
+    moveIds('cash_sessions');
+    moveIds('cash_expenses', foreignKey: 'session_id');
+
+    await repository.restoreBackup(backup);
+
+    final restoredReceipt = (await repository.listReceipts(limit: 10))
+        .singleWhere((row) => row['receipt_no'] == receiptNo);
+    final restoredReceiptId = (restoredReceipt['id'] as num).toInt();
+    expect(restoredReceiptId, oldReceiptId + 1000);
+    final restoredJobs = await repository.jobsForReceipt(restoredReceiptId);
+    expect(restoredJobs, hasLength(1));
+    final restoredJobId = (restoredJobs.single['id'] as num).toInt();
+    expect(restoredJobId, greaterThan(1000));
+    expect(await repository.materialsFor(restoredJobId), hasLength(1));
+    final restoredPayments = await repository.receiptPaymentsFor(restoredReceiptId);
+    expect(restoredPayments.single['id'], greaterThan(1000));
+
+    final newReceiptNo = await repository.saveReceipt(
+      [draft(description: 'Peti ID baru', price: 9000)],
+      customerName: 'Pelanggan baru',
+    );
+    final newReceipt = (await repository.listReceipts(limit: 10))
+        .singleWhere((row) => row['receipt_no'] == newReceiptNo);
+    final newReceiptId = (newReceipt['id'] as num).toInt();
+    expect(newReceiptId, greaterThan(restoredReceiptId));
+    await repository.addReceiptPayment(
+      receiptId: newReceiptId,
+      amount: 1000,
+      paymentMethod: 'transfer',
+    );
+    final newPayments = await repository.receiptPaymentsFor(newReceiptId);
+    expect(newPayments.single['id'], greaterThan(restoredPayments.single['id'] as num));
+
+    final nextCashDate = DateTime.now().add(const Duration(days: 1));
+    final newCashSessionId = await repository.startCashSession(
+      date: nextCashDate,
+      openingBalance: 7000,
+    );
+    expect(newCashSessionId, greaterThan(oldCashSessionId + 1000));
+    await repository.addCashExpense(
+      sessionId: newCashSessionId,
+      amount: 500,
+      category: 'Transport',
+    );
+    final newCashSummary = await repository.cashSessionSummary(newCashSessionId);
+    final newExpenses = (newCashSummary['expenses'] as List)
+        .cast<Map<String, Object?>>();
+    expect(newExpenses.single['id'], greaterThan(1000));
+  });
+
   test('invalid restore leaves existing local records untouched', () async {
     await repository.save(draft(description: 'Data lokal', price: 25000));
     final before = await repository.listReceipts(limit: 10);
