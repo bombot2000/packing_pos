@@ -773,6 +773,18 @@ class PackingTransactionRepository {
     return rows.isEmpty ? null : rows.first;
   }
 
+  Future<List<Map<String, Object?>>> listCashSessions({int limit = 30}) async {
+    if (limit < 1 || limit > 100) {
+      throw ArgumentError.value(limit, 'limit', 'Harus antara 1 dan 100.');
+    }
+    final db = await _database.database;
+    return db.query(
+      'cash_sessions',
+      orderBy: 'date_key DESC, id DESC',
+      limit: limit,
+    );
+  }
+
   Future<int> startCashSession({required DateTime date, required int openingBalance}) async {
     if (openingBalance < 0) throw ArgumentError('Saldo awal tidak boleh negatif.');
     final db = await _database.database;
