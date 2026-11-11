@@ -175,7 +175,7 @@ class _PackingReceiptDetailScreenState extends State<PackingReceiptDetailScreen>
   @override
   Widget build(BuildContext context) {
     final receipt = _receipt;
-    if (receipt == null) return Scaffold(appBar: AppBar(title: const Text('Detail nota'), actions: [IconButton(tooltip: 'Cetak nota', onPressed: _busy ? null : _printReceipt, icon: const Icon(Icons.print))]), body: Center(child: _error == null ? const CircularProgressIndicator() : Text(_error!)));
+    if (receipt == null) return Scaffold(appBar: AppBar(title: const Text('Detail nota')), body: Center(child: _error == null ? const CircularProgressIndicator() : Text(_error!)));
     final total = (receipt['total_amount'] as num).toInt();
     final paid = (receipt['paid_amount'] as num).toInt();
     final status = receipt['status'] as String;
@@ -184,7 +184,6 @@ class _PackingReceiptDetailScreenState extends State<PackingReceiptDetailScreen>
         if (status == 'open' && paid == 0 && _payments.isEmpty)
           IconButton(tooltip: 'Edit nota', onPressed: _busy ? null : _editReceipt, icon: const Icon(Icons.edit_outlined)),
         if (status == 'open') IconButton(tooltip: 'Batalkan nota', onPressed: _busy ? null : _cancel, icon: const Icon(Icons.cancel_outlined)),
-        IconButton(tooltip: 'Cetak nota', onPressed: _busy ? null : _printReceipt, icon: const Icon(Icons.print)),
       ]),
       body: ListView(padding: const EdgeInsets.all(16), children: [
         Card(child: Padding(padding: const EdgeInsets.all(16), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -275,6 +274,22 @@ class _PackingReceiptDetailScreenState extends State<PackingReceiptDetailScreen>
             )).toList())),
         if (_error != null) Padding(padding: const EdgeInsets.symmetric(vertical: 8), child: Text(_error!, style: TextStyle(color: Theme.of(context).colorScheme.error))),
       ]),
+      bottomNavigationBar: SafeArea(
+        minimum: const EdgeInsets.fromLTRB(16, 8, 16, 12),
+        child: SizedBox(
+          width: double.infinity,
+          child: FilledButton.icon(
+            onPressed: _busy ? null : _printReceipt,
+            icon: _busy
+                ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
+                : const Icon(Icons.print),
+            label: Text(_busy ? 'Menyiapkan nota...' : 'Cetak nota'),
+            style: FilledButton.styleFrom(
+              padding: const EdgeInsets.symmetric(vertical: 16),
+            ),
+          ),
+        ),
+      ),
     );
   }
 }
