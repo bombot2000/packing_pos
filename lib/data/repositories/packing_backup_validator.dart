@@ -284,109 +284,14 @@ class PackingBackupValidator {
                   '-${parsedDate.month.toString().padLeft(2, '0')}' +
                   '-${parsedDate.day.toString().padLeft(2, '0')}' ==
               dateKey;
-      if (!RegExp(r'^\d{4}-\d{2}-\d{2}
-      _nonNegativeInt(row['opening_balance'], 'Saldo awal kas');
-      final status = _text(row['status'], 'Status sesi kas');
-      if (!['open', 'closed'].contains(status)) {
-        throw const FormatException('Status sesi kas tidak valid.');
-      }
-      _string(row['note'], 'Catatan sesi kas');
-      _text(row['created_at'], 'Tanggal pembuatan sesi kas');
-      if (status == 'closed') {
-        final expected = _signedInt(row['expected_balance'], 'Saldo kas seharusnya');
-        final counted = _nonNegativeInt(row['counted_balance'], 'Saldo kas fisik');
-        final difference = _signedInt(row['difference'], 'Selisih kas');
-        if (difference != counted - expected) {
-          throw const FormatException('Selisih kas tidak cocok dengan saldo fisik dan saldo seharusnya.');
-        }
-        _text(row['closed_at'], 'Tanggal tutup kas');
-      }
-    }
-
-    final cashExpenseIds = <int>{};
-    for (final row in data['cash_expenses'] ?? const <Map<String, Object?>>[]) {
-      final id = _positiveInt(row['id'], 'ID pengeluaran kas');
-      if (!cashExpenseIds.add(id)) {
-        throw FormatException('ID pengeluaran kas duplikat: $id.');
-      }
-      final sessionId = _positiveInt(row['session_id'], 'ID sesi pengeluaran kas');
-      if (!cashSessionIds.contains(sessionId)) {
-        throw const FormatException('Pengeluaran kas merujuk sesi yang tidak ada.');
-      }
-      _positiveInt(row['amount'], 'Nominal pengeluaran kas');
-      _text(row['category'], 'Kategori pengeluaran kas');
-      _string(row['note'], 'Catatan pengeluaran kas');
-      _text(row['created_at'], 'Tanggal pengeluaran kas');
-    }
-
-    final settingKeys = <String>{};
-    for (final row in data['app_settings']!) {
-      final key = _text(row['key'], 'Kunci pengaturan');
-      if (!settingKeys.add(key)) {
-        throw FormatException('Kunci pengaturan duplikat: $key.');
-      }
-      _string(row['value'], 'Nilai pengaturan');
-      _text(row['updated_at'], 'Tanggal pengaturan');
-    }
-    return data;
-  }
-
-  // Settings may intentionally store an empty string to clear an optional value.
-  static String _string(Object? value, String field) {
-    if (value is! String) {
-      throw FormatException('$field harus berupa teks.');
-    }
-    return value;
-  }
-
-  static String _text(Object? value, String field) {
-    if (value is! String || value.trim().isEmpty) {
-      throw FormatException('$field wajib berupa teks dan tidak boleh kosong.');
-    }
-    return value;
-  }
-
-  static int _int(Object? value, String field) {
-    if (value is! num || !value.isFinite || value < 0 || value != value.round()) {
-      throw FormatException('$field harus berupa bilangan bulat nonnegatif.');
-    }
-    return value.toInt();
-  }
-
-  static int _signedInt(Object? value, String field) {
-    if (value is! num || !value.isFinite || value != value.round()) {
-      throw FormatException('$field harus berupa bilangan bulat.');
-    }
-    return value.toInt();
-  }
-
-  static int _positiveInt(Object? value, String field) {
-    final result = _int(value, field);
-    if (result <= 0) throw FormatException('$field harus lebih dari nol.');
-    return result;
-  }
-
-  static int _nonNegativeInt(Object? value, String field) => _int(value, field);
-
-  static double _number(Object? value, String field) {
-    if (value is! num || !value.isFinite) {
-      throw FormatException('$field harus berupa angka yang valid.');
-    }
-    return value.toDouble();
-  }
-
-  static double _positiveNumber(Object? value, String field) {
-    final result = _number(value, field);
-    if (result <= 0) throw FormatException('$field harus lebih dari nol.');
-    return result;
-  }
-
-  static double _nonNegativeNumber(Object? value, String field) {
-    final result = _number(value, field);
-    if (result < 0) throw FormatException('$field tidak boleh negatif.');
-    return result;
-  }
-}).hasMatch(dateKey) ||
+      final dateKey = _text(row['date_key'], 'Tanggal sesi kas');
+      final parsedDate = DateTime.tryParse(dateKey);
+      final isRealCalendarDate = parsedDate != null &&
+          parsedDate.year.toString().padLeft(4, '0') +
+                  '-${parsedDate.month.toString().padLeft(2, '0')}' +
+                  '-${parsedDate.day.toString().padLeft(2, '0')}' ==
+              dateKey;
+      if (!RegExp(r'^\d{4}-\d{2}-\d{2}$').hasMatch(dateKey) ||
           !isRealCalendarDate ||
           !cashDateKeys.add(dateKey)) {
         throw FormatException('Tanggal sesi kas tidak valid atau duplikat: $dateKey.');
