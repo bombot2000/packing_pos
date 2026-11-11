@@ -59,7 +59,11 @@ class PackingBackupValidator {
         throw FormatException('ID transaksi duplikat: $id.');
       }
       _positiveInt(row['quantity'], 'Qty pekerjaan');
-      _nonNegativeInt(row['unit_price'], 'Harga satuan pekerjaan');
+      final unitPrice = _nonNegativeInt(row['unit_price'], 'Harga satuan pekerjaan');
+      final quantity = _positiveInt(row['quantity'], 'Qty pekerjaan');
+      if (unitPrice * quantity != _int(row['selling_price'], 'selling_price')) {
+        throw FormatException('Subtotal pekerjaan $id tidak cocok dengan qty dan harga satuan.');
+      }
       for (final field in ['length_cm', 'width_cm', 'height_cm']) {
         _positiveNumber(row[field], field);
       }
