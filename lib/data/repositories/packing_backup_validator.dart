@@ -169,9 +169,9 @@ class PackingBackupValidator {
     for (final e in headerMap.entries) {
       final paid = _int(e.value['paid_amount'], 'Pembayaran nota');
       if ((paidSums[e.key] ?? 0) != 0 && paidSums[e.key] != paid) throw const FormatException('Riwayat pembayaran nota tidak cocok.');
-      if ((payCounts[e.key] ?? 0) > 1) throw const FormatException('Nota hanya boleh memiliki satu pembayaran.');
+      if (version >= 4 && (payCounts[e.key] ?? 0) > 1) throw const FormatException('Nota hanya boleh memiliki satu pembayaran.');
       if (e.value['status'] == 'completed' && paid != _int(e.value['total_amount'], 'Total nota')) throw const FormatException('Status lunas tidak cocok.');
-      if (e.value['status'] == 'open' && paid != 0) throw const FormatException('Nota terbuka tidak boleh memiliki pembayaran.');
+      if (version >= 4 && e.value['status'] == 'open' && paid != 0) throw const FormatException('Nota terbuka tidak boleh memiliki pembayaran.');
     }
     final materialIds = <int>{};
     for (final row in data['materials']!) {

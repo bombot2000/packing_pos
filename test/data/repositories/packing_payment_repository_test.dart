@@ -17,7 +17,7 @@ void main() {
 
   tearDown(() async => database.close());
 
-  Future<int> createInvoice({int total = 100000}) async {
+  Future<Map<String, Object?>> createReceipt({int total = 100000}) async {
     await repository.save(PackingTransactionDraft(
       customerName: 'Pelanggan uji',
       itemDescription: 'Barang uji',
@@ -27,68 +27,112 @@ void main() {
       calculationSnapshot: const {'mode': 'test'},
       sellingPrice: total,
     ));
-    return (await repository.listRecent(limit: 1)).single['id'] as int;
+    return (await repository.listReceipts(limit: 1)).single;
   }
 
-  group('PackingTransactionRepository.addPayment', () {
-    test('records partial payment and keeps invoice open', () async {
-      final id = await createInvoice();
-      await repository.addPayment(transactionId: id, amount: 50000, paymentMethod: 'cash', note: 'DP');
-      final invoice = await repository.findById(id);
-      final payments = await repository.paymentsFor(id);
-      expect(invoice!['paid_amount'], 50000);
-      expect(invoice['status'], 'open');
-      expect(payments, hasLength(1));
-      expect(payments.single['amount'], 50000);
-      expect(payments.single['note'], 'DP');
-    });
-
-    test('marks invoice completed after final payment', () async {
-      final id = await createInvoice();
-      await repository.addPayment(transactionId: id, amount: 50000, paymentMethod: 'transfer');
-      await repository.addPayment(transactionId: id, amount: 50000, paymentMethod: 'qris');
-      final invoice = await repository.findById(id);
-      expect(invoice!['paid_amount'], 100000);
-      expect(invoice['status'], 'completed');
-      expect(await repository.paymentsFor(id), hasLength(2));
-    });
-
-    test('rejects overpayment without partial write', () async {
-      final id = await createInvoice();
-      await repository.addPayment(transactionId: id, amount: 75000, paymentMethod: 'cash');
+  group('pembayaran tingkat nota', () {
+    test('menolak pembayaran langsung pada pekerjaan', () async {
+      final receipt = await createReceipt();
+      final job = (await repository.jobsForReceipt(receipt['id'] as int)).single;
       await expectLater(
-        repository.addPayment(transactionId: id, amount: 25001, paymentMethod: 'cash'),
-        throwsArgumentError,
+        repository.addPayment(
+          transactionId: job['id'] as int,
+          amount: 100000,
+          paymentMethod: 'cash',
+        ),
+        throwsStateError,
       );
-      expect((await repository.findById(id))!['paid_amount'], 75000);
-      expect(await repository.paymentsFor(id), hasLength(1));
+      expect(await repository.receiptPaymentsFor(receipt['id'] as int), isEmpty);
     });
 
-    test('rejects zero and negative amounts', () async {
-      final id = await createInvoice();
-      for (final amount in [0, -1]) {
+    test('melunasi seluruh nota dengan satu pembayaran', () async {
+      final receipt = await createReceipt();
+      final receiptId = receipt['id'] as int;
+      await repository.settleReceipt(
+        receiptId: receiptId,
+        amount: 100000,
+        paymentMethod: 'transfer',
+        note: 'Lunas',
+      );
+      final saved = await repository.findReceiptById(receiptId);
+      final jobs = await repository.jobsForReceipt(receiptId);
+      final payments = await repository.receiptPaymentsFor(receiptId);
+      expect(saved!['paid_amount'], 100000);
+      expect(saved['status'], 'completed');
+      expect(jobs, hasLength(1));
+      expect(jobs.single['status'], 'completed');
+      expect(payments, hasLength(1));
+      expect(payments.single['amount'], 100000);
+      expect(payments.single['note'], 'Lunas');
+    });
+
+    test('menolak pembayaran kurang atau lebih dari total nota', () async {
+      final receipt = await createReceipt();
+      final receiptId = receipt['id'] as int;
+      for (final amount in [99999, 100001]) {
         await expectLater(
-          repository.addPayment(transactionId: id, amount: amount, paymentMethod: 'cash'),
+          repository.settleReceipt(
+            receiptId: receiptId,
+            amount: amount,
+            paymentMethod: 'cash',
+          ),
           throwsArgumentError,
         );
       }
-      expect(await repository.paymentsFor(id), isEmpty);
+      expect((await repository.findReceiptById(receiptId))!['paid_amount'], 0);
+      expect(await repository.receiptPaymentsFor(receiptId), isEmpty);
     });
 
-    test('rejects payments on cancelled invoices', () async {
-      final id = await createInvoice();
-      await repository.cancel(id, reason: 'Pesanan dibatalkan');
+    test('menolak nominal nol dan negatif', () async {
+      final receipt = await createReceipt();
+      for (final amount in [0, -1]) {
+        await expectLater(
+          repository.settleReceipt(
+            receiptId: receipt['id'] as int,
+            amount: amount,
+            paymentMethod: 'cash',
+          ),
+          throwsArgumentError,
+        );
+      }
+      expect(await repository.receiptPaymentsFor(receipt['id'] as int), isEmpty);
+    });
+
+    test('menolak pembayaran kedua pada nota yang sudah lunas', () async {
+      final receipt = await createReceipt();
+      final receiptId = receipt['id'] as int;
+      await repository.settleReceipt(
+        receiptId: receiptId,
+        amount: 100000,
+        paymentMethod: 'cash',
+      );
       await expectLater(
-        repository.addPayment(transactionId: id, amount: 10000, paymentMethod: 'cash'),
+        repository.settleReceipt(
+          receiptId: receiptId,
+          amount: 100000,
+          paymentMethod: 'cash',
+        ),
         throwsStateError,
       );
-      expect((await repository.findById(id))!['paid_amount'], 0);
-      expect(await repository.paymentsFor(id), isEmpty);
+      expect(await repository.receiptPaymentsFor(receiptId), hasLength(1));
     });
 
-    test('rejects payments for unknown invoice IDs', () async {
+    test('menolak pembatalan satu pekerjaan secara terpisah', () async {
+      final receipt = await createReceipt();
+      final job = (await repository.jobsForReceipt(receipt['id'] as int)).single;
       await expectLater(
-        repository.addPayment(transactionId: 99999, amount: 10000, paymentMethod: 'cash'),
+        repository.cancel(job['id'] as int, reason: 'Pesanan dibatalkan'),
+        throwsStateError,
+      );
+    });
+
+    test('menolak pembayaran untuk ID pekerjaan yang tidak dikenal', () async {
+      await expectLater(
+        repository.addPayment(
+          transactionId: 99999,
+          amount: 10000,
+          paymentMethod: 'cash',
+        ),
         throwsStateError,
       );
     });
