@@ -128,6 +128,57 @@ void main() {
       expect(payments.single['note'], 'Lunas');
     });
 
+    test('menolak pelunasan jika riwayat pembayaran tidak cocok dengan paid_amount', () async {
+      final receipt = await createReceipt();
+      final id = receipt['id'] as int;
+      await database.insert('receipt_payments', {
+        'receipt_id': id,
+        'amount': 25000,
+        'payment_method': 'cash',
+        'note': 'Riwayat lama',
+        'created_at': DateTime.now().toUtc().toIso8601String(),
+      });
+
+      await expectLater(
+        repository.settleReceipt(
+          receiptId: id,
+          amount: 100000,
+          paymentMethod: 'cash',
+        ),
+        throwsStateError,
+      );
+
+      final saved = (await repository.findReceiptById(id))!;
+      expect(saved['paid_amount'], 0);
+      expect(saved['status'], 'open');
+      expect(await repository.receiptPaymentsFor(id), hasLength(1));
+    });
+
+    test('menolak DP baru jika ledger pembayaran tidak sinkron', () async {
+      final receipt = await createReceipt();
+      final id = receipt['id'] as int;
+      await database.insert('receipt_payments', {
+        'receipt_id': id,
+        'amount': 25000,
+        'payment_method': 'cash',
+        'note': 'Riwayat lama',
+        'created_at': DateTime.now().toUtc().toIso8601String(),
+      });
+
+      await expectLater(
+        repository.addReceiptPayment(
+          receiptId: id,
+          amount: 10000,
+          paymentMethod: 'cash',
+        ),
+        throwsStateError,
+      );
+
+      final saved = (await repository.findReceiptById(id))!;
+      expect(saved['paid_amount'], 0);
+      expect(await repository.receiptPaymentsFor(id), hasLength(1));
+    });
+
     test('menolak pembayaran kurang atau lebih dari total nota', () async {
       final receipt = await createReceipt();
       final receiptId = receipt['id'] as int;
