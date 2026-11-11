@@ -1,4 +1,6 @@
-import '../../data/database/packing_database.dart';
+import 'package:sqflite/sqflite.dart';
+
+import '../database/packing_database.dart';
 
 /// Local business identity shown in the app and on printed receipts.
 class PackingIdentityRepository {
