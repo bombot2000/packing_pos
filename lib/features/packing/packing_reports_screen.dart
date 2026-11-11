@@ -74,6 +74,9 @@ class _PackingReportsScreenState extends State<PackingReportsScreen> {
         final materials = (data['materials'] as List)
             .map((row) => Map<String, Object?>.from(row as Map))
             .toList();
+        final paymentMethods = ((data['payment_methods'] as List?) ?? const [])
+            .map((row) => Map<String, Object?>.from(row as Map))
+            .toList();
         final hasCosts = ['material_cost_total', 'labor_cost_total', 'overhead_cost_total']
             .any((k) => ((totals[k] as num?) ?? 0) > 0);
         return ListView(
@@ -140,6 +143,30 @@ class _PackingReportsScreenState extends State<PackingReportsScreen> {
                 trailing: Text((totals['cancelled_count'] as num? ?? 0).toString()),
               ),
             ])),
+            const SizedBox(height: 16),
+            const Text(
+              'Penerimaan per metode pembayaran',
+              style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 8),
+            Card(child: Column(children: paymentMethods.isEmpty
+                ? [const ListTile(title: Text('Belum ada pembayaran pada periode ini.'))]
+                : paymentMethods.map((item) {
+                    final method = item['payment_method']?.toString() ?? '';
+                    final label = switch (method) {
+                      'cash' => 'Tunai',
+                      'transfer' => 'Transfer',
+                      'qris' => 'QRIS',
+                      'other' => 'Lainnya',
+                      _ => method.isEmpty ? 'Tidak diketahui' : method,
+                    };
+                    final count = (item['payment_count'] as num?)?.toInt() ?? 0;
+                    return ListTile(
+                      title: Text(label),
+                      subtitle: Text('$count transaksi pembayaran'),
+                      trailing: Text(_money(item['amount'])),
+                    );
+                  }).toList())),
             const SizedBox(height: 16),
             const Text(
               'Pemakaian bahan aktual',
