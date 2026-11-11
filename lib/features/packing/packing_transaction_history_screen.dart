@@ -143,7 +143,7 @@ class _PackingTransactionHistoryScreenState
                 controller: _search,
                 onChanged: _onSearchChanged,
                 decoration: InputDecoration(
-                  hintText: 'Cari nomor nota atau pelanggan...',
+                  hintText: 'Cari nota, pelanggan, no. pekerjaan atau barang...',
                   prefixIcon: const Icon(Icons.search),
                   suffixIcon: _search.text.isEmpty
                       ? null
