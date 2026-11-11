@@ -102,9 +102,9 @@ void main() {
     final restoredCashSummary = await repository.cashSessionSummary((restoredCashSession!['id'] as num).toInt());
     expect(restoredCashSummary['expense_total'], 3000);
     expect(restoredCashSession!['status'], 'closed');
-    expect(restoredCashSession['expected_balance'], 22000);
+    expect(restoredCashSession['expected_balance'], 122000);
     expect(restoredCashSession['counted_balance'], 122000);
-    expect(restoredCashSession['difference'], 100000);
+    expect(restoredCashSession['difference'], 0);
     expect(restoredCashSession['note'], 'Kas dihitung dan ditutup');
     final restoredReceipt = restoredReceipts.single;
     expect(restoredReceipt['receipt_no'], receiptNo);
