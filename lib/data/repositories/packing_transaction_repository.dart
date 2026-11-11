@@ -702,6 +702,18 @@ class PackingTransactionRepository {
       if (amount > total - paid) {
         throw ArgumentError('Pembayaran melebihi sisa tagihan.');
       }
+      if (paymentMethod.trim() == 'cash') {
+        final sessions = await txn.query(
+          'cash_sessions',
+          columns: ['status'],
+          where: 'date_key = ?',
+          whereArgs: [_cashDateKey(DateTime.now())],
+          limit: 1,
+        );
+        if (sessions.isNotEmpty && sessions.first['status'] == 'closed') {
+          throw StateError('Kas hari ini sudah ditutup; pembayaran tunai baru tidak dapat dicatat.');
+        }
+      }
       await txn.insert('transaction_payments', {
         'transaction_id': transactionId,
         'amount': amount,
@@ -802,11 +814,18 @@ class PackingTransactionRepository {
     final start = DateTime(date.year, date.month, date.day).toUtc().toIso8601String();
     final end = DateTime(date.year, date.month, date.day + 1).toUtc().toIso8601String();
     final payments = await db.rawQuery('''
-      SELECT COALESCE(SUM(rp.amount), 0) AS total
-      FROM receipt_payments rp INNER JOIN packing_receipts pr ON pr.id = rp.receipt_id
-      WHERE pr.status != 'cancelled' AND rp.payment_method = 'cash'
-        AND rp.created_at >= ? AND rp.created_at < ?
-    ''', [start, end]);
+      SELECT
+        COALESCE((SELECT SUM(rp.amount)
+          FROM receipt_payments rp INNER JOIN packing_receipts pr ON pr.id = rp.receipt_id
+          WHERE pr.status != 'cancelled' AND rp.payment_method = 'cash'
+            AND rp.created_at >= ? AND rp.created_at < ?), 0)
+        + COALESCE((SELECT SUM(tp.amount)
+          FROM transaction_payments tp
+          INNER JOIN packing_transactions pt ON pt.id = tp.transaction_id
+          WHERE pt.receipt_id IS NULL AND pt.status != 'cancelled'
+            AND tp.payment_method = 'cash'
+            AND tp.created_at >= ? AND tp.created_at < ?), 0) AS total
+    ''', [start, end, start, end]);
     final expenses = await db.rawQuery('SELECT COALESCE(SUM(amount), 0) AS total FROM cash_expenses WHERE session_id = ?', [sessionId]);
     final expenseRows = await db.query('cash_expenses', where: 'session_id = ?', whereArgs: [sessionId], orderBy: 'id DESC');
     final opening = (session['opening_balance'] as num).toInt();
@@ -831,10 +850,16 @@ class PackingTransactionRepository {
       final start = DateTime(date.year, date.month, date.day).toUtc().toIso8601String();
       final end = DateTime(date.year, date.month, date.day + 1).toUtc().toIso8601String();
       final payments = await txn.rawQuery('''
-        SELECT COALESCE(SUM(rp.amount), 0) AS total FROM receipt_payments rp
-        INNER JOIN packing_receipts pr ON pr.id = rp.receipt_id
-        WHERE pr.status != 'cancelled' AND rp.payment_method = 'cash'
-          AND rp.created_at >= ? AND rp.created_at < ?
+        SELECT
+          COALESCE((SELECT SUM(rp.amount) FROM receipt_payments rp
+            INNER JOIN packing_receipts pr ON pr.id = rp.receipt_id
+            WHERE pr.status != 'cancelled' AND rp.payment_method = 'cash'
+              AND rp.created_at >= ? AND rp.created_at < ?), 0)
+          + COALESCE((SELECT SUM(tp.amount) FROM transaction_payments tp
+            INNER JOIN packing_transactions pt ON pt.id = tp.transaction_id
+            WHERE pt.receipt_id IS NULL AND pt.status != 'cancelled'
+              AND tp.payment_method = 'cash'
+              AND tp.created_at >= ? AND tp.created_at < ?), 0) AS total
       ''', [start, end]);
       final expenses = await txn.rawQuery('SELECT COALESCE(SUM(amount), 0) AS total FROM cash_expenses WHERE session_id = ?', [sessionId]);
       final expected = (session['opening_balance'] as num).toInt()
