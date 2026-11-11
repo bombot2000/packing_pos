@@ -24,7 +24,7 @@ void main() {
       lengthCm: 100,
       widthCm: 80,
       heightCm: 60,
-      calculationSnapshot: const {'mode': 'test'},
+      calculationSnapshot: {'mode': 'test'},
       sellingPrice: total,
     ));
     return (await repository.listReceipts(limit: 1)).single;
@@ -134,25 +134,25 @@ void main() {
           lengthCm: 100,
           widthCm: 80,
           heightCm: 60,
-          calculationSnapshot: const {'mode': 'test'},
+          calculationSnapshot: {'mode': 'test'},
           sellingPrice: 60000,
         ),
-        PackingTransactionDraft(
+        const PackingTransactionDraft(
           customerName: 'Pelanggan gabungan',
           itemDescription: 'Kardus B',
           lengthCm: 50,
           widthCm: 40,
           heightCm: 30,
-          calculationSnapshot: const {'mode': 'test'},
+          calculationSnapshot: {'mode': 'test'},
           sellingPrice: 40000,
         ),
-        PackingTransactionDraft(
+        const PackingTransactionDraft(
           customerName: 'Pelanggan gabungan',
           itemDescription: 'Peti C',
           lengthCm: 70,
           widthCm: 60,
           heightCm: 50,
-          calculationSnapshot: const {'mode': 'test'},
+          calculationSnapshot: {'mode': 'test'},
           sellingPrice: 25000,
         ),
       ]);
