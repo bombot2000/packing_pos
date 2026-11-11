@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import '../../data/repositories/packing_transaction_repository.dart';
 import 'packing_receipt_detail_screen.dart';
@@ -5,7 +7,8 @@ import 'service_type_master_screen.dart';
 import 'packing_customer_master_screen.dart';
 
 class PackingCalculatorScreen extends StatefulWidget {
-  const PackingCalculatorScreen({super.key});
+  const PackingCalculatorScreen({super.key, this.editReceiptId});
+  final int? editReceiptId;
   @override
   State<PackingCalculatorScreen> createState() => _PackingCalculatorScreenState();
 }
@@ -30,7 +33,72 @@ class _PackingCalculatorScreenState extends State<PackingCalculatorScreen> {
   String? _error;
 
   @override
-  void initState() { super.initState(); _loadServices(); _loadCustomers(); }
+  void initState() {
+    super.initState();
+    _loadServices();
+    _loadCustomers();
+    if (widget.editReceiptId != null) _loadReceiptForEdit();
+  }
+
+  Future<void> _loadReceiptForEdit() async {
+    try {
+      final id = widget.editReceiptId!;
+      final receipt = await _repo.findReceiptById(id);
+      if (receipt == null) throw StateError('Nota tidak ditemukan.');
+      if (receipt['status'] != 'open' || (receipt['paid_amount'] as num).toInt() != 0) {
+        throw StateError('Hanya nota yang belum dibayar yang dapat diedit.');
+      }
+      final payments = await _repo.receiptPaymentsFor(id);
+      if (payments.isNotEmpty) throw StateError('Nota sudah memiliki pembayaran.');
+      final rows = await _repo.jobsForReceipt(id);
+      final drafts = <PackingTransactionDraft>[];
+      for (final row in rows) {
+        final rawSnapshot = row['calculation_snapshot'];
+        final snapshot = rawSnapshot is String
+            ? Map<String, Object?>.from(jsonDecode(rawSnapshot) as Map)
+            : <String, Object?>{};
+        final materialRows = await _repo.materialsFor((row['id'] as num).toInt());
+        final materials = materialRows.map((m) => MaterialUsageDraft(
+          materialId: (m['material_id'] as num?)?.toInt(),
+          name: m['material_name_snapshot'] as String,
+          unit: m['unit_snapshot'] as String,
+          calculatedQuantity: (m['calculated_quantity'] as num).toDouble(),
+          actualQuantity: (m['actual_quantity'] as num).toDouble(),
+          unitPrice: (m['unit_price_snapshot'] as num).toInt(),
+          adjustmentNote: m['adjustment_note'] as String? ?? '',
+        )).toList();
+        drafts.add(PackingTransactionDraft(
+          customerName: row['customer_name'] as String? ?? '',
+          itemDescription: row['item_description'] as String? ?? '',
+          quantity: (row['quantity'] as num?)?.toInt() ?? 1,
+          lengthCm: (row['length_cm'] as num).toDouble(),
+          widthCm: (row['width_cm'] as num).toDouble(),
+          heightCm: (row['height_cm'] as num).toDouble(),
+          calculationSnapshot: snapshot,
+          materialCost: (row['material_cost'] as num?)?.toInt() ?? 0,
+          laborCost: (row['labor_cost'] as num?)?.toInt() ?? 0,
+          overheadCost: (row['overhead_cost'] as num?)?.toInt() ?? 0,
+          sellingPrice: (row['unit_price'] as num?)?.toInt() ?? (row['selling_price'] as num).toInt(),
+          note: row['note'] as String? ?? '',
+          materials: materials,
+        ));
+      }
+      if (!mounted) return;
+      setState(() {
+        _customer.text = receipt['customer_name'] as String? ?? '';
+        _receiptNote.text = receipt['note'] as String? ?? '';
+        _discount.text = ((receipt['discount_amount'] as num?)?.toInt() ?? 0).toString();
+        _jobs
+          ..clear()
+          ..addAll(drafts);
+        if (drafts.isNotEmpty) {
+          _serviceId = (drafts.first.calculationSnapshot['jobTypeId'] as num?)?.toInt();
+        }
+      });
+    } catch (e) {
+      if (mounted) setState(() => _error = 'Nota tidak dapat dimuat untuk diedit: $e');
+    }
+  }
 
   Future<void> _loadCustomers() async {
     try {
@@ -139,6 +207,19 @@ class _PackingCalculatorScreenState extends State<PackingCalculatorScreen> {
     FocusScope.of(context).unfocus();
     setState(() { _saving = true; _error = null; });
     try {
+      if (widget.editReceiptId != null) {
+        await _repo.updateUnpaidReceipt(
+          widget.editReceiptId!,
+          List<PackingTransactionDraft>.unmodifiable(_jobs),
+          customerName: _customer.text.trim(),
+          note: _receiptNote.text.trim(),
+          discountAmount: _discountAmount,
+        );
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Nota berhasil diperbarui.')));
+        Navigator.of(context).pop(true);
+        return;
+      }
       final receipt = await _repo.saveReceipt(
         List<PackingTransactionDraft>.unmodifiable(_jobs),
         customerName: _customer.text.trim(),
@@ -155,7 +236,6 @@ class _PackingCalculatorScreenState extends State<PackingCalculatorScreen> {
         duration: const Duration(seconds: 4),
       ));
       if (saved != null) {
-        // Continue straight to payment/print; back returns to the home page.
         await Navigator.of(context).pushReplacement(MaterialPageRoute(
           builder: (_) => PackingReceiptDetailScreen(receiptId: (saved['id'] as num).toInt()),
         ));
@@ -177,9 +257,11 @@ class _PackingCalculatorScreenState extends State<PackingCalculatorScreen> {
 
   @override
   Widget build(BuildContext context) => Scaffold(
-    appBar: AppBar(title: const Text('Buat nota packing')),
+    appBar: AppBar(title: Text(widget.editReceiptId == null ? 'Buat nota packing' : 'Edit nota packing')),
     body: ListView(padding: const EdgeInsets.all(16), children: [
-      const Text('Satu nota dapat berisi banyak pekerjaan. Tambahkan pekerjaan satu per satu, lalu simpan dan lakukan pembayaran untuk total seluruh nota.'),
+      Text(widget.editReceiptId == null
+        ? 'Satu nota dapat berisi banyak pekerjaan. Tambahkan pekerjaan satu per satu, lalu simpan dan lakukan pembayaran untuk total seluruh nota.'
+        : 'Edit data nota yang belum dibayar. Hapus pekerjaan yang tidak diperlukan atau tambahkan pekerjaan baru, lalu simpan perubahan.'),
       const SizedBox(height: 16),
       Row(
         children: [
@@ -319,7 +401,7 @@ class _PackingCalculatorScreenState extends State<PackingCalculatorScreen> {
         FilledButton.icon(
           onPressed: _saving ? null : _saveReceipt,
           icon: _saving ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2)) : const Icon(Icons.receipt_long),
-          label: Text(_saving ? 'Menyimpan nota...' : 'Simpan nota (${_jobs.length} pekerjaan)'),
+          label: Text(_saving ? 'Menyimpan nota...' : '${widget.editReceiptId == null ? 'Simpan nota' : 'Simpan perubahan'} (${_jobs.length} pekerjaan)'),
         ),
       ],
       if (_error != null) ...[const SizedBox(height: 12), Text(_error!, style: TextStyle(color: Theme.of(context).colorScheme.error))],
