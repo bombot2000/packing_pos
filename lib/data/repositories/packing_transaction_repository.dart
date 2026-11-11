@@ -860,7 +860,7 @@ class PackingTransactionRepository {
             WHERE pt.receipt_id IS NULL AND pt.status != 'cancelled'
               AND tp.payment_method = 'cash'
               AND tp.created_at >= ? AND tp.created_at < ?), 0) AS total
-      ''', [start, end]);
+      ''', [start, end, start, end]);
       final expenses = await txn.rawQuery('SELECT COALESCE(SUM(amount), 0) AS total FROM cash_expenses WHERE session_id = ?', [sessionId]);
       final expected = (session['opening_balance'] as num).toInt()
           + (payments.first['total'] as num).toInt()
