@@ -68,6 +68,126 @@ void main() {
     expect((byDescription['rows'] as List).single['id'], receiptId);
   });
 
+
+  test('receipt history filters all supported statuses correctly', () async {
+    Future<int> create(String description) async {
+      final number = await repository.saveReceipt(
+        [draft(description: description, price: 10000)],
+        customerName: description,
+      );
+      final row = (await repository.listReceipts(limit: 20))
+          .singleWhere((item) => item['receipt_no'] == number);
+      return (row['id'] as num).toInt();
+    }
+
+    final unpaidId = await create('Belum bayar');
+    final partialId = await create('DP');
+    final completedId = await create('Lunas');
+    final cancelledId = await create('Batal');
+
+    await repository.addReceiptPayment(
+      receiptId: partialId,
+      amount: 2000,
+      paymentMethod: 'cash',
+    );
+    await repository.settleReceipt(
+      receiptId: completedId,
+      amount: 10000,
+      paymentMethod: 'cash',
+    );
+    await repository.cancelReceipt(
+      receiptId: cancelledId,
+      reason: 'Salah input',
+    );
+
+    Future<Set<int>> idsFor(String status) async {
+      final result = await repository.searchReceipts(status: status);
+      return (result['rows'] as List)
+          .map((row) => (row['id'] as num).toInt())
+          .toSet();
+    }
+
+    expect(await idsFor('all'),
+        {unpaidId, partialId, completedId, cancelledId});
+    expect(await idsFor('unpaid'), {unpaidId});
+    expect(await idsFor('partial'), {partialId});
+    expect(await idsFor('completed'), {completedId});
+    expect(await idsFor('cancelled'), {cancelledId});
+  });
+
+  test('receipt history date range includes both local calendar boundary days', () async {
+    Future<int> createAt(String description, DateTime createdAt) async {
+      final number = await repository.saveReceipt(
+        [draft(description: description, price: 10000)],
+        customerName: description,
+      );
+      final row = (await repository.listReceipts(limit: 20))
+          .singleWhere((item) => item['receipt_no'] == number);
+      final id = (row['id'] as num).toInt();
+      await database.update(
+        'packing_receipts',
+        {'created_at': createdAt.toUtc().toIso8601String()},
+        where: 'id = ?',
+        whereArgs: [id],
+      );
+      return id;
+    }
+
+    final start = DateTime(2026, 5, 10);
+    final end = DateTime(2026, 5, 12);
+    final beforeId = await createAt('Sebelum rentang', DateTime(2026, 5, 9, 23, 59));
+    final startId = await createAt('Hari awal', DateTime(2026, 5, 10, 0, 0));
+    final endId = await createAt('Hari akhir', DateTime(2026, 5, 12, 23, 59));
+    final afterId = await createAt('Sesudah rentang', DateTime(2026, 5, 13, 0, 0));
+
+    final result = await repository.searchReceipts(
+      startDate: start,
+      endDate: end,
+    );
+    final ids = (result['rows'] as List)
+        .map((row) => (row['id'] as num).toInt())
+        .toSet();
+
+    expect(result['total'], 2);
+    expect(ids, {startId, endId});
+    expect(ids, isNot(contains(beforeId)));
+    expect(ids, isNot(contains(afterId)));
+  });
+
+  test('receipt history pagination returns stable newest-first pages and total', () async {
+    final ids = <int>[];
+    for (var index = 0; index < 5; index++) {
+      final number = await repository.saveReceipt(
+        [draft(description: 'Nota $index', price: 10000)],
+        customerName: 'Pelanggan $index',
+      );
+      final row = (await repository.listReceipts(limit: 20))
+          .singleWhere((item) => item['receipt_no'] == number);
+      ids.add((row['id'] as num).toInt());
+      await database.update(
+        'packing_receipts',
+        {'created_at': DateTime.utc(2026, 6, 1).toIso8601String()},
+        where: 'id = ?',
+        whereArgs: [ids.last],
+      );
+    }
+
+    final first = await repository.searchReceipts(limit: 2, offset: 0);
+    final second = await repository.searchReceipts(limit: 2, offset: 2);
+    final firstIds = (first['rows'] as List)
+        .map((row) => (row['id'] as num).toInt())
+        .toList();
+    final secondIds = (second['rows'] as List)
+        .map((row) => (row['id'] as num).toInt())
+        .toList();
+
+    expect(first['total'], 5);
+    expect(second['total'], 5);
+    expect(firstIds, [ids[4], ids[3]]);
+    expect(secondIds, [ids[2], ids[1]]);
+    expect(firstIds.toSet().intersection(secondIds.toSet()), isEmpty);
+  });
+
   test('export and restore round-trip keeps multi-job receipt and settlement', () async {
     await repository.saveServiceType(name: 'Packing ekspor backup', defaultPrice: 15000);
     await repository.saveCustomer(
