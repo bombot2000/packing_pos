@@ -55,6 +55,9 @@ void main() {
       expect(job['selling_price'], 60000);
       expect(receipt['discount_amount'], 5000);
       expect(receipt['total_amount'], 55000);
+      final report = await repository.reportSummary();
+      final totals = report['totals'] as Map<String, Object?>;
+      expect(totals['sales_total'], 55000);
     });
 
     test('menolak qty nol dan diskon melebihi subtotal', () async {
