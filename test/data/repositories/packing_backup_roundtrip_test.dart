@@ -66,12 +66,13 @@ void main() {
     await repository.settleReceipt(
       receiptId: receiptId,
       amount: 100000,
-      paymentMethod: 'qris',
+      paymentMethod: 'cash',
       note: 'Pembayaran gabungan',
     );
 
     final cashSessionId = await repository.startCashSession(date: DateTime.now(), openingBalance: 25000);
     await repository.addCashExpense(sessionId: cashSessionId, amount: 3000, category: 'Operasional', note: 'Parkir');
+    await repository.closeCashSession(sessionId: cashSessionId, countedBalance: 122000, note: 'Kas dihitung dan ditutup');
 
     final backup = await repository.exportBackup();
     expect(backup['version'], 7);
@@ -100,6 +101,11 @@ void main() {
     expect(restoredCashSession?['opening_balance'], 25000);
     final restoredCashSummary = await repository.cashSessionSummary((restoredCashSession!['id'] as num).toInt());
     expect(restoredCashSummary['expense_total'], 3000);
+    expect(restoredCashSession!['status'], 'closed');
+    expect(restoredCashSession['expected_balance'], 22000);
+    expect(restoredCashSession['counted_balance'], 122000);
+    expect(restoredCashSession['difference'], 100000);
+    expect(restoredCashSession['note'], 'Kas dihitung dan ditutup');
     final restoredReceipt = restoredReceipts.single;
     expect(restoredReceipt['receipt_no'], receiptNo);
     expect(restoredReceipt['total_amount'], 100000);
@@ -119,7 +125,7 @@ void main() {
     final payments = await repository.receiptPaymentsFor(restoredId);
     expect(payments, hasLength(1));
     expect(payments.single['amount'], 100000);
-    expect(payments.single['payment_method'], 'qris');
+    expect(payments.single['payment_method'], 'cash');
     expect(payments.single['note'], 'Pembayaran gabungan');
 
     final restoredMaterials = await repository.materialsFor(
