@@ -352,6 +352,17 @@ void main() {
       await expectLater(repository.closeCashSession(sessionId: sessionId, countedBalance: 45000), throwsStateError);
     });
 
+    test('menolak pembayaran tunai setelah sesi kas ditutup', () async {
+      final receipt = await createReceipt();
+      final sessionId = await repository.startCashSession(date: DateTime.now(), openingBalance: 0);
+      await repository.closeCashSession(sessionId: sessionId, countedBalance: 0);
+      await expectLater(
+        repository.addReceiptPayment(receiptId: receipt['id'] as int, amount: 10000, paymentMethod: 'cash'),
+        throwsStateError,
+      );
+      expect(await repository.receiptPaymentsFor(receipt['id'] as int), isEmpty);
+    });
+
     test('mencegah sesi kas ganda dan nominal awal atau pengeluaran tidak valid', () async {
       await expectLater(repository.startCashSession(date: DateTime.now(), openingBalance: -1), throwsArgumentError);
       final id = await repository.startCashSession(date: DateTime.now(), openingBalance: 0);
