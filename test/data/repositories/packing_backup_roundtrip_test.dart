@@ -200,13 +200,16 @@ void main() {
     final backup = Map<String, dynamic>.from(await repository.exportBackup());
 
     void moveIds(String table, {String? foreignKey}) {
-      final rows = (backup[table] as List).cast<Map<String, Object?>>();
+      final rows = (backup[table] as List)
+          .map((row) => Map<String, Object?>.from(row as Map))
+          .toList();
       for (final row in rows) {
         row['id'] = (row['id'] as num).toInt() + 1000;
         if (foreignKey != null) {
           row[foreignKey] = (row[foreignKey] as num).toInt() + 1000;
         }
       }
+      backup[table] = rows;
     }
 
     moveIds('packing_receipts');
