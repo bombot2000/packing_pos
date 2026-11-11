@@ -146,6 +146,32 @@ void main() {
       expect(data['receipt_payments'], hasLength(2));
     });
 
+    test('validates material subtotal against actual quantity and snapshot price', () {
+      final backup = validBackup();
+      backup['transaction_materials'] = [
+        {
+          'id': 1,
+          'transaction_id': 1,
+          'material_name_snapshot': 'Kayu',
+          'unit_snapshot': 'batang',
+          'calculated_quantity': 2.5,
+          'actual_quantity': 2.5,
+          'unit_price_snapshot': 1000,
+          'subtotal': 2500,
+          'adjustment_note': '',
+          'created_at': '2026-11-09T00:00:00.000Z',
+        },
+      ];
+
+      expect(() => PackingBackupValidator.validate(backup), returnsNormally);
+
+      backup['transaction_materials']![0]['subtotal'] = 2499;
+      expect(
+        () => PackingBackupValidator.validate(backup),
+        throwsFormatException,
+      );
+    });
+
     test('rejects malformed calculation snapshots before restore', () {
       final backup = validBackup();
       backup['packing_transactions']![0]['calculation_snapshot'] = '{broken';
