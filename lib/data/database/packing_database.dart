@@ -14,7 +14,7 @@ class PackingDatabase {
     return instance;
   }
   static final PackingDatabase instance = PackingDatabase._();
-  static const int schemaVersion = 5;
+  static const int schemaVersion = 6;
   Database? _database;
 
   Future<Database> get database async {
@@ -73,6 +73,7 @@ class PackingDatabase {
     ''');
     await _createServiceTypes(db);
     await _createReceiptTables(db);
+    await _createCustomers(db);
     await db.execute('CREATE TABLE app_settings (key TEXT PRIMARY KEY, value TEXT NOT NULL, updated_at TEXT NOT NULL)');
     await _createIndexes(db);
   }
@@ -93,6 +94,22 @@ class PackingDatabase {
       'name': 'Packing Kayu', 'default_price': 0, 'is_active': 1,
       'created_at': now, 'updated_at': now,
     });
+  }
+
+  Future<void> _createCustomers(Database db) async {
+    await db.execute('''
+      CREATE TABLE customers (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT NOT NULL COLLATE NOCASE UNIQUE,
+        phone TEXT NOT NULL DEFAULT '',
+        address TEXT NOT NULL DEFAULT '',
+        note TEXT NOT NULL DEFAULT '',
+        is_active INTEGER NOT NULL DEFAULT 1 CHECK(is_active IN (0, 1)),
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      )
+    ''');
+    await db.execute('CREATE INDEX IF NOT EXISTS idx_customers_active_name ON customers(is_active, name)');
   }
 
   Future<void> _createIndexes(Database db) async {
@@ -116,6 +133,7 @@ class PackingDatabase {
       await db.execute('UPDATE packing_transactions SET unit_price = selling_price');
       await db.execute('ALTER TABLE packing_receipts ADD COLUMN discount_amount INTEGER NOT NULL DEFAULT 0 CHECK(discount_amount >= 0)');
     }
+    if (oldVersion < 6) await _createCustomers(db);
   }
 
   Future<void> _createReceiptTables(Database db) async {
