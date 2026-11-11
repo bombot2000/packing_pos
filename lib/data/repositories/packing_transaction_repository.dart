@@ -29,6 +29,7 @@ class PackingTransactionDraft {
   const PackingTransactionDraft({
     this.customerName = '',
     this.itemDescription = '',
+    this.quantity = 1,
     required this.lengthCm,
     required this.widthCm,
     required this.heightCm,
@@ -43,6 +44,7 @@ class PackingTransactionDraft {
 
   final String customerName;
   final String itemDescription;
+  final int quantity;
   final double lengthCm;
   final double widthCm;
   final double heightCm;
@@ -167,10 +169,15 @@ class PackingTransactionRepository {
     List<PackingTransactionDraft> drafts, {
     String customerName = '',
     String note = '',
+    int discountAmount = 0,
   }) async {
     if (drafts.isEmpty) throw ArgumentError('Nota harus memiliki minimal satu pekerjaan.');
     for (final draft in drafts) {
       _validate(draft);
+    }
+    final subtotal = drafts.fold<int>(0, (sum, item) => sum + item.sellingPrice * item.quantity);
+    if (discountAmount < 0 || discountAmount > subtotal) {
+      throw ArgumentError('Diskon nota tidak boleh melebihi subtotal pekerjaan.');
     }
     final db = await _database.database;
     final now = DateTime.now().toUtc().toIso8601String();
@@ -180,7 +187,8 @@ class PackingTransactionRepository {
         'customer_name': customerName.trim().isNotEmpty
             ? customerName.trim()
             : drafts.first.customerName.trim(),
-        'total_amount': drafts.fold<int>(0, (sum, item) => sum + item.sellingPrice),
+        'total_amount': subtotal - discountAmount,
+        'discount_amount': discountAmount,
         'paid_amount': 0,
         'status': 'open',
         'note': note.trim(),
@@ -198,6 +206,8 @@ class PackingTransactionRepository {
           'receipt_id': receiptId,
           'customer_name': customerName.trim().isNotEmpty ? customerName.trim() : draft.customerName.trim(),
           'item_description': draft.itemDescription.trim(),
+          'quantity': draft.quantity,
+          'unit_price': draft.sellingPrice,
           'length_cm': draft.lengthCm,
           'width_cm': draft.widthCm,
           'height_cm': draft.heightCm,
@@ -205,7 +215,7 @@ class PackingTransactionRepository {
           'material_cost': draft.materialCost,
           'labor_cost': draft.laborCost,
           'overhead_cost': draft.overheadCost,
-          'selling_price': draft.sellingPrice,
+          'selling_price': draft.sellingPrice * draft.quantity,
           'paid_amount': 0,
           'status': 'open',
           'note': draft.note.trim(),
@@ -566,7 +576,7 @@ class PackingTransactionRepository {
           txn.query(table, orderBy: 'id');
       return {
         'format': 'packing_pos_backup',
-        'version': 4,
+        'version': 5,
         'createdAt': DateTime.now().toUtc().toIso8601String(),
         'packing_transactions': await rows('packing_transactions'),
         'packing_receipts': await rows('packing_receipts'),
@@ -620,6 +630,9 @@ class PackingTransactionRepository {
   }
 
   void _validate(PackingTransactionDraft draft) {
+    if (draft.quantity < 1) {
+      throw ArgumentError('Qty pekerjaan minimal 1.');
+    }
     if (![draft.lengthCm, draft.widthCm, draft.heightCm]
         .every((v) => v.isFinite && v > 0)) {
       throw ArgumentError('Dimensi harus berupa angka lebih dari nol.');
