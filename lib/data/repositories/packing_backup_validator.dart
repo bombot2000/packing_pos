@@ -21,7 +21,7 @@ class PackingBackupValidator {
   ) {
     final version = backup['version'];
     if (backup['format'] != 'packing_pos_backup' ||
-        (version != 1 && version != 2 && version != 3 && version != 4)) {
+        (version != 1 && version != 2 && version != 3 && version != 4 && version != 5)) {
       throw const FormatException('Format atau versi backup tidak didukung.');
     }
 
@@ -40,6 +40,16 @@ class PackingBackupValidator {
       }).toList(growable: false);
     }
 
+    if (version < 5) {
+      for (final row in data['packing_transactions']!) {
+        row['quantity'] = 1;
+        row['unit_price'] = row['selling_price'];
+      }
+      for (final row in data['packing_receipts']!) {
+        row['discount_amount'] = 0;
+      }
+    }
+
     final transactions = <int, Map<String, Object?>>{};
     final receipts = <String>{};
     for (final row in data['packing_transactions']!) {
@@ -51,6 +61,8 @@ class PackingBackupValidator {
       if (transactions.containsKey(id)) {
         throw FormatException('ID transaksi duplikat: $id.');
       }
+      _positiveInt(row['quantity'], 'Qty pekerjaan');
+      _nonNegativeInt(row['unit_price'], 'Harga satuan pekerjaan');
       for (final field in ['length_cm', 'width_cm', 'height_cm']) {
         _positiveNumber(row[field], field);
       }
@@ -144,7 +156,10 @@ class PackingBackupValidator {
     for (final row in data['packing_receipts']!) {
       final id = _positiveInt(row['id'], 'ID nota'); final no = _text(row['receipt_no'], 'Nomor nota');
       if (!headerIds.add(id) || !headerNos.add(no)) throw FormatException('ID atau nomor nota duplikat: $no');
-      final total = _nonNegativeInt(row['total_amount'], 'Total nota'); final paid = _nonNegativeInt(row['paid_amount'], 'Pembayaran nota');
+      final total = _nonNegativeInt(row['total_amount'], 'Total nota');
+      final discount = _nonNegativeInt(row['discount_amount'], 'Diskon nota');
+      final paid = _nonNegativeInt(row['paid_amount'], 'Pembayaran nota');
+      if (discount > total + discount) throw FormatException('Diskon nota tidak valid: $no');
       if (paid > total) throw FormatException('Pembayaran nota melebihi total: $no');
       final status = _text(row['status'], 'Status nota');
       if (!['open', 'completed', 'cancelled'].contains(status)) throw FormatException('Status nota tidak dikenal: $no');
@@ -157,7 +172,7 @@ class PackingBackupValidator {
       if (tx['status'] != 'cancelled') sums[rid] = (sums[rid] ?? 0) + _int(tx['selling_price'], 'Harga pekerjaan');
     }
     for (final e in headerMap.entries) {
-      if (e.value['status'] != 'cancelled' && (sums[e.key] ?? 0) != _int(e.value['total_amount'], 'Total nota')) throw const FormatException('Total pekerjaan tidak cocok dengan total nota.');
+      if (e.value['status'] != 'cancelled' && (sums[e.key] ?? 0) - _int(e.value['discount_amount'], 'Diskon nota') != _int(e.value['total_amount'], 'Total nota')) throw const FormatException('Total pekerjaan tidak cocok dengan total nota.');
     }
     final payIds = <int>{}; final paidSums = <int, int>{};
     for (final row in data['receipt_payments']!) {
