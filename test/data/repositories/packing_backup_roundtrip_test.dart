@@ -43,6 +43,31 @@ void main() {
     );
   }
 
+  test('receipt history search matches job number and item description once per receipt', () async {
+    final receiptNo = await repository.saveReceipt(
+      [
+        draft(description: 'Peti kayu ekspor', price: 60000),
+        draft(description: 'Kardus mesin', price: 40000),
+      ],
+      customerName: 'Pelanggan pencarian',
+    );
+    final receipt = (await repository.listReceipts(limit: 10))
+        .singleWhere((row) => row['receipt_no'] == receiptNo);
+    final receiptId = (receipt['id'] as num).toInt();
+    final jobs = await repository.jobsForReceipt(receiptId);
+    final jobNo = jobs.first['receipt_no'] as String;
+
+    final byJobNumber = await repository.searchReceipts(query: jobNo);
+    expect(byJobNumber['total'], 1);
+    expect((byJobNumber['rows'] as List), hasLength(1));
+    expect((byJobNumber['rows'] as List).single['id'], receiptId);
+
+    final byDescription = await repository.searchReceipts(query: 'kayu ekspor');
+    expect(byDescription['total'], 1);
+    expect((byDescription['rows'] as List), hasLength(1));
+    expect((byDescription['rows'] as List).single['id'], receiptId);
+  });
+
   test('export and restore round-trip keeps multi-job receipt and settlement', () async {
     await repository.saveServiceType(name: 'Packing ekspor backup', defaultPrice: 15000);
     await repository.saveCustomer(
