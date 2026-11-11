@@ -198,12 +198,10 @@ class _PackingCalculatorScreenState extends State<PackingCalculatorScreen> {
                 if (controller.text != _customer.text && !focusNode.hasFocus) {
                   controller.text = _customer.text;
                 }
-                controller.addListener(() {
-                  if (_customer.text != controller.text) _customer.text = controller.text;
-                });
                 return TextField(
                   controller: controller,
                   focusNode: focusNode,
+                  onChanged: (value) => _customer.text = value,
                   decoration: const InputDecoration(
                     labelText: 'Nama pelanggan',
                     hintText: 'Pilih pelanggan atau ketik nama baru',
