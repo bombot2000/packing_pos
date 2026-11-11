@@ -92,7 +92,16 @@ class _PackingCalculatorScreenState extends State<PackingCalculatorScreen> {
           ..clear()
           ..addAll(drafts);
         if (drafts.isNotEmpty) {
-          _serviceId = (drafts.first.calculationSnapshot['jobTypeId'] as num?)?.toInt();
+          final snapshotServiceId =
+              (drafts.first.calculationSnapshot['jobTypeId'] as num?)?.toInt();
+          // A service may have been deactivated since this receipt was created.
+          // Keep the historical job snapshot, but never assign an unavailable
+          // value to the active-service dropdown.
+          _serviceId = _services.any((service) => service['id'] == snapshotServiceId)
+              ? snapshotServiceId
+              : (_loadingServices || _services.isEmpty
+                  ? null
+                  : _services.first['id'] as int);
         }
       });
     } catch (e) {
@@ -122,9 +131,12 @@ class _PackingCalculatorScreenState extends State<PackingCalculatorScreen> {
       setState(() {
         _services = rows;
         _loadingServices = false;
-        if (_services.isNotEmpty && _serviceId == null) {
+        final selectedServiceExists = _services.any((service) => service['id'] == _serviceId);
+        if (_services.isNotEmpty && !selectedServiceExists) {
           _serviceId = _services.first['id'] as int;
           _charge.text = (_services.first['default_price'] as num).toInt().toString();
+        } else if (_serviceId != null && !selectedServiceExists) {
+          _serviceId = null;
         }
       });
     } catch (e) {
