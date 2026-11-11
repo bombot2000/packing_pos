@@ -17,11 +17,14 @@ class _PackingTransactionHistoryScreenState extends State<PackingTransactionHist
   @override
   void dispose() { _search.dispose(); super.dispose(); }
   void _refresh() => setState(() => _future = _repo.listReceipts(limit: 500));
-  String _money(Object? v) {
-    final n = (v as num?)?.toInt() ?? 0;
-    return 'Rp ' + n.toString().replaceAllMapped(RegExp(r'(?<=\\d)(?=(\\d{3})+(?!\\d))'), (_) => '.');
-  }
-  String _status(String? v) => v == 'completed' ? 'Lunas' : v == 'cancelled' ? 'Dibatalkan' : 'Belum dibayar';
+  String _money(Object? v) => formatRupiah(v);
+  String _status(Map<String, Object?> row) => row['status'] == 'completed'
+      ? 'Lunas'
+      : row['status'] == 'cancelled'
+          ? 'Dibatalkan'
+          : ((row['paid_amount'] as num?)?.toInt() ?? 0) > 0
+              ? 'Dibayar sebagian'
+              : 'Belum dibayar';
 
   @override
   Widget build(BuildContext context) => Scaffold(
