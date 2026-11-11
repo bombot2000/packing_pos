@@ -78,6 +78,11 @@ void main() {
       final backup = validBackup(version: 4);
       backup['service_types'] = <Map<String, Object?>>[];
       backup['packing_transactions']![0]['receipt_id'] = 1;
+      backup['packing_transactions']![0]['quantity'] = 1;
+      backup['packing_transactions']![0]['unit_price'] = 20000;
+      backup['service_types'] = <Map<String, Object?>>[];
+      backup['customers'] = <Map<String, Object?>>[];
+      backup['receipt_payments'] = <Map<String, Object?>>[];
       backup['packing_receipts'] = [
         {
           'id': 1,
