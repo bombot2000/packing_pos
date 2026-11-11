@@ -58,6 +58,12 @@ void main() {
       final report = await repository.reportSummary();
       final totals = report['totals'] as Map<String, Object?>;
       expect(totals['sales_total'], 55000);
+      final backup = await repository.exportBackup();
+      expect(backup['version'], 5);
+      await repository.restoreBackup(backup);
+      final restored = (await repository.findReceiptByNo(receiptNo))!;
+      expect(restored['total_amount'], 55000);
+      expect((await repository.jobsForReceipt(restored['id'] as int)).single['quantity'], 3);
     });
 
     test('menolak qty nol dan diskon melebihi subtotal', () async {
