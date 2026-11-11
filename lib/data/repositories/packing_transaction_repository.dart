@@ -976,6 +976,8 @@ class PackingTransactionRepository {
       for (final row in data['app_settings']!) {
         await txn.insert('app_settings', row);
       }
+      for (final row in data['cash_sessions'] ?? const <Map<String, Object?>>[]) { await txn.insert('cash_sessions', row); }
+      for (final row in data['cash_expenses'] ?? const <Map<String, Object?>>[]) { await txn.insert('cash_expenses', row); }
     });
   }
 
