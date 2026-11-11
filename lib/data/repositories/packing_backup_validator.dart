@@ -270,7 +270,7 @@ class PackingBackupValidator {
       final id = _positiveInt(row['id'], 'ID sesi kas');
       if (!cashSessionIds.add(id)) throw FormatException('ID sesi kas duplikat: $id.');
       final dateKey = _text(row['date_key'], 'Tanggal sesi kas');
-      if (!RegExp(r'^\\d{4}-\\d{2}-\\d{2}
+      if (!RegExp(r'^\d{4}-\d{2}-\d{2}
     for (final row in data['app_settings']!) {
       final key = _text(row['key'], 'Kunci pengaturan');
       if (!settingKeys.add(key)) throw FormatException('Kunci pengaturan duplikat: $key.');
