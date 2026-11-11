@@ -70,9 +70,14 @@ void main() {
       note: 'Pembayaran gabungan',
     );
 
-    final cashSessionId = await repository.startCashSession(date: DateTime.now(), openingBalance: 25000);\n    await repository.addCashExpense(sessionId: cashSessionId, amount: 3000, category: 'Operasional', note: 'Parkir');\n\n    final backup = await repository.exportBackup();
+    final cashSessionId = await repository.startCashSession(date: DateTime.now(), openingBalance: 25000);
+    await repository.addCashExpense(sessionId: cashSessionId, amount: 3000, category: 'Operasional', note: 'Parkir');
+
+    final backup = await repository.exportBackup();
     expect(backup['version'], 7);
-    expect(backup['customers'], hasLength(1));\n    expect(backup['cash_sessions'], hasLength(1));\n    expect(backup['cash_expenses'], hasLength(1));
+    expect(backup['customers'], hasLength(1));
+    expect(backup['cash_sessions'], hasLength(1));
+    expect(backup['cash_expenses'], hasLength(1));
     final backupReceipts = backup['packing_receipts'] as List<dynamic>;
     expect(backupReceipts, hasLength(1));
     expect(backup['receipt_payments'], hasLength(1));
@@ -90,7 +95,11 @@ void main() {
     await repository.restoreBackup(backup);
 
     final restoredReceipts = await repository.listReceipts(limit: 10);
-    expect(restoredReceipts, hasLength(1));\n    final restoredCashSession = await repository.findCashSession(DateTime.now());\n    expect(restoredCashSession?['opening_balance'], 25000);\n    final restoredCashSummary = await repository.cashSessionSummary((restoredCashSession!['id'] as num).toInt());\n    expect(restoredCashSummary['expense_total'], 3000);
+    expect(restoredReceipts, hasLength(1));
+    final restoredCashSession = await repository.findCashSession(DateTime.now());
+    expect(restoredCashSession?['opening_balance'], 25000);
+    final restoredCashSummary = await repository.cashSessionSummary((restoredCashSession!['id'] as num).toInt());
+    expect(restoredCashSummary['expense_total'], 3000);
     final restoredReceipt = restoredReceipts.single;
     expect(restoredReceipt['receipt_no'], receiptNo);
     expect(restoredReceipt['total_amount'], 100000);
