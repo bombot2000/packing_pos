@@ -320,6 +320,59 @@ class PackingTransactionRepository {
     });
   }
 
+  /// Records a partial or final payment for one receipt atomically.
+  Future<void> addReceiptPayment({
+    required int receiptId,
+    required int amount,
+    required String paymentMethod,
+    String note = '',
+  }) async {
+    if (amount <= 0) throw ArgumentError('Nominal pembayaran harus lebih dari nol.');
+    if (paymentMethod.trim().isEmpty) throw ArgumentError('Metode pembayaran wajib dipilih.');
+    final db = await _database.database;
+    final now = DateTime.now().toUtc().toIso8601String();
+    await db.transaction((txn) async {
+      final rows = await txn.query(
+        'packing_receipts',
+        where: 'id = ?',
+        whereArgs: [receiptId],
+        limit: 1,
+      );
+      if (rows.isEmpty) throw StateError('Nota tidak ditemukan.');
+      final receipt = rows.first;
+      if (receipt['status'] == 'cancelled') {
+        throw StateError('Nota yang dibatalkan tidak dapat dibayar.');
+      }
+      final total = (receipt['total_amount'] as num).toInt();
+      final paid = (receipt['paid_amount'] as num).toInt();
+      final remaining = total - paid;
+      if (remaining <= 0) throw StateError('Nota sudah lunas.');
+      if (amount > remaining) {
+        throw ArgumentError('Pembayaran melebihi sisa tagihan ($remaining).');
+      }
+      await txn.insert('receipt_payments', {
+        'receipt_id': receiptId,
+        'amount': amount,
+        'payment_method': paymentMethod.trim(),
+        'note': note.trim(),
+        'created_at': now,
+      });
+      final newPaid = paid + amount;
+      final isSettled = newPaid == total;
+      await txn.update('packing_receipts', {
+        'paid_amount': newPaid,
+        'status': isSettled ? 'completed' : 'open',
+        'updated_at': now,
+      }, where: 'id = ?', whereArgs: [receiptId]);
+      if (isSettled) {
+        await txn.update('packing_transactions', {
+          'status': 'completed',
+          'updated_at': now,
+        }, where: 'receipt_id = ?', whereArgs: [receiptId]);
+      }
+    });
+  }
+
   Future<List<Map<String, Object?>>> listRecent({int limit = 100}) async {
     if (limit < 1 || limit > 500) {
       throw ArgumentError.value(limit, 'limit', 'Harus antara 1 dan 500.');
@@ -479,13 +532,13 @@ class PackingTransactionRepository {
         COALESCE(SUM(labor_cost), 0) AS labor_cost_total,
         COALESCE(SUM(overhead_cost), 0) AS overhead_cost_total,
         COALESCE(SUM(selling_price - material_cost - labor_cost - overhead_cost), 0) AS gross_profit,
-        (SELECT COALESCE(SUM(paid_amount), 0) FROM packing_receipts WHERE status != 'cancelled'${dateFilter}) AS paid_total,
+        (SELECT COALESCE(SUM(receipt_payments.amount), 0) FROM receipt_payments INNER JOIN packing_receipts ON packing_receipts.id = receipt_payments.receipt_id WHERE packing_receipts.status != 'cancelled'${paymentDateFilter}) AS paid_total,
         (SELECT COALESCE(SUM(total_amount - paid_amount), 0) FROM packing_receipts WHERE status != 'cancelled'${dateFilter}) AS receivable_total,
-        SUM(CASE WHEN status = 'completed' THEN 1 ELSE 0 END) AS completed_count,
-        SUM(CASE WHEN status = 'open' THEN 1 ELSE 0 END) AS open_count,
+        (SELECT COUNT(*) FROM packing_receipts WHERE status = 'completed'${dateFilter}) AS completed_count,
+        (SELECT COUNT(*) FROM packing_receipts WHERE status = 'open'${dateFilter}) AS open_count,
         (SELECT COUNT(*) FROM packing_receipts WHERE status = 'cancelled'${dateFilter}) AS cancelled_count
       FROM packing_transactions WHERE status != 'cancelled'${dateFilter}
-    ''', [...args, ...args, ...args, ...args, ...args]);
+    ''', [...args, ...args, ...args, ...args, ...args, ...args, ...args]);
     final materials = await db.rawQuery('''
       SELECT material_name_snapshot AS name, unit_snapshot AS unit,
         COALESCE(SUM(actual_quantity), 0) AS quantity,
