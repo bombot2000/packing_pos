@@ -42,6 +42,11 @@ void main() {
         {'id': 1, 'receipt_no': 'RCP-1', 'customer_name': '', 'total_amount': 20000, 'discount_amount': 0, 'paid_amount': 0, 'status': 'open', 'note': '', 'created_at': '2026-11-09T00:00:00.000Z', 'updated_at': '2026-11-09T00:00:00.000Z'},
       ];
       backup['packing_transactions']![0]['receipt_id'] = 1;
+      backup['packing_transactions']![0]['quantity'] = 1;
+      backup['packing_transactions']![0]['unit_price'] = 20000;
+      backup['service_types'] = <Map<String, Object?>>[];
+      backup['customers'] = <Map<String, Object?>>[];
+      backup['receipt_payments'] = <Map<String, Object?>>[];
       backup['packing_receipts']![0]['total_amount'] = 20000;
       backup['cash_sessions'] = [
         {'id': 1, 'date_key': '2026-11-09', 'opening_balance': 10000, 'expected_balance': null, 'counted_balance': null, 'difference': null, 'status': 'open', 'note': '', 'created_at': '2026-11-09T00:00:00.000Z', 'closed_at': null},
