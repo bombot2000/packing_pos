@@ -187,7 +187,8 @@ class _PackingReceiptDetailScreenState extends State<PackingReceiptDetailScreen>
           ));
         }),
         Card(child: Column(children: [
-          if (((receipt['discount_amount'] as num?)?.toInt() ?? 0) > 0) ListTile(title: const Text('Subtotal setelah diskon'), trailing: Text(_money(total + ((receipt['discount_amount'] as num?)?.toInt() ?? 0)))),
+          if (((receipt['discount_amount'] as num?)?.toInt() ?? 0) > 0) ListTile(title: const Text('Subtotal pekerjaan'), trailing: Text(_money(total + ((receipt['discount_amount'] as num?)?.toInt() ?? 0)))),
+          ListTile(title: const Text('Diskon nota'), trailing: Text('- ${_money(receipt['discount_amount'])}')),
           ListTile(title: const Text('Total nota'), trailing: Text(_money(total), style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18))),
           ListTile(title: const Text('Pembayaran'), trailing: Text(_money(paid))),
           ListTile(title: const Text('Sisa'), trailing: Text(_money(total - paid), style: const TextStyle(fontWeight: FontWeight.bold))),
