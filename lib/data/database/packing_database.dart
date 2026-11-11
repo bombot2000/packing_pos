@@ -14,7 +14,7 @@ class PackingDatabase {
     return instance;
   }
   static final PackingDatabase instance = PackingDatabase._();
-  static const int schemaVersion = 4;
+  static const int schemaVersion = 5;
   Database? _database;
 
   Future<Database> get database async {
@@ -36,6 +36,7 @@ class PackingDatabase {
       CREATE TABLE packing_transactions (
         id INTEGER PRIMARY KEY AUTOINCREMENT, receipt_no TEXT NOT NULL UNIQUE, receipt_id INTEGER,
         customer_name TEXT NOT NULL DEFAULT '', item_description TEXT NOT NULL DEFAULT '',
+        quantity INTEGER NOT NULL DEFAULT 1 CHECK(quantity > 0), unit_price INTEGER NOT NULL DEFAULT 0 CHECK(unit_price >= 0),
         length_cm REAL NOT NULL, width_cm REAL NOT NULL, height_cm REAL NOT NULL,
         calculation_snapshot TEXT NOT NULL, material_cost INTEGER NOT NULL DEFAULT 0,
         labor_cost INTEGER NOT NULL DEFAULT 0, overhead_cost INTEGER NOT NULL DEFAULT 0,
@@ -109,6 +110,12 @@ class PackingDatabase {
     }
     if (oldVersion < 3) await _createServiceTypes(db);
     if (oldVersion < 4) await _upgradeToReceiptHeaders(db);
+    if (oldVersion < 5) {
+      await db.execute('ALTER TABLE packing_transactions ADD COLUMN quantity INTEGER NOT NULL DEFAULT 1 CHECK(quantity > 0)');
+      await db.execute('ALTER TABLE packing_transactions ADD COLUMN unit_price INTEGER NOT NULL DEFAULT 0 CHECK(unit_price >= 0)');
+      await db.execute('UPDATE packing_transactions SET unit_price = selling_price');
+      await db.execute('ALTER TABLE packing_receipts ADD COLUMN discount_amount INTEGER NOT NULL DEFAULT 0 CHECK(discount_amount >= 0)');
+    }
   }
 
   Future<void> _createReceiptTables(Database db) async {
@@ -118,6 +125,7 @@ class PackingDatabase {
         receipt_no TEXT NOT NULL UNIQUE,
         customer_name TEXT NOT NULL DEFAULT '',
         total_amount INTEGER NOT NULL DEFAULT 0 CHECK(total_amount >= 0),
+        discount_amount INTEGER NOT NULL DEFAULT 0 CHECK(discount_amount >= 0),
         paid_amount INTEGER NOT NULL DEFAULT 0 CHECK(paid_amount >= 0),
         status TEXT NOT NULL DEFAULT 'open' CHECK(status IN ('open', 'completed', 'cancelled')),
         note TEXT NOT NULL DEFAULT '',
