@@ -248,6 +248,92 @@ class PackingTransactionRepository {
   Future<String> save(PackingTransactionDraft draft) =>
       saveReceipt([draft], customerName: draft.customerName, note: draft.note);
 
+  /// Returns a filtered page of receipts and the matching total row count.
+  /// Date bounds are interpreted in the device's local timezone; endDate is inclusive.
+  Future<Map<String, Object?>> searchReceipts({
+    String query = '',
+    String status = 'all',
+    DateTime? startDate,
+    DateTime? endDate,
+    int limit = 30,
+    int offset = 0,
+  }) async {
+    if (limit < 1 || limit > 100) {
+      throw ArgumentError.value(limit, 'limit', 'Harus antara 1 dan 100.');
+    }
+    if (offset < 0) throw ArgumentError.value(offset, 'offset', 'Tidak boleh negatif.');
+    const allowedStatuses = {'all', 'unpaid', 'partial', 'completed', 'cancelled'};
+    if (!allowedStatuses.contains(status)) {
+      throw ArgumentError.value(status, 'status', 'Filter status tidak dikenal.');
+    }
+    if (startDate != null && endDate != null && startDate.isAfter(endDate)) {
+      throw ArgumentError('Tanggal awal tidak boleh melewati tanggal akhir.');
+    }
+
+    final conditions = <String>[];
+    final args = <Object?>[];
+    final cleanQuery = query.trim().toLowerCase();
+    if (cleanQuery.isNotEmpty) {
+      conditions.add("(LOWER(receipt_no) LIKE ? OR LOWER(customer_name) LIKE ?)");
+      args.addAll(['%$cleanQuery%', '%$cleanQuery%']);
+    }
+    switch (status) {
+      case 'unpaid':
+        conditions.add("status = 'open' AND paid_amount = 0");
+        break;
+      case 'partial':
+        conditions.add("status = 'open' AND paid_amount > 0");
+        break;
+      case 'completed':
+        conditions.add("status = 'completed'");
+        break;
+      case 'cancelled':
+        conditions.add("status = 'cancelled'");
+        break;
+    }
+    if (startDate != null) {
+      conditions.add('created_at >= ?');
+      args.add(DateTime(startDate.year, startDate.month, startDate.day)
+          .toUtc().toIso8601String());
+    }
+    if (endDate != null) {
+      final exclusiveEnd = DateTime(endDate.year, endDate.month, endDate.day + 1);
+      conditions.add('created_at < ?');
+      args.add(exclusiveEnd.toUtc().toIso8601String());
+    }
+    final where = conditions.isEmpty ? '' : ' WHERE ${conditions.join(' AND ')}';
+    final db = await _database.database;
+    final countRows = await db.rawQuery(
+      'SELECT COUNT(*) AS total FROM packing_receipts$where',
+      args,
+    );
+    final rows = await db.rawQuery(
+      'SELECT * FROM packing_receipts$where ORDER BY created_at DESC, id DESC LIMIT ? OFFSET ?',
+      [...args, limit, offset],
+    );
+    return {
+      'rows': rows,
+      'total': (countRows.first['total'] as num).toInt(),
+    };
+  }
+
+  /// Outstanding invoices ordered oldest first for collection follow-up.
+  Future<List<Map<String, Object?>>> listReceivables() async {
+    final db = await _database.database;
+    return db.rawQuery("""
+      SELECT id, receipt_no, customer_name, total_amount, paid_amount,
+        (total_amount - paid_amount) AS remaining_amount, created_at,
+        (SELECT COALESCE(SUM(r2.total_amount - r2.paid_amount), 0)
+         FROM packing_receipts r2
+         WHERE r2.status != 'cancelled'
+           AND LOWER(TRIM(r2.customer_name)) = LOWER(TRIM(r.customer_name))
+        ) AS customer_outstanding
+      FROM packing_receipts r
+      WHERE status != 'cancelled' AND total_amount > paid_amount
+      ORDER BY created_at ASC, id ASC
+    """);
+  }
+
   Future<List<Map<String, Object?>>> listReceipts({int limit = 100}) async {
     if (limit < 1 || limit > 500) {
       throw ArgumentError.value(limit, 'limit', 'Harus antara 1 dan 500.');
