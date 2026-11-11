@@ -244,6 +244,24 @@ class PackingReceiptPrinter {
     bytes.addAll(generator.text('TOTAL NOTA: ${money(total)}', styles: const PosStyles(bold: true, height: PosTextSize.size2)));
     bytes.addAll(generator.text('Dibayar: ${money(paid)}'));
     bytes.addAll(generator.text('Sisa: ${money(total - paid)}'));
+
+    final receiptStatus = receipt['status']?.toString() ?? 'open';
+    final statusLabel = switch (receiptStatus) {
+      'completed' => 'LUNAS',
+      'cancelled' => 'DIBATALKAN',
+      _ when paid > 0 => 'DIBAYAR SEBAGIAN',
+      _ => 'BELUM DIBAYAR',
+    };
+    bytes.addAll(generator.text(
+      'STATUS: $statusLabel',
+      styles: PosStyles(
+        bold: true,
+        align: PosAlign.center,
+        reverse: receiptStatus == 'cancelled',
+      ),
+      linesAfter: 1,
+    ));
+
     if (payments.isNotEmpty) {
       bytes.addAll(generator.text(
         'RIWAYAT PEMBAYARAN',
@@ -254,8 +272,9 @@ class PackingReceiptPrinter {
         bytes.addAll(generator.text(
           '${i + 1}. ${money(payment['amount'])} • ${payment['payment_method'] ?? '-'}',
         ));
+        final paymentDate = DateTime.tryParse(payment['created_at']?.toString() ?? '');
         bytes.addAll(generator.text(
-          '   ${payment['created_at'] ?? '-'}',
+          '   ${paymentDate == null ? '-' : DateFormat('dd/MM/yyyy HH:mm').format(paymentDate.toLocal())}',
         ));
         final paymentNote = payment['note']?.toString() ?? '';
         if (paymentNote.trim().isNotEmpty) {
@@ -267,13 +286,26 @@ class PackingReceiptPrinter {
         (sum, payment) => sum + ((payment['amount'] as num?)?.toInt() ?? 0),
       );
       bytes.addAll(generator.text('Total riwayat bayar: ${money(paymentTotal)}'));
-    } else {
-      bytes.addAll(generator.text('Status: Belum dibayar'));
+      if (paymentTotal != paid) {
+        bytes.addAll(generator.text(
+          'PERHATIAN: total riwayat pembayaran berbeda dari saldo dibayar.',
+          styles: const PosStyles(bold: true),
+        ));
+      }
     }
     final note = receipt['note']?.toString() ?? '';
     if (note.trim().isNotEmpty) bytes.addAll(generator.text('Catatan: $note'));
+    if (receiptStatus == 'cancelled') {
+      final reason = jobs
+          .map((job) => job['cancellation_reason']?.toString() ?? '')
+          .firstWhere((value) => value.trim().isNotEmpty, orElse: () => '');
+      if (reason.isNotEmpty) bytes.addAll(generator.text('Alasan batal: $reason'));
+    }
     bytes.addAll(generator.hr());
-    bytes.addAll(generator.text('Terima kasih', styles: const PosStyles(align: PosAlign.center)));
+    bytes.addAll(generator.text(
+      receiptStatus == 'cancelled' ? 'ARSIP NOTA DIBATALKAN' : 'Terima kasih',
+      styles: const PosStyles(align: PosAlign.center, bold: true),
+    ));
     bytes.addAll(generator.feed(3));
     if (!await PrintBluetoothThermal.writeBytes(bytes)) throw StateError('Printer menolak data cetak.');
     return true;
