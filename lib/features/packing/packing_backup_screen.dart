@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
 
+import '../../data/repositories/packing_backup_validator.dart';
 import '../../data/repositories/packing_transaction_repository.dart';
 
 class PackingBackupScreen extends StatefulWidget {
@@ -58,13 +59,34 @@ class _PackingBackupScreenState extends State<PackingBackupScreen> {
       if (decoded is! Map<String, dynamic>) {
         throw const FormatException('Struktur file backup tidak valid.');
       }
+      // Validate before showing the destructive confirmation, then show the
+      // user exactly which backup and how much data will replace local records.
+      final validated = PackingBackupValidator.validate(decoded);
+      final createdAt = decoded['createdAt'] is String
+          ? decoded['createdAt'] as String
+          : 'Tidak tercatat';
+      int count(String table) => validated[table]?.length ?? 0;
       if (!mounted) return;
       final confirmed = await showDialog<bool>(
         context: context,
         builder: (dialogContext) => AlertDialog(
           title: const Text('Pulihkan backup?'),
-          content: const Text(
-            'Pemulihan akan mengganti seluruh transaksi, pembayaran, dan master bahan pada perangkat ini dengan isi file backup. Buat backup terbaru terlebih dahulu jika data sekarang masih diperlukan.',
+          content: SingleChildScrollView(
+            child: Text(
+              'File: ${file.name}\\n'
+              'Tanggal backup: $createdAt\\n'
+              'Versi format: ${decoded['version']}\\n\\n'
+              'Data yang akan dipulihkan:\\n'
+              '• Nota: ${count('packing_receipts')}\\n'
+              '• Pekerjaan: ${count('packing_transactions')}\\n'
+              '• Riwayat pembayaran: ${count('receipt_payments') + count('transaction_payments')}\\n'
+              '• Pelanggan: ${count('customers')}\\n'
+              '• Master bahan: ${count('materials')}\\n'
+              '• Sesi kas: ${count('cash_sessions')}\\n'
+              '• Pengeluaran kas: ${count('cash_expenses')}\\n\\n'
+              'Restore akan mengganti data lokal dengan isi file ini. '
+              'Buat backup terbaru terlebih dahulu jika data sekarang masih diperlukan.',
+            ),
           ),
           actions: [
             TextButton(
