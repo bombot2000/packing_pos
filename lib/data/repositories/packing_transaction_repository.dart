@@ -792,9 +792,21 @@ class PackingTransactionRepository {
       GROUP BY material_name_snapshot, unit_snapshot
       ORDER BY cost DESC, name COLLATE NOCASE
     ''', args);
+    final paymentMethods = await db.rawQuery('''
+      SELECT receipt_payments.payment_method AS payment_method,
+        COALESCE(SUM(receipt_payments.amount), 0) AS amount,
+        COUNT(*) AS payment_count
+      FROM receipt_payments
+      INNER JOIN packing_receipts
+        ON packing_receipts.id = receipt_payments.receipt_id
+      WHERE packing_receipts.status != 'cancelled'$paymentDateFilter
+      GROUP BY receipt_payments.payment_method
+      ORDER BY amount DESC, payment_method ASC
+    ''', args);
     return {
       'totals': totals.first,
       'materials': materials,
+      'payment_methods': paymentMethods,
     };
   }
 
