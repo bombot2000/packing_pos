@@ -168,6 +168,46 @@ void main() {
       expect(data['receipt_payments'], hasLength(2));
     });
 
+    test('rejects an open receipt whose balance is fully paid', () {
+      final backup = validBackup(version: 7);
+      backup['packing_transactions']![0]['receipt_id'] = 1;
+      backup['packing_transactions']![0]['quantity'] = 1;
+      backup['packing_transactions']![0]['unit_price'] = 20000;
+      backup['service_types'] = <Map<String, Object?>>[];
+      backup['customers'] = <Map<String, Object?>>[];
+      backup['receipt_payments'] = [
+        {
+          'id': 1,
+          'receipt_id': 1,
+          'amount': 20000,
+          'payment_method': 'cash',
+          'note': '',
+          'created_at': '2026-11-09T00:00:00.000Z',
+        },
+      ];
+      backup['packing_receipts'] = [
+        {
+          'id': 1,
+          'receipt_no': 'RCP-20261109-000001',
+          'customer_name': '',
+          'total_amount': 20000,
+          'discount_amount': 0,
+          'paid_amount': 20000,
+          'status': 'open',
+          'note': '',
+          'created_at': '2026-11-09T00:00:00.000Z',
+          'updated_at': '2026-11-09T00:00:00.000Z',
+        },
+      ];
+      backup['cash_sessions'] = <Map<String, Object?>>[];
+      backup['cash_expenses'] = <Map<String, Object?>>[];
+
+      expect(
+        () => PackingBackupValidator.validate(backup),
+        throwsFormatException,
+      );
+    });
+
     test('validates material subtotal against actual quantity and snapshot price', () {
       final backup = validBackup();
       backup['transaction_materials'] = [
