@@ -320,6 +320,30 @@ void main() {
       expect((report['totals'] as Map)['cancelled_count'], 1);
     });
 
+    test('menolak pembatalan nota setelah DP dan mempertahankan pembayaran serta laporan kas', () async {
+      final receipt = await createReceipt();
+      final id = receipt['id'] as int;
+      await repository.addReceiptPayment(
+        receiptId: id,
+        amount: 25000,
+        paymentMethod: 'cash',
+      );
+
+      await expectLater(
+        repository.cancelReceipt(receiptId: id, reason: 'Pelanggan berubah pikiran'),
+        throwsStateError,
+      );
+
+      final saved = (await repository.findReceiptById(id))!;
+      expect(saved['status'], 'open');
+      expect(saved['paid_amount'], 25000);
+      expect(await repository.receiptPaymentsFor(id), hasLength(1));
+      final totals = (await repository.reportSummary())['totals'] as Map;
+      expect(totals['paid_total'], 25000);
+      expect(totals['cash_received_total'], 25000);
+      expect(totals['receivable_total'], 75000);
+    });
+
     test('alasan wajib dan nota tidak dapat dibatalkan dua kali', () async {
       final receipt = await createReceipt();
       final id = receipt['id'] as int;
