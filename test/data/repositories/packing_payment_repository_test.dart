@@ -59,7 +59,7 @@ void main() {
       final totals = report['totals'] as Map<String, Object?>;
       expect(totals['sales_total'], 55000);
       final backup = await repository.exportBackup();
-      expect(backup['version'], 6);
+      expect(backup['version'], 7);
       await repository.restoreBackup(backup);
       final restored = (await repository.findReceiptByNo(receiptNo))!;
       expect(restored['total_amount'], 55000);
@@ -326,6 +326,37 @@ void main() {
       await expectLater(repository.cancelReceipt(receiptId: id, reason: '  '), throwsArgumentError);
       await repository.cancelReceipt(receiptId: id, reason: 'Batal');
       await expectLater(repository.cancelReceipt(receiptId: id, reason: 'Lagi'), throwsStateError);
+    });
+  });
+
+  group('tutup kas harian', () {
+    test('menghitung saldo awal ditambah tunai dikurangi pengeluaran dan mencatat selisih', () async {
+      final receipt = await createReceipt();
+      final id = receipt['id'] as int;
+      await repository.addReceiptPayment(receiptId: id, amount: 30000, paymentMethod: 'cash');
+      final sessionId = await repository.startCashSession(date: DateTime.now(), openingBalance: 20000);
+      await repository.addCashExpense(sessionId: sessionId, amount: 5000, category: 'Operasional', note: 'Parkir');
+      var summary = await repository.cashSessionSummary(sessionId);
+      expect(summary['cash_received'], 30000);
+      expect(summary['expense_total'], 5000);
+      expect(summary['expected_balance'], 45000);
+      expect((summary['expenses'] as List), hasLength(1));
+      await repository.closeCashSession(sessionId: sessionId, countedBalance: 44000, note: 'Selisih hitung');
+      summary = await repository.cashSessionSummary(sessionId);
+      final session = summary['session'] as Map;
+      expect(session['status'], 'closed');
+      expect(session['expected_balance'], 45000);
+      expect(session['counted_balance'], 44000);
+      expect(session['difference'], -1000);
+      await expectLater(repository.addCashExpense(sessionId: sessionId, amount: 1000, category: 'Tambahan'), throwsStateError);
+      await expectLater(repository.closeCashSession(sessionId: sessionId, countedBalance: 45000), throwsStateError);
+    });
+
+    test('mencegah sesi kas ganda dan nominal awal atau pengeluaran tidak valid', () async {
+      await expectLater(repository.startCashSession(date: DateTime.now(), openingBalance: -1), throwsArgumentError);
+      final id = await repository.startCashSession(date: DateTime.now(), openingBalance: 0);
+      await expectLater(repository.startCashSession(date: DateTime.now(), openingBalance: 100), throwsStateError);
+      await expectLater(repository.addCashExpense(sessionId: id, amount: 0, category: 'Lainnya'), throwsArgumentError);
     });
   });
 
