@@ -5,6 +5,8 @@ import 'package:intl/intl.dart';
 import 'package:print_bluetooth_thermal/print_bluetooth_thermal.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../data/repositories/packing_identity_repository.dart';
+
 class PackingReceiptPrinter {
   static const printerMacKey = 'packing_pos_printer_mac';
   static const paperWidthKey = 'packing_pos_printer_paper_width';
@@ -33,6 +35,7 @@ class PackingReceiptPrinter {
       }
     }
 
+    final identity = await PackingIdentityRepository().getSettings();
     final paperWidth = preferences.getInt(paperWidthKey) ?? 58;
     final paper = paperWidth == 80 ? PaperSize.mm80 : PaperSize.mm58;
     final profile = await CapabilityProfile.load();
@@ -60,7 +63,7 @@ class PackingReceiptPrinter {
 
     bytes.addAll(generator.reset());
     bytes.addAll(generator.text(
-      'PACKING POS',
+      identity['business_name'] ?? 'Packing POS',
       styles: const PosStyles(
         align: PosAlign.center,
         bold: true,
@@ -69,6 +72,10 @@ class PackingReceiptPrinter {
       ),
       linesAfter: 1,
     ));
+    final businessAddress = identity['business_address'] ?? '';
+    final businessPhone = identity['business_phone'] ?? '';
+    if (businessAddress.isNotEmpty) bytes.addAll(generator.text(businessAddress, styles: const PosStyles(align: PosAlign.center)));
+    if (businessPhone.isNotEmpty) bytes.addAll(generator.text('Telp. $businessPhone', styles: const PosStyles(align: PosAlign.center)));
     bytes.addAll(generator.text(
       transaction['receipt_no']?.toString() ?? '',
       styles: const PosStyles(align: PosAlign.center, bold: true),
@@ -191,6 +198,7 @@ class PackingReceiptPrinter {
     if (!await PrintBluetoothThermal.connectionStatus && !await connect(mac)) {
       throw StateError('Tidak dapat terhubung ke printer Bluetooth.');
     }
+    final identity = await PackingIdentityRepository().getSettings();
     final paper = (prefs.getInt(paperWidthKey) ?? 58) == 80 ? PaperSize.mm80 : PaperSize.mm58;
     final generator = Generator(paper, await CapabilityProfile.load());
     final bytes = <int>[];
@@ -199,7 +207,11 @@ class PackingReceiptPrinter {
       return 'Rp ${n.toString().replaceAllMapped(RegExp(r'(?<=\d)(?=(\d{3})+(?!\d))'), (_) => '.')}';
     }
     bytes.addAll(generator.reset());
-    bytes.addAll(generator.text('PACKING POS', styles: const PosStyles(align: PosAlign.center, bold: true, height: PosTextSize.size2, width: PosTextSize.size2), linesAfter: 1));
+    bytes.addAll(generator.text(identity['business_name'] ?? 'Packing POS', styles: const PosStyles(align: PosAlign.center, bold: true, height: PosTextSize.size2, width: PosTextSize.size2), linesAfter: 1));
+    final businessAddress = identity['business_address'] ?? '';
+    final businessPhone = identity['business_phone'] ?? '';
+    if (businessAddress.isNotEmpty) bytes.addAll(generator.text(businessAddress, styles: const PosStyles(align: PosAlign.center)));
+    if (businessPhone.isNotEmpty) bytes.addAll(generator.text('Telp. $businessPhone', styles: const PosStyles(align: PosAlign.center)));
     bytes.addAll(generator.text(receipt['receipt_no']?.toString() ?? '-', styles: const PosStyles(align: PosAlign.center, bold: true)));
     bytes.addAll(generator.hr());
     final created = DateTime.tryParse(receipt['created_at']?.toString() ?? '');
