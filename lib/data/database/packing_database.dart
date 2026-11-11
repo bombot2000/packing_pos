@@ -14,7 +14,7 @@ class PackingDatabase {
     return instance;
   }
   static final PackingDatabase instance = PackingDatabase._();
-  static const int schemaVersion = 6;
+  static const int schemaVersion = 7;
   Database? _database;
 
   Future<Database> get database async {
@@ -74,6 +74,7 @@ class PackingDatabase {
     await _createServiceTypes(db);
     await _createReceiptTables(db);
     await _createCustomers(db);
+    await _createCashTables(db);
     await db.execute('CREATE TABLE app_settings (key TEXT PRIMARY KEY, value TEXT NOT NULL, updated_at TEXT NOT NULL)');
     await _createIndexes(db);
   }
@@ -134,6 +135,36 @@ class PackingDatabase {
       await db.execute('ALTER TABLE packing_receipts ADD COLUMN discount_amount INTEGER NOT NULL DEFAULT 0 CHECK(discount_amount >= 0)');
     }
     if (oldVersion < 6) await _createCustomers(db);
+    if (oldVersion < 7) await _createCashTables(db);
+  }
+
+  Future<void> _createCashTables(Database db) async {
+    await db.execute('''
+      CREATE TABLE cash_sessions (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        date_key TEXT NOT NULL UNIQUE,
+        opening_balance INTEGER NOT NULL CHECK(opening_balance >= 0),
+        expected_balance INTEGER,
+        counted_balance INTEGER,
+        difference INTEGER,
+        status TEXT NOT NULL DEFAULT 'open' CHECK(status IN ('open', 'closed')),
+        note TEXT NOT NULL DEFAULT '',
+        created_at TEXT NOT NULL,
+        closed_at TEXT
+      )
+    ''');
+    await db.execute('''
+      CREATE TABLE cash_expenses (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        session_id INTEGER NOT NULL,
+        amount INTEGER NOT NULL CHECK(amount > 0),
+        category TEXT NOT NULL,
+        note TEXT NOT NULL DEFAULT '',
+        created_at TEXT NOT NULL,
+        FOREIGN KEY(session_id) REFERENCES cash_sessions(id) ON DELETE RESTRICT
+      )
+    ''');
+    await db.execute('CREATE INDEX IF NOT EXISTS idx_cash_expenses_session ON cash_expenses(session_id)');
   }
 
   Future<void> _createReceiptTables(Database db) async {
