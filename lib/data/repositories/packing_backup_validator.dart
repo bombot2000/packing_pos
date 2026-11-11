@@ -15,6 +15,8 @@ class PackingBackupValidator {
     'service_types',
     'customers',
     'app_settings',
+    'cash_sessions',
+    'cash_expenses',
   ];
 
   static Map<String, List<Map<String, Object?>>> validate(
@@ -22,13 +24,13 @@ class PackingBackupValidator {
   ) {
     final version = backup['version'];
     if (backup['format'] != 'packing_pos_backup' ||
-        (version != 1 && version != 2 && version != 3 && version != 4 && version != 5 && version != 6)) {
+        (version != 1 && version != 2 && version != 3 && version != 4 && version != 5 && version != 6 && version != 7)) {
       throw const FormatException('Format atau versi backup tidak didukung.');
     }
 
     final data = <String, List<Map<String, Object?>>>{};
     for (final table in tables) {
-      if ((table == 'service_types' && version < 3 && backup[table] == null) || (version < 4 && ['packing_receipts', 'receipt_payments'].contains(table)) || (table == 'customers' && version < 6)) continue;
+      if ((table == 'service_types' && version < 3 && backup[table] == null) || (version < 4 && ['packing_receipts', 'receipt_payments'].contains(table)) || (table == 'customers' && version < 6) || (['cash_sessions', 'cash_expenses'].contains(table) && version < 7)) continue;
       final raw = backup[table];
       if (raw is! List) {
         throw FormatException('Data tabel $table tidak ditemukan pada backup.');
@@ -260,6 +262,98 @@ class PackingBackupValidator {
       if (active > 1) throw const FormatException('Status pelanggan tidak valid.');
       _text(row['created_at'], 'Tanggal pelanggan');
       _text(row['updated_at'], 'Pembaruan pelanggan');
+    }
+
+    final cashSessionIds = <int>{};
+    final cashDateKeys = <String>{};
+    for (final row in data['cash_sessions'] ?? const <Map<String, Object?>>[]) {
+      final id = _positiveInt(row['id'], 'ID sesi kas');
+      if (!cashSessionIds.add(id)) throw FormatException('ID sesi kas duplikat: $id.');
+      final dateKey = _text(row['date_key'], 'Tanggal sesi kas');
+      if (!RegExp(r'^\\d{4}-\\d{2}-\\d{2}
+    for (final row in data['app_settings']!) {
+      final key = _text(row['key'], 'Kunci pengaturan');
+      if (!settingKeys.add(key)) throw FormatException('Kunci pengaturan duplikat: $key.');
+      _string(row['value'], 'Nilai pengaturan');
+      _text(row['updated_at'], 'Tanggal pengaturan');
+    }
+    return data;
+  }
+
+  // Settings may intentionally store an empty string to clear an optional value.
+  static String _string(Object? value, String field) {
+    if (value is! String) {
+      throw FormatException('$field harus berupa teks.');
+    }
+    return value;
+  }
+
+  static String _text(Object? value, String field) {
+    if (value is! String || value.trim().isEmpty) {
+      throw FormatException('$field wajib berupa teks dan tidak boleh kosong.');
+    }
+    return value;
+  }
+
+  static int _int(Object? value, String field) {
+    if (value is! num || !value.isFinite || value < 0 || value != value.round()) {
+      throw FormatException('$field harus berupa bilangan bulat nonnegatif.');
+    }
+    return value.toInt();
+  }
+
+  static int _positiveInt(Object? value, String field) {
+    final result = _int(value, field);
+    if (result <= 0) throw FormatException('$field harus lebih dari nol.');
+    return result;
+  }
+
+  static int _nonNegativeInt(Object? value, String field) => _int(value, field);
+
+  static double _number(Object? value, String field) {
+    if (value is! num || !value.isFinite) {
+      throw FormatException('$field harus berupa angka yang valid.');
+    }
+    return value.toDouble();
+  }
+
+  static double _positiveNumber(Object? value, String field) {
+    final result = _number(value, field);
+    if (result <= 0) throw FormatException('$field harus lebih dari nol.');
+    return result;
+  }
+
+  static double _nonNegativeNumber(Object? value, String field) {
+    final result = _number(value, field);
+    if (result < 0) throw FormatException('$field tidak boleh negatif.');
+    return result;
+  }
+}
+).hasMatch(dateKey) || !cashDateKeys.add(dateKey)) {
+        throw FormatException('Tanggal sesi kas tidak valid atau duplikat: $dateKey.');
+      }
+      _nonNegativeInt(row['opening_balance'], 'Saldo awal kas');
+      final status = _text(row['status'], 'Status sesi kas');
+      if (!['open', 'closed'].contains(status)) throw const FormatException('Status sesi kas tidak valid.');
+      _string(row['note'], 'Catatan sesi kas');
+      _text(row['created_at'], 'Tanggal pembuatan sesi kas');
+      if (status == 'closed') {
+        _nonNegativeInt(row['expected_balance'], 'Saldo kas seharusnya');
+        _nonNegativeInt(row['counted_balance'], 'Saldo kas fisik');
+        if (row['difference'] is! num) throw const FormatException('Selisih kas tidak valid.');
+        _text(row['closed_at'], 'Tanggal tutup kas');
+      }
+    }
+    final cashExpenseIds = <int>{};
+    for (final row in data['cash_expenses'] ?? const <Map<String, Object?>>[]) {
+      final id = _positiveInt(row['id'], 'ID pengeluaran kas');
+      if (!cashExpenseIds.add(id)) throw FormatException('ID pengeluaran kas duplikat: $id.');
+      final sessionId = _positiveInt(row['session_id'], 'ID sesi pengeluaran kas');
+      if (!cashSessionIds.contains(sessionId)) throw const FormatException('Pengeluaran kas merujuk sesi yang tidak ada.');
+      _positiveInt(row['amount'], 'Nominal pengeluaran kas');
+      _text(row['category'], 'Kategori pengeluaran kas');
+      _string(row['note'], 'Catatan pengeluaran kas');
+      _text(row['created_at'], 'Tanggal pengeluaran kas');
     }
 
     final settingKeys = <String>{};
