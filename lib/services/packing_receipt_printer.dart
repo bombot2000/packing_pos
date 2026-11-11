@@ -198,10 +198,6 @@ class PackingReceiptPrinter {
       final n = (raw as num?)?.toInt() ?? 0;
       return 'Rp ' + n.toString().replaceAllMapped(RegExp(r'(?<=\d)(?=(\d{3})+(?!\d))'), (_) => '.');
     }
-    String formatDate(Object? raw) {
-      final d = DateTime.tryParse(raw?.toString() ?? '');
-      return d == null ? '-' : DateFormat('dd/MM/yyyy HH:mm').format(d.toLocal());
-    }
     bytes.addAll(generator.reset());
     bytes.addAll(generator.text('PACKING POS', styles: const PosStyles(align: PosAlign.center, bold: true, height: PosTextSize.size2, width: PosTextSize.size2), linesAfter: 1));
     bytes.addAll(generator.text(receipt['receipt_no']?.toString() ?? '-', styles: const PosStyles(align: PosAlign.center, bold: true)));
