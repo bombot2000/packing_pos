@@ -101,13 +101,18 @@ class _PackingCashClosingScreenState extends State<PackingCashClosingScreen> {
     final session = summary?['session'] as Map<String, Object?>?;
     final expenses = (summary?['expenses'] as List?)?.cast<Map<String, Object?>>() ?? const <Map<String, Object?>>[];
     final status = session?['status'];
+    final expenseTiles = expenses.map<Widget>((item) => ListTile(
+      title: Text(item['category'] as String),
+      subtitle: Text(item['note'] as String? ?? ''),
+      trailing: Text(_money(item['amount'])),
+    )).toList();
     return Scaffold(
       appBar: AppBar(title: const Text('Tutup kas harian'), actions: [IconButton(onPressed: _busy ? null : _load, icon: const Icon(Icons.refresh), tooltip: 'Muat ulang')]),
       body: ListView(padding: const EdgeInsets.all(16), children: [
         Text('Tanggal: ${DateTime.now().day.toString().padLeft(2, '0')}-${DateTime.now().month.toString().padLeft(2, '0')}-${DateTime.now().year}', style: Theme.of(context).textTheme.titleMedium),
         const SizedBox(height: 12),
         if (_error != null) Card(color: Theme.of(context).colorScheme.errorContainer, child: Padding(padding: const EdgeInsets.all(12), child: Text(_error!))),
-        if (summary == null) ...[
+        if (summary == null || session == null) ...[
           const Card(child: Padding(padding: EdgeInsets.all(16), child: Text('Sesi kas hari ini belum dimulai. Masukkan uang tunai awal di laci sebelum transaksi berjalan.'))),
           TextField(controller: _opening, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'Saldo awal / modal kas (Rp)', border: OutlineInputBorder())),
           const SizedBox(height: 12),
@@ -128,7 +133,9 @@ class _PackingCashClosingScreenState extends State<PackingCashClosingScreen> {
             ],
           ]))),
           const Text('Pengeluaran tunai', style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold)),
-          Card(child: Column(children: expenses.isEmpty ? [const ListTile(title: Text('Belum ada pengeluaran.'))] : expenses.map((item) => ListTile(title: Text(item['category'] as String), subtitle: Text(item['note'] as String? ?? ''), trailing: Text(_money(item['amount']))).toList())),
+          Card(child: Column(children: expenses.isEmpty
+              ? <Widget>[const ListTile(title: Text('Belum ada pengeluaran.'))]
+              : expenseTiles)),
           if (status == 'open') ...[
             const SizedBox(height: 12),
             TextField(controller: _expenseAmount, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'Nominal pengeluaran (Rp)', border: OutlineInputBorder())),
