@@ -352,6 +352,57 @@ void main() {
       await expectLater(repository.closeCashSession(sessionId: sessionId, countedBalance: 45000), throwsStateError);
     });
 
+    test('menghitung dan mengunci pembayaran tunai transaksi legacy tanpa nota', () async {
+      final now = DateTime.now().toUtc().toIso8601String();
+      final transactionId = await database.insert('packing_transactions', {
+        'receipt_no': 'LEGACY-CASH-TEST',
+        'receipt_id': null,
+        'customer_name': 'Pelanggan lama',
+        'item_description': 'Transaksi lama',
+        'quantity': 1,
+        'unit_price': 20000,
+        'length_cm': 10,
+        'width_cm': 10,
+        'height_cm': 10,
+        'calculation_snapshot': '{"mode":"legacy-test"}',
+        'material_cost': 0,
+        'labor_cost': 0,
+        'overhead_cost': 0,
+        'selling_price': 20000,
+        'paid_amount': 0,
+        'status': 'open',
+        'note': '',
+        'created_at': now,
+        'updated_at': now,
+      });
+      final sessionId = await repository.startCashSession(
+        date: DateTime.now(),
+        openingBalance: 5000,
+      );
+      await repository.addPayment(
+        transactionId: transactionId,
+        amount: 7000,
+        paymentMethod: 'cash',
+      );
+      final summary = await repository.cashSessionSummary(sessionId);
+      expect(summary['cash_received'], 7000);
+      expect(summary['expected_balance'], 12000);
+
+      await repository.closeCashSession(
+        sessionId: sessionId,
+        countedBalance: 12000,
+      );
+      await expectLater(
+        repository.addPayment(
+          transactionId: transactionId,
+          amount: 13000,
+          paymentMethod: 'cash',
+        ),
+        throwsStateError,
+      );
+      expect(await repository.paymentsFor(transactionId), hasLength(1));
+    });
+
     test('menolak pembayaran tunai setelah sesi kas ditutup', () async {
       final receipt = await createReceipt();
       final sessionId = await repository.startCashSession(date: DateTime.now(), openingBalance: 0);
