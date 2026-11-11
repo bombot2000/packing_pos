@@ -567,6 +567,23 @@ class PackingTransactionRepository {
       if (receipt['status'] == 'cancelled') throw StateError('Nota yang dibatalkan tidak dapat dibayar.');
       final total = (receipt['total_amount'] as num).toInt();
       final paid = (receipt['paid_amount'] as num).toInt();
+      final receiptLedger = await txn.rawQuery(
+        'SELECT COALESCE(SUM(amount), 0) AS total FROM receipt_payments WHERE receipt_id = ?',
+        [receiptId],
+      );
+      final legacyLedger = await txn.rawQuery(
+        'SELECT COALESCE(SUM(tp.amount), 0) AS total FROM transaction_payments tp '
+        'INNER JOIN packing_transactions pt ON pt.id = tp.transaction_id '
+        'WHERE pt.receipt_id = ?',
+        [receiptId],
+      );
+      final ledgerPaid = (receiptLedger.first['total'] as num).toInt();
+      final legacyPaid = (legacyLedger.first['total'] as num).toInt();
+      if (legacyPaid > 0 || ledgerPaid != paid) {
+        throw StateError(
+          'Riwayat pembayaran nota tidak sinkron. Pembayaran baru ditahan agar tidak terjadi pencatatan ganda.',
+        );
+      }
       if (paid > 0) throw StateError('Nota ini sudah memiliki pembayaran.');
       if (amount != total) throw ArgumentError('Pembayaran harus sama dengan total nota ($total).');
       if (paymentMethod.trim() == 'cash') {
@@ -613,6 +630,23 @@ class PackingTransactionRepository {
       }
       final total = (receipt['total_amount'] as num).toInt();
       final paid = (receipt['paid_amount'] as num).toInt();
+      final receiptLedger = await txn.rawQuery(
+        'SELECT COALESCE(SUM(amount), 0) AS total FROM receipt_payments WHERE receipt_id = ?',
+        [receiptId],
+      );
+      final legacyLedger = await txn.rawQuery(
+        'SELECT COALESCE(SUM(tp.amount), 0) AS total FROM transaction_payments tp '
+        'INNER JOIN packing_transactions pt ON pt.id = tp.transaction_id '
+        'WHERE pt.receipt_id = ?',
+        [receiptId],
+      );
+      final ledgerPaid = (receiptLedger.first['total'] as num).toInt();
+      final legacyPaid = (legacyLedger.first['total'] as num).toInt();
+      if (legacyPaid > 0 || ledgerPaid != paid) {
+        throw StateError(
+          'Riwayat pembayaran nota tidak sinkron. Pembayaran baru ditahan agar saldo tidak keliru.',
+        );
+      }
       final remaining = total - paid;
       if (remaining <= 0) throw StateError('Nota sudah lunas.');
       if (amount > remaining) {
