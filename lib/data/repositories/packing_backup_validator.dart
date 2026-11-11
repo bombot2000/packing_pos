@@ -284,12 +284,11 @@ class PackingBackupValidator {
       _string(row['note'], 'Catatan sesi kas');
       _text(row['created_at'], 'Tanggal pembuatan sesi kas');
       if (status == 'closed') {
-        _nonNegativeInt(row['expected_balance'], 'Saldo kas seharusnya');
-        _nonNegativeInt(row['counted_balance'], 'Saldo kas fisik');
-        if (row['difference'] is! num ||
-            !(row['difference'] as num).isFinite ||
-            (row['difference'] as num) != (row['difference'] as num).round()) {
-          throw const FormatException('Selisih kas tidak valid.');
+        final expected = _signedInt(row['expected_balance'], 'Saldo kas seharusnya');
+        final counted = _nonNegativeInt(row['counted_balance'], 'Saldo kas fisik');
+        final difference = _signedInt(row['difference'], 'Selisih kas');
+        if (difference != counted - expected) {
+          throw const FormatException('Selisih kas tidak cocok dengan saldo fisik dan saldo seharusnya.');
         }
         _text(row['closed_at'], 'Tanggal tutup kas');
       }
@@ -341,6 +340,13 @@ class PackingBackupValidator {
   static int _int(Object? value, String field) {
     if (value is! num || !value.isFinite || value < 0 || value != value.round()) {
       throw FormatException('$field harus berupa bilangan bulat nonnegatif.');
+    }
+    return value.toInt();
+  }
+
+  static int _signedInt(Object? value, String field) {
+    if (value is! num || !value.isFinite || value != value.round()) {
+      throw FormatException('$field harus berupa bilangan bulat.');
     }
     return value.toInt();
   }
