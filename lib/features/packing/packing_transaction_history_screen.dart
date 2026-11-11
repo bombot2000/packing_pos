@@ -90,6 +90,15 @@ class _PackingTransactionHistoryScreenState
       : '${value.day.toString().padLeft(2, '0')}/'
         '${value.month.toString().padLeft(2, '0')}/${value.year}';
 
+  String _createdAtLabel(Object? raw) {
+    final date = DateTime.tryParse(raw?.toString() ?? '')?.toLocal();
+    if (date == null) return '-';
+    return '${date.day.toString().padLeft(2, '0')}/'
+        '${date.month.toString().padLeft(2, '0')}/${date.year} '
+        '${date.hour.toString().padLeft(2, '0')}:'
+        '${date.minute.toString().padLeft(2, '0')}';
+  }
+
   Future<void> _chooseDate({required bool start}) async {
     final selected = await showDatePicker(
       context: context,
@@ -287,9 +296,12 @@ class _PackingTransactionHistoryScreenState
                                             if ((row['customer_name'] as String).isNotEmpty)
                                               Text(row['customer_name'] as String),
                                             Text('${row['job_count'] ?? 0} pekerjaan • ${_statusLabel(row)}'),
-                                            Text('${_statusLabel(row)} • Total ${_money(amount)}'),
-                                            Text('Pembayaran ${_money(paid)} • Sisa ${_money(amount - paid)}'),
-                                            Text((row['created_at'] as String).replaceFirst('T', ' ')),
+                                            Text('Total ${_money(amount)}'),
+                                            if (row['status'] == 'cancelled')
+                                              Text('Nota dibatalkan • Pembayaran tercatat ${_money(paid)}')
+                                            else
+                                              Text('Dibayar ${_money(paid)} • Sisa ${_money(amount - paid)}'),
+                                            Text(_createdAtLabel(row['created_at'])),
                                           ],
                                         ),
                                         trailing: const Icon(Icons.chevron_right),
