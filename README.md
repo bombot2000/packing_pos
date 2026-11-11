@@ -2,38 +2,27 @@
 
 Flutter POS khusus jasa packing barang, bukan aplikasi transaksi pengiriman/kurir. Aplikasi dirancang offline-first dengan penyimpanan lokal SQLite.
 
-## Fitur yang sudah tersedia di branch fitur
+## Fitur
 
-- Transaksi packing berdasarkan panjang, lebar, dan tinggi barang.
-- Enam bidang dikonfigurasi independen: atas, bawah, depan, belakang, kiri, dan kanan.
-- Konstruksi bidang: bilah kayu terbuka, papan tertutup, atau tidak digunakan.
-- Margin kiri/kanan bilah dan overlap panjang/lebar papan dapat diatur terpisah untuk setiap bidang.
-- Celah bilah tetap; sisa lebar tepi dilaporkan dan celah tidak direnggangkan.
-- Estimasi rangka 8 sudut: empat tiang, empat rel arah panjang, dan empat rel arah lebar. Panjang potong dapat disesuaikan.
-- Daftar potongan rangka dan bilah dipisah menurut kelompok bahan/penampang; panjang stok masing-masing dapat diatur dan optimasi jumlah batang memakai first-fit decreasing dengan allowance mata gergaji.
-- Nesting papan lembar berbasis guillotine best-short-side-fit dengan rotasi.
-- Mode harga pembelian terpisah untuk rangka dan bilah: per meter atau per batang; papan per m² atau per lembar.
-- Master bahan dengan snapshot nama, satuan, dan harga saat transaksi.
-- Jumlah aktual dapat disesuaikan dengan alasan wajib jika berbeda dari hasil hitung.
-- Nota transaksi, pembayaran bertahap, pembatalan dengan alasan, riwayat transaksi.
-- Laporan semua waktu, harian, dan bulanan.
+Aplikasi ini mencatat ongkos jasa packing secara manual (bukan mesin hitung bahan kayu).
+
+- Master jenis pekerjaan dengan harga standar yang dapat diubah saat transaksi.
+- Satu nota berisi banyak pekerjaan; ukuran barang hanya informasi.
+- Setelah nota disimpan, aplikasi langsung membuka detail nota untuk pembayaran dan cetak.
+- Pembayaran penuh, DP, atau bertahap; metode tunai/transfer/QRIS/lainnya; kembalian tunai dihitung otomatis.
+- Pembatalan nota keseluruhan dengan alasan wajib (nota batal tidak masuk laporan).
+- Riwayat nota dengan pencarian nomor nota dan pelanggan.
+- Laporan semua waktu, harian, bulanan: penjualan dan piutang mengikuti tanggal nota, uang masuk mengikuti tanggal pembayaran.
 - Backup JSON dan restore atomik melalui transaksi SQLite.
 - Printer Bluetooth ESC/POS untuk kertas 58 mm dan 80 mm.
 - APK rilis dipublikasikan ke GitHub Releases, bukan Actions Artifacts.
-
-## Catatan perhitungan
-
-Rangka 8 sudut saat ini memakai model 4 tiang + 4 rel panjang + 4 rel lebar. Ukuran potong default mengikuti dimensi barang; ubah ukuran potong jika sambungan atau orientasi penampang kayu mengharuskan panjang berbeda.
-
-Optimasi pemotongan kayu dan nesting papan adalah heuristik praktis, bukan jaminan jumlah stok atau limbah minimum matematis. Kerf dimasukkan sebagai allowance. Pastikan ukuran lembar/stok, arah serat, sambungan, dan ukuran potong sesuai bahan nyata sebelum pembelian.
-
-Mode harga per batang/lembar menggunakan jumlah pembelian dari rencana potong. Mode harga per meter/m² memakai jumlah teoritis atau jumlah aktual yang disesuaikan. Jangan mencampur kedua mode pada bahan yang sama karena akan menghitung biaya ganda.
+- Master bahan masih tersimpan sebagai arsip; tidak dipakai dalam alur transaksi.
 
 ## Database dan keamanan data
 
 - Database lokal: `packing_pos.db`.
-- Schema saat ini versi 2.
-- Migrasi versi 1 ke 2 hanya menambahkan kolom alasan pembatalan; tidak menghapus tabel atau transaksi.
+- Schema saat ini versi 4 (v2: alasan pembatalan, v3: master jenis pekerjaan, v4: nota induk dan pembayaran tingkat nota).
+- Migrasi tidak menghapus tabel atau transaksi.
 - Restore backup mengganti data lokal yang ada setelah konfirmasi. File yang tidak valid dibatalkan seluruhnya oleh transaksi SQLite.
 - Harga dan nama bahan pada transaksi lama disimpan sebagai snapshot.
 

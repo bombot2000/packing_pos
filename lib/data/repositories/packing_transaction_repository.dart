@@ -252,6 +252,31 @@ class PackingTransactionRepository {
     return rows.isEmpty ? null : rows.first;
   }
 
+  Future<Map<String, Object?>?> findReceiptByNo(String receiptNo) async {
+    final db = await _database.database;
+    final rows = await db.query('packing_receipts', where: 'receipt_no = ?', whereArgs: [receiptNo], limit: 1);
+    return rows.isEmpty ? null : rows.first;
+  }
+
+  /// Cancels a whole receipt and all of its jobs atomically. History and
+  /// payment rows are kept; cancelled receipts are excluded from reports.
+  Future<void> cancelReceipt({required int receiptId, required String reason}) async {
+    final cleanReason = reason.trim();
+    if (cleanReason.isEmpty) throw ArgumentError('Alasan pembatalan wajib diisi.');
+    final db = await _database.database;
+    final now = DateTime.now().toUtc().toIso8601String();
+    await db.transaction((txn) async {
+      final rows = await txn.query('packing_receipts', where: 'id = ?', whereArgs: [receiptId], limit: 1);
+      if (rows.isEmpty) throw StateError('Nota tidak ditemukan.');
+      if (rows.first['status'] == 'cancelled') throw StateError('Nota sudah dibatalkan.');
+      await txn.update('packing_receipts', {'status': 'cancelled', 'updated_at': now},
+          where: 'id = ?', whereArgs: [receiptId]);
+      await txn.update('packing_transactions', {
+        'status': 'cancelled', 'cancellation_reason': cleanReason, 'updated_at': now,
+      }, where: 'receipt_id = ?', whereArgs: [receiptId]);
+    });
+  }
+
   Future<List<Map<String, Object?>>> jobsForReceipt(int receiptId) async {
     final db = await _database.database;
     return db.query('packing_transactions', where: 'receipt_id = ?', whereArgs: [receiptId], orderBy: 'id ASC');
@@ -439,6 +464,7 @@ class PackingTransactionRepository {
       args.add(endDate.toUtc().toIso8601String());
     }
     final dateFilter = conditions.isEmpty ? '' : ' AND ' + conditions.join(' AND ');
+    final paymentDateFilter = dateFilter.replaceAll('created_at', 'receipt_payments.created_at');
     final materialDateConditions = <String>[];
     if (startDate != null) materialDateConditions.add('packing_transactions.created_at >= ?');
     if (endDate != null) materialDateConditions.add('packing_transactions.created_at < ?');

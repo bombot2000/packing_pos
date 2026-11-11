@@ -196,4 +196,74 @@ void main() {
       );
     });
   });
+
+  group('pembatalan nota', () {
+    test('membatalkan nota beserta seluruh pekerjaannya dan menolak pembayaran', () async {
+      final receipt = await createReceipt();
+      final id = receipt['id'] as int;
+      await repository.cancelReceipt(receiptId: id, reason: 'Salah input');
+      expect((await repository.findReceiptById(id))!['status'], 'cancelled');
+      final jobs = await repository.jobsForReceipt(id);
+      expect(jobs.every((j) => j['status'] == 'cancelled'), isTrue);
+      expect(jobs.first['cancellation_reason'], 'Salah input');
+      await expectLater(
+        repository.settleReceipt(receiptId: id, amount: 100000, paymentMethod: 'cash'),
+        throwsStateError,
+      );
+      final report = await repository.reportSummary();
+      expect((report['totals'] as Map)['sales_total'], 0);
+      expect((report['totals'] as Map)['cancelled_count'], 1);
+    });
+
+    test('alasan wajib dan nota tidak dapat dibatalkan dua kali', () async {
+      final receipt = await createReceipt();
+      final id = receipt['id'] as int;
+      await expectLater(repository.cancelReceipt(receiptId: id, reason: '  '), throwsArgumentError);
+      await repository.cancelReceipt(receiptId: id, reason: 'Batal');
+      await expectLater(repository.cancelReceipt(receiptId: id, reason: 'Lagi'), throwsStateError);
+    });
+  });
+
+  group('pembayaran bertahap nota', () {
+    test('DP lalu pelunasan mengubah status hanya saat sisa nol', () async {
+      final receipt = await createReceipt();
+      final id = receipt['id'] as int;
+      await repository.addReceiptPayment(receiptId: id, amount: 40000, paymentMethod: 'cash');
+      var saved = (await repository.findReceiptById(id))!;
+      expect(saved['paid_amount'], 40000);
+      expect(saved['status'], 'open');
+      expect((await repository.jobsForReceipt(id)).single['status'], 'open');
+      await repository.addReceiptPayment(receiptId: id, amount: 60000, paymentMethod: 'transfer');
+      saved = (await repository.findReceiptById(id))!;
+      expect(saved['paid_amount'], 100000);
+      expect(saved['status'], 'completed');
+      expect((await repository.jobsForReceipt(id)).single['status'], 'completed');
+      expect(await repository.receiptPaymentsFor(id), hasLength(2));
+    });
+
+    test('menolak nominal nol, melebihi sisa, atau nota lunas', () async {
+      final receipt = await createReceipt();
+      final id = receipt['id'] as int;
+      await expectLater(repository.addReceiptPayment(receiptId: id, amount: 0, paymentMethod: 'cash'), throwsArgumentError);
+      await expectLater(repository.addReceiptPayment(receiptId: id, amount: 100001, paymentMethod: 'cash'), throwsArgumentError);
+      await repository.addReceiptPayment(receiptId: id, amount: 100000, paymentMethod: 'cash');
+      await expectLater(repository.addReceiptPayment(receiptId: id, amount: 1, paymentMethod: 'cash'), throwsStateError);
+    });
+
+    test('laporan menghitung uang masuk dari tanggal pembayaran dan menghitung nota', () async {
+      final receipt = await createReceipt();
+      final id = receipt['id'] as int;
+      await repository.addReceiptPayment(receiptId: id, amount: 30000, paymentMethod: 'cash');
+      final all = (await repository.reportSummary())['totals'] as Map;
+      expect(all['paid_total'], 30000);
+      expect(all['receivable_total'], 70000);
+      expect(all['open_count'], 1);
+      expect(all['completed_count'], 0);
+      final tomorrow = DateTime.now().add(const Duration(days: 1));
+      final future = (await repository.reportSummary(
+        startDate: tomorrow, endDate: tomorrow.add(const Duration(days: 1)),
+      ))['totals'] as Map;
+      expect(future['paid_total'], 0);
+    });
+  });
 }

@@ -1,6 +1,8 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
+import '../../core/format/rupiah.dart';
 import '../../data/repositories/packing_transaction_repository.dart';
 import '../../services/packing_receipt_printer.dart';
 
@@ -25,7 +27,7 @@ class _PackingReceiptDetailScreenState extends State<PackingReceiptDetailScreen>
   @override
   void initState() { super.initState(); _load(); }
   @override
-  void dispose() { _amount.dispose(); _note.dispose(); super.dispose(); }
+  void dispose() { _amount.dispose(); _note.dispose(); _received.dispose(); super.dispose(); }
 
   Future<void> _load() async {
     try {
@@ -70,19 +72,67 @@ class _PackingReceiptDetailScreenState extends State<PackingReceiptDetailScreen>
     }
   }
 
-  Future<void> _settle() async {
+  Future<void> _pay() async {
     if (_busy || _receipt == null) return;
     final total = (_receipt!['total_amount'] as num).toInt();
-    final amount = int.tryParse(_amount.text.replaceAll('.', '').replaceAll(',', '').trim());
-    if (amount == null || amount != total) {
-      setState(() => _error = 'Pembayaran harus tepat sebesar total nota ${_money(total)}.');
-      return;
+    final remaining = total - (_receipt!['paid_amount'] as num).toInt();
+    final amount = _parse(_amount.text);
+    if (amount == null || amount <= 0) { setState(() => _error = 'Nominal pembayaran tidak valid.'); return; }
+    if (amount > remaining) { setState(() => _error = 'Pembayaran melebihi sisa tagihan ${_money(remaining)}.'); return; }
+    var note = _note.text.trim();
+    int change = 0;
+    if (_method == 'cash' && _received.text.trim().isNotEmpty) {
+      final received = _parse(_received.text);
+      if (received == null || received < amount) { setState(() => _error = 'Uang diterima kurang dari nominal pembayaran.'); return; }
+      change = received - amount;
+      final cashNote = 'Diterima ${_money(received)}, kembali ${_money(change)}';
+      note = note.isEmpty ? cashNote : '$note • $cashNote';
     }
     setState(() { _busy = true; _error = null; });
     try {
-      await _repo.settleReceipt(receiptId: widget.receiptId, amount: amount, paymentMethod: _method, note: _note.text.trim());
+      await _repo.addReceiptPayment(receiptId: widget.receiptId, amount: amount, paymentMethod: _method, note: note);
+      _received.clear(); _note.clear();
       await _load();
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Pembayaran nota berhasil disimpan.')));
+      if (mounted) {
+        final done = amount == remaining;
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          duration: Duration(seconds: change > 0 ? 10 : 4),
+          content: Text('${done ? 'Nota lunas' : 'Pembayaran tersimpan'}${change > 0 ? ' • Kembalian ${_money(change)}' : ''}'),
+        ));
+      }
+    } catch (e) { if (mounted) setState(() => _error = e.toString()); }
+    finally { if (mounted) setState(() => _busy = false); }
+  }
+
+  Future<void> _cancel() async {
+    if (_busy || _receipt == null) return;
+    final reason = TextEditingController();
+    final paid = (_receipt!['paid_amount'] as num).toInt();
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(builder: (ctx, setLocal) => AlertDialog(
+        title: const Text('Batalkan nota?'),
+        content: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Text(paid > 0
+              ? 'Nota sudah dibayar ${_money(paid)}. Pengembalian uang harus dilakukan manual. Nota batal tidak dihitung di laporan.'
+              : 'Nota batal tidak dihitung di laporan dan tidak dapat dipulihkan.'),
+          const SizedBox(height: 12),
+          TextField(controller: reason, autofocus: true, onChanged: (_) => setLocal(() {}),
+            decoration: const InputDecoration(labelText: 'Alasan pembatalan (wajib)', border: OutlineInputBorder())),
+        ]),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Kembali')),
+          FilledButton(onPressed: reason.text.trim().isEmpty ? null : () => Navigator.pop(ctx, true), child: const Text('Batalkan nota')),
+        ],
+      )),
+    );
+    final text = reason.text.trim();
+    if (confirmed != true) return;
+    setState(() { _busy = true; _error = null; });
+    try {
+      await _repo.cancelReceipt(receiptId: widget.receiptId, reason: text);
+      await _load();
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Nota dibatalkan.')));
     } catch (e) { if (mounted) setState(() => _error = e.toString()); }
     finally { if (mounted) setState(() => _busy = false); }
   }
@@ -120,10 +170,14 @@ class _PackingReceiptDetailScreenState extends State<PackingReceiptDetailScreen>
           ListTile(title: const Text('Pembayaran'), trailing: Text(_money(paid))),
           ListTile(title: const Text('Sisa'), trailing: Text(_money(total - paid), style: const TextStyle(fontWeight: FontWeight.bold))),
         ])),
-        if (status == 'open' && total > 0 && paid == 0) ...[
-          Text('Pembayaran satu kali untuk seluruh nota', style: Theme.of(context).textTheme.titleMedium),
+        if (status == 'open' && total - paid > 0) ...[
+          Text(paid > 0 ? 'Pelunasan / pembayaran berikutnya' : 'Pembayaran (penuh atau DP)', style: Theme.of(context).textTheme.titleMedium),
           const SizedBox(height: 8),
-          TextField(controller: _amount, keyboardType: TextInputType.number, decoration: InputDecoration(labelText: 'Nominal pembayaran', prefixText: 'Rp ', helperText: 'Isi tepat ${_money(total)}')),
+          TextField(controller: _amount, keyboardType: TextInputType.number, decoration: InputDecoration(
+            labelText: 'Nominal pembayaran', prefixText: 'Rp ', border: const OutlineInputBorder(),
+            helperText: 'Sisa tagihan ${_money(total - paid)}',
+            suffixIcon: TextButton(onPressed: () => setState(() => _amount.text = (total - paid).toString()), child: const Text('Lunas')),
+          )),
           const SizedBox(height: 8),
           DropdownButtonFormField<String>(
             initialValue: _method,

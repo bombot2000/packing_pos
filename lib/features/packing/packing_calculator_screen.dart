@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
+import '../../core/format/rupiah.dart';
 import '../../data/repositories/packing_transaction_repository.dart';
+import 'packing_receipt_detail_screen.dart';
 import 'service_type_master_screen.dart';
 
 class PackingCalculatorScreen extends StatefulWidget {
@@ -119,14 +121,23 @@ class _PackingCalculatorScreenState extends State<PackingCalculatorScreen> {
       if (!mounted) return;
       final total = _grandTotal;
       final count = _jobs.length;
+      final saved = await _repo.findReceiptByNo(receipt);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text('Nota tersimpan • $receipt • ${_money(total)} • $count pekerjaan'),
+        duration: const Duration(seconds: 4),
+      ));
+      if (saved != null) {
+        // Continue straight to payment/print; back returns to the home page.
+        await Navigator.of(context).pushReplacement(MaterialPageRoute(
+          builder: (_) => PackingReceiptDetailScreen(receiptId: (saved['id'] as num).toInt()),
+        ));
+        return;
+      }
       setState(() {
         _jobs.clear(); _customer.clear(); _receiptNote.clear();
         _item.clear(); _length.clear(); _width.clear(); _height.clear(); _note.clear();
       });
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text('Nota tersimpan • $receipt • ${_money(total)} • $count pekerjaan'),
-        duration: const Duration(seconds: 5),
-      ));
     } catch (e) {
       if (mounted) setState(() => _error = 'Gagal menyimpan nota: $e');
     } finally {

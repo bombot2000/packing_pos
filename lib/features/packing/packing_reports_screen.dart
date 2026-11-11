@@ -74,6 +74,8 @@ class _PackingReportsScreenState extends State<PackingReportsScreen> {
         final materials = (data['materials'] as List)
             .map((row) => Map<String, Object?>.from(row as Map))
             .toList();
+        final hasCosts = ['material_cost_total', 'labor_cost_total', 'overhead_cost_total']
+            .any((k) => ((totals[k] as num?) ?? 0) > 0);
         return ListView(
           padding: const EdgeInsets.all(16),
           children: [
@@ -120,11 +122,11 @@ class _PackingReportsScreenState extends State<PackingReportsScreen> {
             const SizedBox(height: 12),
             Card(child: Column(children: [
               ListTile(
-                title: const Text('Lunas'),
+                title: const Text('Nota lunas'),
                 trailing: Text((totals['completed_count'] as num? ?? 0).toString()),
               ),
               ListTile(
-                title: const Text('Belum lunas'),
+                title: const Text('Nota belum lunas'),
                 trailing: Text((totals['open_count'] as num? ?? 0).toString()),
               ),
               ListTile(

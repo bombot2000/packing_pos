@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../core/format/rupiah.dart';
 import '../../data/repositories/packing_transaction_repository.dart';
 import 'packing_receipt_detail_screen.dart';
 
@@ -59,7 +60,7 @@ class _PackingTransactionHistoryScreenState extends State<PackingTransactionHist
                     title: Text(row['receipt_no'] as String, style: const TextStyle(fontWeight: FontWeight.bold)),
                     subtitle: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                       if ((row['customer_name'] as String).isNotEmpty) Text(row['customer_name'] as String),
-                      Text('${_status(row['status'] as String?)} • Total ${_money(total)}'),
+                      Text('${_status(row)} • Total ${_money(total)}'),
                       Text('Pembayaran ${_money(paid)}'),
                       Text((row['created_at'] as String).replaceFirst('T', ' ')),
                     ]),
