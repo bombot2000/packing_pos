@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'packing_calculator_screen.dart';
 import '../../data/repositories/packing_transaction_repository.dart';
 import '../../services/packing_receipt_printer.dart';
 
@@ -59,6 +60,19 @@ class _PackingReceiptDetailScreenState extends State<PackingReceiptDetailScreen>
   String _date(Object? raw) {
     final date = DateTime.tryParse(raw?.toString() ?? '');
     return date == null ? '-' : DateFormat('dd/MM/yyyy HH:mm').format(date.toLocal());
+  }
+
+  Future<void> _editReceipt() async {
+    if (_busy || _receipt == null) return;
+    final paid = (_receipt!['paid_amount'] as num).toInt();
+    if (_receipt!['status'] != 'open' || paid > 0 || _payments.isNotEmpty) {
+      setState(() => _error = 'Nota hanya dapat diedit sebelum pembayaran pertama.');
+      return;
+    }
+    final changed = await Navigator.of(context).push<bool>(MaterialPageRoute(
+      builder: (_) => PackingCalculatorScreen(editReceiptId: widget.receiptId),
+    ));
+    if (changed == true) await _load();
   }
 
   Future<void> _printReceipt() async {
@@ -163,6 +177,8 @@ class _PackingReceiptDetailScreenState extends State<PackingReceiptDetailScreen>
     final status = receipt['status'] as String;
     return Scaffold(
       appBar: AppBar(title: const Text('Detail nota'), actions: [
+        if (status == 'open' && paid == 0 && _payments.isEmpty)
+          IconButton(tooltip: 'Edit nota', onPressed: _busy ? null : _editReceipt, icon: const Icon(Icons.edit_outlined)),
         if (status == 'open') IconButton(tooltip: 'Batalkan nota', onPressed: _busy ? null : _cancel, icon: const Icon(Icons.cancel_outlined)),
         IconButton(tooltip: 'Cetak nota', onPressed: _busy ? null : _printReceipt, icon: const Icon(Icons.print)),
       ]),
