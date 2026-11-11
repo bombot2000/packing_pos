@@ -23,10 +23,13 @@ class _MaterialMasterScreenState extends State<MaterialMasterScreen> {
     _materials = _repository.listMaterials();
   }
 
-  String _rupiah(int value) => 'Rp ${value.toString().replaceAllMapped(
-            RegExp(r'(?<=\d)(?=(\d{3})+(?!\d))'),
-            (_) => '.',
-          );
+  String _rupiah(int value) {
+    final formatted = value.toString().replaceAllMapped(
+      RegExp(r'(?<=\\d)(?=(\\d{3})+(?!\\d))'),
+      (_) => '.',
+    );
+    return 'Rp $formatted';
+  }
 
   Future<void> _editMaterial([Map<String, Object?>? material]) async {
     // Use a normal page route instead of DialogRoute. Android Back now pops
