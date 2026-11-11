@@ -231,6 +231,17 @@ class PackingReceiptPrinter {
       final unitPrice = job['unit_price'] ?? job['selling_price'];
       bytes.addAll(generator.text('  Qty: $quantity x ${money(unitPrice)}'));
       bytes.addAll(generator.text('  Subtotal pekerjaan: ${money(job['selling_price'])}'));
+      final jobNote = job['note']?.toString().trim() ?? '';
+      if (jobNote.isNotEmpty) {
+        bytes.addAll(generator.text('  Catatan pekerjaan: $jobNote'));
+      }
+      if (receipt['status']?.toString() == 'cancelled') {
+        final cancellationReason =
+            job['cancellation_reason']?.toString().trim() ?? '';
+        if (cancellationReason.isNotEmpty) {
+          bytes.addAll(generator.text('  Alasan pembatalan: $cancellationReason'));
+        }
+      }
       if (i != jobs.length - 1) bytes.addAll(generator.hr(ch: '-'));
     }
     bytes.addAll(generator.hr());
@@ -297,12 +308,6 @@ class PackingReceiptPrinter {
     }
     final note = receipt['note']?.toString() ?? '';
     if (note.trim().isNotEmpty) bytes.addAll(generator.text('Catatan: $note'));
-    if (receiptStatus == 'cancelled') {
-      final reason = jobs
-          .map((job) => job['cancellation_reason']?.toString() ?? '')
-          .firstWhere((value) => value.trim().isNotEmpty, orElse: () => '');
-      if (reason.isNotEmpty) bytes.addAll(generator.text('Alasan batal: $reason'));
-    }
     bytes.addAll(generator.hr());
     bytes.addAll(generator.text(
       receiptStatus == 'cancelled' ? 'ARSIP NOTA DIBATALKAN' : 'Terima kasih',
