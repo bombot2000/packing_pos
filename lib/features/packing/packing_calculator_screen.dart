@@ -74,8 +74,10 @@ class _PackingCalculatorScreenState extends State<PackingCalculatorScreen> {
     final n = int.tryParse(_charge.text.replaceAll('Rp', '').replaceAll('.', '').replaceAll(',', '').replaceAll(' ', '').trim());
     return n != null && n >= 0 ? n : null;
   }
-  String _money(int n) => 'Rp ${n.toString().replaceAllMapped(RegExp(r'(?<=\\d)(?=(\\d{3})+(?!\\d))'), (_) => '.')}';
-  int get _grandTotal => _jobs.fold<int>(0, (sum, job) => sum + job.sellingPrice);
+  String _money(int n) => 'Rp ${n.toString().replaceAllMapped(RegExp(r'(?<=\d)(?=(\d{3})+(?!\d))'), (_) => '.')}';
+  int get _grandSubtotal => _jobs.fold<int>(0, (sum, job) => sum + job.sellingPrice * job.quantity);
+  int get _discountAmount => int.tryParse(_discount.text.replaceAll('.', '').replaceAll(',', '').trim()) ?? 0;
+  int get _grandTotal => _grandSubtotal - _discountAmount;
 
   void _addJob() {
     FocusScope.of(context).unfocus();
