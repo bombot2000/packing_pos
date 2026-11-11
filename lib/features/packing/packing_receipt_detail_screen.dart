@@ -2,7 +2,6 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
-import '../../core/format/rupiah.dart';
 import '../../data/repositories/packing_transaction_repository.dart';
 import '../../services/packing_receipt_printer.dart';
 
@@ -144,6 +143,7 @@ class _PackingReceiptDetailScreenState extends State<PackingReceiptDetailScreen>
       )),
     );
     final text = reason.text.trim();
+    reason.dispose();
     if (confirmed != true) return;
     setState(() { _busy = true; _error = null; });
     try {
@@ -162,7 +162,10 @@ class _PackingReceiptDetailScreenState extends State<PackingReceiptDetailScreen>
     final paid = (receipt['paid_amount'] as num).toInt();
     final status = receipt['status'] as String;
     return Scaffold(
-      appBar: AppBar(title: const Text('Detail nota'), actions: [IconButton(tooltip: 'Cetak nota', onPressed: _busy ? null : _printReceipt, icon: const Icon(Icons.print))]),
+      appBar: AppBar(title: const Text('Detail nota'), actions: [
+        if (status == 'open') IconButton(tooltip: 'Batalkan nota', onPressed: _busy ? null : _cancel, icon: const Icon(Icons.cancel_outlined)),
+        IconButton(tooltip: 'Cetak nota', onPressed: _busy ? null : _printReceipt, icon: const Icon(Icons.print)),
+      ]),
       body: ListView(padding: const EdgeInsets.all(16), children: [
         Card(child: Padding(padding: const EdgeInsets.all(16), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           Text(receipt['receipt_no'] as String, style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold)),
