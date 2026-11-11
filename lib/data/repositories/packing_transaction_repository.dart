@@ -510,7 +510,27 @@ class PackingTransactionRepository {
     await db.transaction((txn) async {
       final rows = await txn.query('packing_receipts', where: 'id = ?', whereArgs: [receiptId], limit: 1);
       if (rows.isEmpty) throw StateError('Nota tidak ditemukan.');
-      if (rows.first['status'] == 'cancelled') throw StateError('Nota sudah dibatalkan.');
+      final receipt = rows.first;
+      if (receipt['status'] == 'cancelled') throw StateError('Nota sudah dibatalkan.');
+      final paidAmount = (receipt['paid_amount'] as num).toInt();
+      final receiptPayments = await txn.query(
+        'receipt_payments',
+        columns: ['id'],
+        where: 'receipt_id = ?',
+        whereArgs: [receiptId],
+        limit: 1,
+      );
+      final legacyPayments = await txn.rawQuery(
+        'SELECT tp.id FROM transaction_payments tp '
+        'INNER JOIN packing_transactions pt ON pt.id = tp.transaction_id '
+        'WHERE pt.receipt_id = ? LIMIT 1',
+        [receiptId],
+      );
+      if (paidAmount > 0 || receiptPayments.isNotEmpty || legacyPayments.isNotEmpty) {
+        throw StateError(
+          'Nota sudah memiliki pembayaran. Catat pengembalian dana melalui prosedur refund sebelum pembatalan.',
+        );
+      }
       await txn.update('packing_receipts', {'status': 'cancelled', 'updated_at': now},
           where: 'id = ?', whereArgs: [receiptId]);
       await txn.update('packing_transactions', {
