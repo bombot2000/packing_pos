@@ -162,7 +162,7 @@ class PackingBackupValidator {
       final id = _positiveInt(row['id'], 'ID nota'); final no = _text(row['receipt_no'], 'Nomor nota');
       if (!headerIds.add(id) || !headerNos.add(no)) throw FormatException('ID atau nomor nota duplikat: $no');
       final total = _nonNegativeInt(row['total_amount'], 'Total nota');
-      final discount = _nonNegativeInt(row['discount_amount'], 'Diskon nota');
+      _nonNegativeInt(row['discount_amount'], 'Diskon nota');
       final paid = _nonNegativeInt(row['paid_amount'], 'Pembayaran nota');
       if (paid > total) throw FormatException('Pembayaran nota melebihi total: $no');
       final status = _text(row['status'], 'Status nota');
