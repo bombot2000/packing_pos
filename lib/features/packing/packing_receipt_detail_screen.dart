@@ -102,7 +102,7 @@ class _PackingReceiptDetailScreenState extends State<PackingReceiptDetailScreen>
           const SizedBox(height: 8),
           Text('Pelanggan: ${(receipt['customer_name'] as String).isEmpty ? '-' : receipt['customer_name']}'),
           Text('Tanggal: ${receipt['created_at']}'),
-          Text('Status: ${status == 'completed' ? 'Lunas' : status == 'cancelled' ? 'Dibatalkan' : 'Belum dibayar'}'),
+          Text('Status: ${status == 'completed' ? 'Lunas' : status == 'cancelled' ? 'Dibatalkan' : paid > 0 ? 'Pembayaran sebagian (nota lama)' : 'Belum dibayar'}'),
           if ((receipt['note'] as String).isNotEmpty) Text('Catatan: ${receipt['note']}'),
         ]))),
         Text('Rincian pekerjaan • ${_jobs.length}', style: Theme.of(context).textTheme.titleMedium),
@@ -120,7 +120,7 @@ class _PackingReceiptDetailScreenState extends State<PackingReceiptDetailScreen>
           ListTile(title: const Text('Pembayaran'), trailing: Text(_money(paid))),
           ListTile(title: const Text('Sisa'), trailing: Text(_money(total - paid), style: const TextStyle(fontWeight: FontWeight.bold))),
         ])),
-        if (status == 'open' && total > 0) ...[
+        if (status == 'open' && total > 0 && paid == 0) ...[
           Text('Pembayaran satu kali untuk seluruh nota', style: Theme.of(context).textTheme.titleMedium),
           const SizedBox(height: 8),
           TextField(controller: _amount, keyboardType: TextInputType.number, decoration: InputDecoration(labelText: 'Nominal pembayaran', prefixText: 'Rp ', helperText: 'Isi tepat ${_money(total)}')),
@@ -141,6 +141,7 @@ class _PackingReceiptDetailScreenState extends State<PackingReceiptDetailScreen>
           const SizedBox(height: 12),
           FilledButton.icon(onPressed: _busy ? null : _settle, icon: _busy ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2)) : const Icon(Icons.payments), label: Text(_busy ? 'Menyimpan...' : 'Bayar seluruh nota')),
         ],
+        if (status == 'open' && paid > 0) const Padding(padding: EdgeInsets.symmetric(vertical: 8), child: Text('Nota ini berasal dari data lama dengan pembayaran bertahap. Riwayat tetap disimpan, tetapi pembayaran baru melalui alur satu kali tidak tersedia untuk nota ini.')),
         Text('Riwayat pembayaran', style: Theme.of(context).textTheme.titleMedium),
         Card(child: Column(children: _payments.isEmpty
           ? [const ListTile(title: Text('Belum ada pembayaran'))]
