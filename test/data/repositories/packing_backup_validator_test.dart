@@ -55,6 +55,48 @@ void main() {
       expect(() => PackingBackupValidator.validate(backup), returnsNormally);
     });
 
+
+    test('accepts migrated version 4 receipts with historical partial payments', () {
+      final backup = validBackup(version: 4);
+      backup['service_types'] = <Map<String, Object?>>[];
+      backup['packing_transactions']![0]['receipt_id'] = 1;
+      backup['packing_receipts'] = [
+        {
+          'id': 1,
+          'receipt_no': 'RCP-20261109-000001',
+          'customer_name': 'Pelanggan uji',
+          'total_amount': 20000,
+          'paid_amount': 5000,
+          'status': 'open',
+          'note': '',
+          'created_at': '2026-11-09T00:00:00.000Z',
+          'updated_at': '2026-11-09T00:00:00.000Z',
+        },
+      ];
+      backup['receipt_payments'] = [
+        {
+          'id': 1,
+          'receipt_id': 1,
+          'amount': 2000,
+          'payment_method': 'cash',
+          'note': '',
+          'created_at': '2026-11-09T00:00:00.000Z',
+        },
+        {
+          'id': 2,
+          'receipt_id': 1,
+          'amount': 3000,
+          'payment_method': 'transfer',
+          'note': '',
+          'created_at': '2026-11-09T00:00:00.000Z',
+        },
+      ];
+
+      final data = PackingBackupValidator.validate(backup);
+      expect(data['packing_receipts'], hasLength(1));
+      expect(data['receipt_payments'], hasLength(2));
+    });
+
     test('rejects malformed calculation snapshots before restore', () {
       final backup = validBackup();
       backup['packing_transactions']![0]['calculation_snapshot'] = '{broken';

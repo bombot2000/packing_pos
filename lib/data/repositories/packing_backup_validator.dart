@@ -159,19 +159,17 @@ class PackingBackupValidator {
     for (final e in headerMap.entries) {
       if (e.value['status'] != 'cancelled' && (sums[e.key] ?? 0) != _int(e.value['total_amount'], 'Total nota')) throw const FormatException('Total pekerjaan tidak cocok dengan total nota.');
     }
-    final payIds = <int>{}; final paidSums = <int, int>{}; final payCounts = <int, int>{};
+    final payIds = <int>{}; final paidSums = <int, int>{};
     for (final row in data['receipt_payments']!) {
       final id = _positiveInt(row['id'], 'ID pembayaran nota'); if (!payIds.add(id)) throw const FormatException('ID pembayaran nota duplikat.');
       final rid = _positiveInt(row['receipt_id'], 'ID nota pembayaran'); if (!headerMap.containsKey(rid)) throw const FormatException('Pembayaran merujuk nota yang tidak ada.');
       final amount = _positiveInt(row['amount'], 'Nominal pembayaran nota'); _text(row['payment_method'], 'Metode pembayaran nota'); _text(row['created_at'], 'Tanggal pembayaran nota');
-      paidSums[rid] = (paidSums[rid] ?? 0) + amount; payCounts[rid] = (payCounts[rid] ?? 0) + 1;
+      paidSums[rid] = (paidSums[rid] ?? 0) + amount;
     }
     for (final e in headerMap.entries) {
       final paid = _int(e.value['paid_amount'], 'Pembayaran nota');
       if ((paidSums[e.key] ?? 0) != 0 && paidSums[e.key] != paid) throw const FormatException('Riwayat pembayaran nota tidak cocok.');
-      if (version >= 4 && (payCounts[e.key] ?? 0) > 1) throw const FormatException('Nota hanya boleh memiliki satu pembayaran.');
       if (e.value['status'] == 'completed' && paid != _int(e.value['total_amount'], 'Total nota')) throw const FormatException('Status lunas tidak cocok.');
-      if (version >= 4 && e.value['status'] == 'open' && paid != 0) throw const FormatException('Nota terbuka tidak boleh memiliki pembayaran.');
     }
     final materialIds = <int>{};
     for (final row in data['materials']!) {
