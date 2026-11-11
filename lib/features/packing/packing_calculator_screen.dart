@@ -270,7 +270,7 @@ class _PackingCalculatorScreenState extends State<PackingCalculatorScreen> {
   @override
   Widget build(BuildContext context) => Scaffold(
     appBar: AppBar(title: Text(widget.editReceiptId == null ? 'Buat nota packing' : 'Edit nota packing')),
-    body: ListView(padding: const EdgeInsets.all(16), children: [
+    body: ListView(padding: const EdgeInsets.fromLTRB(16, 16, 16, 12), children: [
       Text(widget.editReceiptId == null
         ? 'Satu nota dapat berisi banyak pekerjaan. Tambahkan pekerjaan satu per satu, lalu simpan dan lakukan pembayaran untuk total seluruh nota.'
         : 'Edit data nota yang belum dibayar. Hapus pekerjaan yang tidak diperlukan atau tambahkan pekerjaan baru, lalu simpan perubahan.'),
@@ -410,13 +410,62 @@ class _PackingCalculatorScreenState extends State<PackingCalculatorScreen> {
         const SizedBox(height: 8),
         _field('Catatan nota', _receiptNote, hint: 'Opsional, berlaku untuk seluruh nota'),
         const SizedBox(height: 12),
-        FilledButton.icon(
-          onPressed: _saving ? null : _saveReceipt,
-          icon: _saving ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2)) : const Icon(Icons.receipt_long),
-          label: Text(_saving ? 'Menyimpan nota...' : '${widget.editReceiptId == null ? 'Simpan nota' : 'Simpan perubahan'} (${_jobs.length} pekerjaan)'),
-        ),
       ],
       if (_error != null) ...[const SizedBox(height: 12), Text(_error!, style: TextStyle(color: Theme.of(context).colorScheme.error))],
     ]),
+    bottomNavigationBar: SafeArea(
+      minimum: const EdgeInsets.fromLTRB(16, 8, 16, 12),
+      child: Material(
+        elevation: 6,
+        borderRadius: BorderRadius.circular(16),
+        color: Theme.of(context).colorScheme.surface,
+        child: Padding(
+          padding: const EdgeInsets.all(12),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Row(
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text('Total nota', style: Theme.of(context).textTheme.labelMedium),
+                        Text(
+                          _money(_grandTotal < 0 ? 0 : _grandTotal),
+                          style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
+                        ),
+                      ],
+                    ),
+                  ),
+                  Text('${_jobs.length} pekerjaan', style: Theme.of(context).textTheme.bodySmall),
+                ],
+              ),
+              const SizedBox(height: 8),
+              SizedBox(
+                width: double.infinity,
+                child: FilledButton.icon(
+                  onPressed: _saving || _jobs.isEmpty ? null : _saveReceipt,
+                  icon: _saving
+                      ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
+                      : const Icon(Icons.save_outlined),
+                  label: Text(_saving
+                      ? 'Menyimpan nota...'
+                      : widget.editReceiptId == null
+                          ? 'Simpan nota'
+                          : 'Simpan perubahan nota'),
+                ),
+              ),
+              if (_jobs.isEmpty)
+                const Padding(
+                  padding: EdgeInsets.only(top: 4),
+                  child: Text('Tambahkan pekerjaan terlebih dahulu untuk menyimpan nota.'),
+                ),
+            ],
+          ),
+        ),
+      ),
+    ),
   );
 }
