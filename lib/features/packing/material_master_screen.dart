@@ -25,7 +25,7 @@ class _MaterialMasterScreenState extends State<MaterialMasterScreen> {
 
   String _rupiah(int value) {
     final formatted = value.toString().replaceAllMapped(
-      RegExp(r'(?<=\\d)(?=(\\d{3})+(?!\\d))'),
+      RegExp(r'(?<=\d)(?=(\d{3})+(?!\d))'),
       (_) => '.',
     );
     return 'Rp $formatted';
