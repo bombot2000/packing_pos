@@ -50,7 +50,7 @@ class _PackingCashClosingScreenState extends State<PackingCashClosingScreen> {
 
   String _money(Object? value) {
     final amount = (value as num?)?.toInt() ?? 0;
-    return 'Rp ${amount.toString().replaceAllMapped(RegExp(r'(?<=\\d)(?=(\\d{3})+(?!\\d))'), (_) => '.')}';
+    return 'Rp ${amount.toString().replaceAllMapped(RegExp(r'(?<=\d)(?=(\d{3})+(?!\d))'), (_) => '.')}';
   }
 
   Future<void> _run(Future<void> Function() action) async {
