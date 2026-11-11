@@ -99,7 +99,7 @@ class PackingTransactionRepository {
     };
     try {
       if (id == null) {
-        return db.insert('customers', {...values, 'created_at': now});
+        return await db.insert('customers', {...values, 'created_at': now});
       }
       final changed = await db.update('customers', values, where: 'id = ?', whereArgs: [id]);
       if (changed == 0) throw StateError('Pelanggan tidak ditemukan.');
