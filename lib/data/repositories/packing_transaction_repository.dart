@@ -301,6 +301,95 @@ class PackingTransactionRepository {
     });
   }
 
+  /// Replaces all jobs and invoice values while preserving the receipt identity.
+  /// Editing is allowed only before the first payment; the guard is enforced
+  /// inside the same SQLite transaction as the replacement.
+  Future<void> updateUnpaidReceipt(
+    int receiptId,
+    List<PackingTransactionDraft> drafts, {
+    String customerName = '',
+    String note = '',
+    int discountAmount = 0,
+  }) async {
+    if (drafts.isEmpty) throw ArgumentError('Nota harus memiliki minimal satu pekerjaan.');
+    for (final draft in drafts) { _validate(draft); }
+    final subtotal = drafts.fold<int>(0, (sum, item) => sum + item.sellingPrice * item.quantity);
+    if (discountAmount < 0 || discountAmount > subtotal) {
+      throw ArgumentError('Diskon nota tidak boleh melebihi subtotal pekerjaan.');
+    }
+    final db = await _database.database;
+    final now = DateTime.now().toUtc().toIso8601String();
+    await db.transaction((txn) async {
+      final rows = await txn.query('packing_receipts', where: 'id = ?', whereArgs: [receiptId], limit: 1);
+      if (rows.isEmpty) throw StateError('Nota tidak ditemukan.');
+      final receipt = rows.first;
+      if (receipt['status'] != 'open' || (receipt['paid_amount'] as num).toInt() != 0) {
+        throw StateError('Nota hanya dapat diedit sebelum pembayaran pertama.');
+      }
+      final receiptPayments = await txn.query('receipt_payments', where: 'receipt_id = ?', whereArgs: [receiptId], limit: 1);
+      final transactionPayments = await txn.rawQuery(
+        'SELECT tp.id FROM transaction_payments tp INNER JOIN packing_transactions pt ON pt.id = tp.transaction_id WHERE pt.receipt_id = ? LIMIT 1',
+        [receiptId],
+      );
+      if (receiptPayments.isNotEmpty || transactionPayments.isNotEmpty) {
+        throw StateError('Nota sudah memiliki riwayat pembayaran dan tidak dapat diedit.');
+      }
+      final oldJobs = await txn.query('packing_transactions', columns: ['id'], where: 'receipt_id = ?', whereArgs: [receiptId]);
+      for (final job in oldJobs) {
+        await txn.delete('transaction_materials', where: 'transaction_id = ?', whereArgs: [job['id']]);
+      }
+      await txn.delete('packing_transactions', where: 'receipt_id = ?', whereArgs: [receiptId]);
+      await txn.update('packing_receipts', {
+        'customer_name': customerName.trim().isNotEmpty ? customerName.trim() : drafts.first.customerName.trim(),
+        'total_amount': subtotal - discountAmount,
+        'discount_amount': discountAmount,
+        'note': note.trim(),
+        'updated_at': now,
+      }, where: 'id = ?', whereArgs: [receiptId]);
+      final date = DateTime.now();
+      for (var index = 0; index < drafts.length; index++) {
+        final draft = drafts[index];
+        final id = await txn.insert('packing_transactions', {
+          'receipt_no': 'PENDING-${DateTime.now().microsecondsSinceEpoch}-$index',
+          'receipt_id': receiptId,
+          'customer_name': customerName.trim().isNotEmpty ? customerName.trim() : draft.customerName.trim(),
+          'item_description': draft.itemDescription.trim(),
+          'quantity': draft.quantity,
+          'unit_price': draft.sellingPrice,
+          'length_cm': draft.lengthCm,
+          'width_cm': draft.widthCm,
+          'height_cm': draft.heightCm,
+          'calculation_snapshot': jsonEncode(draft.calculationSnapshot),
+          'material_cost': draft.materialCost,
+          'labor_cost': draft.laborCost,
+          'overhead_cost': draft.overheadCost,
+          'selling_price': draft.sellingPrice * draft.quantity,
+          'paid_amount': 0,
+          'status': 'open',
+          'note': draft.note.trim(),
+          'created_at': now,
+          'updated_at': now,
+        });
+        final jobNo = 'PKG-${date.year}${date.month.toString().padLeft(2, '0')}${date.day.toString().padLeft(2, '0')}-${id.toString().padLeft(6, '0')}';
+        await txn.update('packing_transactions', {'receipt_no': jobNo}, where: 'id = ?', whereArgs: [id]);
+        for (final material in draft.materials) {
+          await txn.insert('transaction_materials', {
+            'transaction_id': id,
+            'material_id': material.materialId,
+            'material_name_snapshot': material.name.trim(),
+            'unit_snapshot': material.unit.trim(),
+            'calculated_quantity': material.calculatedQuantity,
+            'actual_quantity': material.actualQuantity,
+            'unit_price_snapshot': material.unitPrice,
+            'subtotal': material.subtotal,
+            'adjustment_note': material.adjustmentNote.trim(),
+            'created_at': now,
+          });
+        }
+      }
+    });
+  }
+
   /// Backward-compatible single-job save; it now creates a one-job receipt.
   Future<String> save(PackingTransactionDraft draft) =>
       saveReceipt([draft], customerName: draft.customerName, note: draft.note);
