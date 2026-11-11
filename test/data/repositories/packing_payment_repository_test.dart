@@ -146,28 +146,43 @@ void main() {
           calculationSnapshot: const {'mode': 'test'},
           sellingPrice: 40000,
         ),
+        PackingTransactionDraft(
+          customerName: 'Pelanggan gabungan',
+          itemDescription: 'Peti C',
+          lengthCm: 70,
+          widthCm: 60,
+          heightCm: 50,
+          calculationSnapshot: const {'mode': 'test'},
+          sellingPrice: 25000,
+        ),
       ]);
       final receipts = await repository.listReceipts(limit: 10);
       final receipt = receipts.singleWhere((row) => row['receipt_no'] == receiptNo);
       final receiptId = receipt['id'] as int;
       expect(receiptNo, startsWith('RCP-'));
-      expect(receipt['total_amount'], 100000);
-      expect(await repository.jobsForReceipt(receiptId), hasLength(2));
+      expect(receipt['total_amount'], 125000);
+      final jobs = await repository.jobsForReceipt(receiptId);
+      expect(jobs, hasLength(3));
+      expect(
+        jobs.map((job) => job['item_description']).toSet(),
+        {'Kardus A', 'Kardus B', 'Peti C'},
+      );
 
       await repository.settleReceipt(
         receiptId: receiptId,
-        amount: 100000,
+        amount: 125000,
         paymentMethod: 'qris',
       );
 
       expect(await repository.receiptPaymentsFor(receiptId), hasLength(1));
       final saved = await repository.findReceiptById(receiptId);
-      expect(saved!['paid_amount'], 100000);
+      expect(saved!['paid_amount'], 125000);
       expect(saved['status'], 'completed');
       final report = await repository.reportSummary();
-      expect(report['totals']['receipt_count'], 1);
-      expect(report['totals']['paid_total'], 100000);
-      expect(report['totals']['sales_total'], 100000);
+      final totals = report['totals'] as Map<String, Object?>;
+      expect(totals['receipt_count'], 1);
+      expect(totals['paid_total'], 125000);
+      expect(totals['sales_total'], 125000);
     });
 
     test('menolak pembayaran untuk ID pekerjaan yang tidak dikenal', () async {
