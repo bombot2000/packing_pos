@@ -64,6 +64,63 @@ class PackingTransactionRepository {
 
   final PackingDatabase _database;
 
+  /// Customer master; historical receipt snapshots remain unchanged.
+  Future<List<Map<String, Object?>>> listCustomers({bool activeOnly = true, String query = ''}) async {
+    final db = await _database.database;
+    final clean = query.trim();
+    return db.query(
+      'customers',
+      where: activeOnly
+          ? (clean.isEmpty ? 'is_active = 1' : 'is_active = 1 AND name LIKE ?')
+          : (clean.isEmpty ? null : 'name LIKE ?'),
+      whereArgs: clean.isEmpty ? null : ['%$clean%'],
+      orderBy: 'name COLLATE NOCASE ASC',
+    );
+  }
+
+  Future<int> saveCustomer({
+    int? id,
+    required String name,
+    String phone = '',
+    String address = '',
+    String note = '',
+  }) async {
+    final cleanName = name.trim();
+    if (cleanName.isEmpty) throw ArgumentError('Nama pelanggan wajib diisi.');
+    final db = await _database.database;
+    final now = DateTime.now().toUtc().toIso8601String();
+    final values = {
+      'name': cleanName,
+      'phone': phone.trim(),
+      'address': address.trim(),
+      'note': note.trim(),
+      'is_active': 1,
+      'updated_at': now,
+    };
+    try {
+      if (id == null) {
+        return db.insert('customers', {...values, 'created_at': now});
+      }
+      final changed = await db.update('customers', values, where: 'id = ?', whereArgs: [id]);
+      if (changed == 0) throw StateError('Pelanggan tidak ditemukan.');
+      return id;
+    } on Exception catch (error) {
+      if (error.toString().toLowerCase().contains('unique')) {
+        throw ArgumentError('Nama pelanggan sudah terdaftar.');
+      }
+      rethrow;
+    }
+  }
+
+  Future<void> deactivateCustomer(int id) async {
+    final db = await _database.database;
+    final changed = await db.update('customers', {
+      'is_active': 0,
+      'updated_at': DateTime.now().toUtc().toIso8601String(),
+    }, where: 'id = ? AND is_active = 1', whereArgs: [id]);
+    if (changed == 0) throw StateError('Pelanggan tidak ditemukan atau sudah nonaktif.');
+  }
+
   /// Master catalog of packing service types and their default prices.
   Future<List<Map<String, Object?>>> listServiceTypes({bool activeOnly = true}) async {
     final db = await _database.database;
@@ -662,7 +719,7 @@ class PackingTransactionRepository {
           txn.query(table, orderBy: 'id');
       return {
         'format': 'packing_pos_backup',
-        'version': 5,
+        'version': 6,
         'createdAt': DateTime.now().toUtc().toIso8601String(),
         'packing_transactions': await rows('packing_transactions'),
         'packing_receipts': await rows('packing_receipts'),
@@ -671,6 +728,7 @@ class PackingTransactionRepository {
         'transaction_payments': await rows('transaction_payments'),
         'materials': await rows('materials'),
         'service_types': await rows('service_types'),
+        'customers': await rows('customers'),
         'app_settings': await txn.query('app_settings', orderBy: 'key'),
       };
     });
@@ -689,6 +747,7 @@ class PackingTransactionRepository {
       await txn.delete('packing_transactions');
       await txn.delete('packing_receipts');
       await txn.delete('materials');
+      await txn.delete('customers');
       if (data.containsKey('service_types')) await txn.delete('service_types');
       await txn.delete('app_settings');
 
@@ -697,6 +756,9 @@ class PackingTransactionRepository {
       }
       for (final row in data['service_types'] ?? const <Map<String, Object?>>[]) {
         await txn.insert('service_types', row);
+      }
+      for (final row in data['customers'] ?? const <Map<String, Object?>>[]) {
+        await txn.insert('customers', row);
       }
       for (final row in data['packing_receipts']!) { await txn.insert('packing_receipts', row); }
       for (final row in data['packing_transactions']!) {
