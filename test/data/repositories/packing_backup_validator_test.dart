@@ -172,6 +172,31 @@ void main() {
       );
     });
 
+    test('rejects version 4 receipt with paid balance but no payment history', () {
+      final backup = validBackup(version: 4);
+      backup['service_types'] = <Map<String, Object?>>[];
+      backup['packing_transactions']![0]['receipt_id'] = 1;
+      backup['packing_receipts'] = [
+        {
+          'id': 1,
+          'receipt_no': 'RCP-20261109-000001',
+          'customer_name': 'Pelanggan uji',
+          'total_amount': 20000,
+          'paid_amount': 5000,
+          'status': 'open',
+          'note': '',
+          'created_at': '2026-11-09T00:00:00.000Z',
+          'updated_at': '2026-11-09T00:00:00.000Z',
+        },
+      ];
+      backup['receipt_payments'] = <Map<String, Object?>>[];
+
+      expect(
+        () => PackingBackupValidator.validate(backup),
+        throwsFormatException,
+      );
+    });
+
     test('rejects payments exceeding the invoice total', () {
       final backup = validBackup();
       backup['transaction_payments'] = [
