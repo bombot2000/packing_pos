@@ -102,6 +102,52 @@ void main() {
       expect(() => PackingBackupValidator.validate(backup), throwsFormatException);
     });
 
+    test('migrates version 1 legacy transaction into a receipt without losing paid balance', () {
+      final backup = validBackup(version: 1);
+      final data = PackingBackupValidator.validate(backup);
+      final transaction = data['packing_transactions']!.single;
+      final receipt = data['packing_receipts']!.single;
+
+      expect(transaction['receipt_id'], transaction['id']);
+      expect(transaction['quantity'], 1);
+      expect(transaction['unit_price'], transaction['selling_price']);
+      expect(receipt['total_amount'], 20000);
+      expect(receipt['paid_amount'], 5000);
+      expect(receipt['status'], 'open');
+      expect(data['receipt_payments'], isEmpty);
+    });
+
+    test('migrates version 3 transaction payment rows into receipt payment history', () {
+      final backup = validBackup(version: 3);
+      backup['service_types'] = <Map<String, Object?>>[];
+      backup['transaction_payments'] = [
+        {
+          'id': 1,
+          'transaction_id': 1,
+          'amount': 2000,
+          'payment_method': 'cash',
+          'note': 'DP',
+          'created_at': '2026-11-09T01:00:00.000Z',
+        },
+        {
+          'id': 2,
+          'transaction_id': 1,
+          'amount': 3000,
+          'payment_method': 'transfer',
+          'note': 'Pelunasan sebagian',
+          'created_at': '2026-11-09T02:00:00.000Z',
+        },
+      ];
+      final data = PackingBackupValidator.validate(backup);
+      final receipt = data['packing_receipts']!.single;
+      final payments = data['receipt_payments']!;
+
+      expect(receipt['paid_amount'], 5000);
+      expect(payments, hasLength(2));
+      expect(payments.map((row) => row['amount']), [2000, 3000]);
+      expect(payments.map((row) => row['note']), ['DP', 'Pelunasan sebagian']);
+    });
+
     test('accepts version 1 backups without the cancellation reason column', () {
       expect(
         () => PackingBackupValidator.validate(validBackup(version: 1)),
