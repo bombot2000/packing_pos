@@ -37,7 +37,14 @@ class _PackingReceiptDetailScreenState extends State<PackingReceiptDetailScreen>
       final jobs = await _repo.jobsForReceipt(widget.receiptId);
       final payments = await _repo.receiptPaymentsFor(widget.receiptId);
       if (!mounted) return;
-      setState(() { _receipt = receipt; _jobs = jobs; _payments = payments; _error = null; });
+      setState(() {
+        _receipt = receipt;
+        _jobs = jobs;
+        _payments = payments;
+        _error = null;
+        final remaining = (receipt['total_amount'] as num).toInt() - (receipt['paid_amount'] as num).toInt();
+        _amount.text = remaining > 0 ? remaining.toString() : '';
+      });
     } catch (e) { if (mounted) setState(() => _error = e.toString()); }
   }
 
@@ -183,7 +190,7 @@ class _PackingReceiptDetailScreenState extends State<PackingReceiptDetailScreen>
         if (status == 'open' && total - paid > 0) ...[
           Text(paid > 0 ? 'Pelunasan / pembayaran berikutnya' : 'Pembayaran (penuh atau DP)', style: Theme.of(context).textTheme.titleMedium),
           const SizedBox(height: 8),
-          TextField(controller: _amount, keyboardType: TextInputType.number, decoration: InputDecoration(
+          TextField(controller: _amount, keyboardType: TextInputType.number, onChanged: (_) => setState(() {}), decoration: InputDecoration(
             labelText: 'Nominal pembayaran', prefixText: 'Rp ', border: const OutlineInputBorder(),
             helperText: 'Sisa tagihan ${_money(total - paid)}',
             suffixIcon: TextButton(onPressed: () => setState(() => _amount.text = (total - paid).toString()), child: const Text('Lunas')),
@@ -223,9 +230,8 @@ class _PackingReceiptDetailScreenState extends State<PackingReceiptDetailScreen>
           const SizedBox(height: 8),
           TextField(controller: _note, decoration: const InputDecoration(labelText: 'Catatan pembayaran (opsional)')),
           const SizedBox(height: 12),
-          FilledButton.icon(onPressed: _busy ? null : _pay, icon: _busy ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2)) : const Icon(Icons.payments), label: Text(_busy ? 'Menyimpan...' : 'Bayar seluruh nota')),
+          FilledButton.icon(onPressed: _busy ? null : _pay, icon: _busy ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2)) : const Icon(Icons.payments), label: Text(_busy ? 'Menyimpan...' : 'Simpan pembayaran')),
         ],
-        if (status == 'open' && paid > 0) const Padding(padding: EdgeInsets.symmetric(vertical: 8), child: Text('Nota ini berasal dari data lama dengan pembayaran bertahap. Riwayat tetap disimpan, tetapi pembayaran baru melalui alur satu kali tidak tersedia untuk nota ini.')),
         Text('Riwayat pembayaran', style: Theme.of(context).textTheme.titleMedium),
         Card(child: Column(children: _payments.isEmpty
           ? [const ListTile(title: Text('Belum ada pembayaran'))]
