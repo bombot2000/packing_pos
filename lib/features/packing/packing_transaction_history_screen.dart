@@ -149,6 +149,7 @@ class _PackingTransactionHistoryScreenState
                       ? null
                       : IconButton(
                           onPressed: () {
+                            _searchTimer?.cancel();
                             _search.clear();
                             _refresh(resetPage: true);
                           },
@@ -285,6 +286,7 @@ class _PackingTransactionHistoryScreenState
                                           children: [
                                             if ((row['customer_name'] as String).isNotEmpty)
                                               Text(row['customer_name'] as String),
+                                            Text('${row['job_count'] ?? 0} pekerjaan • ${_statusLabel(row)}'),
                                             Text('${_statusLabel(row)} • Total ${_money(amount)}'),
                                             Text('Pembayaran ${_money(paid)} • Sisa ${_money(amount - paid)}'),
                                             Text((row['created_at'] as String).replaceFirst('T', ' ')),
