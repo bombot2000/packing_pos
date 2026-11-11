@@ -549,6 +549,12 @@ class PackingTransactionRepository {
       final paid = (receipt['paid_amount'] as num).toInt();
       if (paid > 0) throw StateError('Nota ini sudah memiliki pembayaran.');
       if (amount != total) throw ArgumentError('Pembayaran harus sama dengan total nota ($total).');
+      if (paymentMethod.trim() == 'cash') {
+        final sessions = await txn.query('cash_sessions', columns: ['status'], where: 'date_key = ?', whereArgs: [_cashDateKey(DateTime.now())], limit: 1);
+        if (sessions.isNotEmpty && sessions.first['status'] == 'closed') {
+          throw StateError('Kas hari ini sudah ditutup; pembayaran tunai baru tidak dapat dicatat.');
+        }
+      }
       await txn.insert('receipt_payments', {
         'receipt_id': receiptId, 'amount': amount,
         'payment_method': paymentMethod.trim(), 'note': note.trim(), 'created_at': now,
@@ -591,6 +597,12 @@ class PackingTransactionRepository {
       if (remaining <= 0) throw StateError('Nota sudah lunas.');
       if (amount > remaining) {
         throw ArgumentError('Pembayaran melebihi sisa tagihan ($remaining).');
+      }
+      if (paymentMethod.trim() == 'cash') {
+        final sessions = await txn.query('cash_sessions', columns: ['status'], where: 'date_key = ?', whereArgs: [_cashDateKey(DateTime.now())], limit: 1);
+        if (sessions.isNotEmpty && sessions.first['status'] == 'closed') {
+          throw StateError('Kas hari ini sudah ditutup; pembayaran tunai baru tidak dapat dicatat.');
+        }
       }
       await txn.insert('receipt_payments', {
         'receipt_id': receiptId,
