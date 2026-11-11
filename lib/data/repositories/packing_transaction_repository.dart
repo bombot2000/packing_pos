@@ -741,6 +741,101 @@ class PackingTransactionRepository {
   }
 
 
+  String _cashDateKey(DateTime date) => '${date.year.toString().padLeft(4, '0')}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
+
+  Future<Map<String, Object?>?> findCashSession(DateTime date) async {
+    final db = await _database.database;
+    final rows = await db.query('cash_sessions', where: 'date_key = ?', whereArgs: [_cashDateKey(date)], limit: 1);
+    return rows.isEmpty ? null : rows.first;
+  }
+
+  Future<int> startCashSession({required DateTime date, required int openingBalance}) async {
+    if (openingBalance < 0) throw ArgumentError('Saldo awal tidak boleh negatif.');
+    final db = await _database.database;
+    final now = DateTime.now().toUtc().toIso8601String();
+    try {
+      return await db.insert('cash_sessions', {
+        'date_key': _cashDateKey(date), 'opening_balance': openingBalance,
+        'status': 'open', 'note': '', 'created_at': now,
+      });
+    } catch (error) {
+      if (error.toString().toLowerCase().contains('unique')) {
+        throw StateError('Sesi kas untuk tanggal ini sudah dibuat.');
+      }
+      rethrow;
+    }
+  }
+
+  Future<void> addCashExpense({required int sessionId, required int amount, required String category, String note = ''}) async {
+    if (amount <= 0) throw ArgumentError('Pengeluaran harus lebih dari nol.');
+    if (category.trim().isEmpty) throw ArgumentError('Kategori pengeluaran wajib diisi.');
+    final db = await _database.database;
+    await db.transaction((txn) async {
+      final rows = await txn.query('cash_sessions', where: 'id = ?', whereArgs: [sessionId], limit: 1);
+      if (rows.isEmpty) throw StateError('Sesi kas tidak ditemukan.');
+      if (rows.first['status'] != 'open') throw StateError('Sesi kas sudah ditutup.');
+      await txn.insert('cash_expenses', {
+        'session_id': sessionId, 'amount': amount, 'category': category.trim(),
+        'note': note.trim(), 'created_at': DateTime.now().toUtc().toIso8601String(),
+      });
+    });
+  }
+
+  Future<Map<String, Object?>> cashSessionSummary(int sessionId) async {
+    final db = await _database.database;
+    final rows = await db.query('cash_sessions', where: 'id = ?', whereArgs: [sessionId], limit: 1);
+    if (rows.isEmpty) throw StateError('Sesi kas tidak ditemukan.');
+    final session = rows.first;
+    final date = DateTime.parse(session['date_key'] as String);
+    final start = DateTime(date.year, date.month, date.day).toUtc().toIso8601String();
+    final end = DateTime(date.year, date.month, date.day + 1).toUtc().toIso8601String();
+    final payments = await db.rawQuery('''
+      SELECT COALESCE(SUM(rp.amount), 0) AS total
+      FROM receipt_payments rp INNER JOIN packing_receipts pr ON pr.id = rp.receipt_id
+      WHERE pr.status != 'cancelled' AND rp.payment_method = 'cash'
+        AND rp.created_at >= ? AND rp.created_at < ?
+    ''', [start, end]);
+    final expenses = await db.rawQuery('SELECT COALESCE(SUM(amount), 0) AS total FROM cash_expenses WHERE session_id = ?', [sessionId]);
+    final expenseRows = await db.query('cash_expenses', where: 'session_id = ?', whereArgs: [sessionId], orderBy: 'id DESC');
+    final opening = (session['opening_balance'] as num).toInt();
+    final cashIn = (payments.first['total'] as num).toInt();
+    final expenseTotal = (expenses.first['total'] as num).toInt();
+    final expected = opening + cashIn - expenseTotal;
+    return {
+      'session': session, 'cash_received': cashIn, 'expense_total': expenseTotal,
+      'expected_balance': expected, 'expenses': expenseRows,
+    };
+  }
+
+  Future<void> closeCashSession({required int sessionId, required int countedBalance, String note = ''}) async {
+    if (countedBalance < 0) throw ArgumentError('Uang fisik tidak boleh negatif.');
+    final db = await _database.database;
+    await db.transaction((txn) async {
+      final rows = await txn.query('cash_sessions', where: 'id = ?', whereArgs: [sessionId], limit: 1);
+      if (rows.isEmpty) throw StateError('Sesi kas tidak ditemukan.');
+      final session = rows.first;
+      if (session['status'] != 'open') throw StateError('Sesi kas sudah ditutup.');
+      final date = DateTime.parse(session['date_key'] as String);
+      final start = DateTime(date.year, date.month, date.day).toUtc().toIso8601String();
+      final end = DateTime(date.year, date.month, date.day + 1).toUtc().toIso8601String();
+      final payments = await txn.rawQuery('''
+        SELECT COALESCE(SUM(rp.amount), 0) AS total FROM receipt_payments rp
+        INNER JOIN packing_receipts pr ON pr.id = rp.receipt_id
+        WHERE pr.status != 'cancelled' AND rp.payment_method = 'cash'
+          AND rp.created_at >= ? AND rp.created_at < ?
+      ''', [start, end]);
+      final expenses = await txn.rawQuery('SELECT COALESCE(SUM(amount), 0) AS total FROM cash_expenses WHERE session_id = ?', [sessionId]);
+      final expected = (session['opening_balance'] as num).toInt()
+          + (payments.first['total'] as num).toInt()
+          - (expenses.first['total'] as num).toInt();
+      await txn.update('cash_sessions', {
+        'expected_balance': expected, 'counted_balance': countedBalance,
+        'difference': countedBalance - expected, 'status': 'closed',
+        'note': note.trim(), 'closed_at': DateTime.now().toUtc().toIso8601String(),
+      }, where: 'id = ?', whereArgs: [sessionId]);
+    });
+  }
+
   /// Ringkasan laporan lintas transaksi. Transaksi batal tidak dihitung sebagai
   /// penjualan, tetapi tetap tersimpan pada riwayat.
   Future<Map<String, Object?>> reportSummary({
@@ -822,7 +917,7 @@ class PackingTransactionRepository {
           txn.query(table, orderBy: 'id');
       return {
         'format': 'packing_pos_backup',
-        'version': 6,
+        'version': 7,
         'createdAt': DateTime.now().toUtc().toIso8601String(),
         'packing_transactions': await rows('packing_transactions'),
         'packing_receipts': await rows('packing_receipts'),
@@ -832,7 +927,7 @@ class PackingTransactionRepository {
         'materials': await rows('materials'),
         'service_types': await rows('service_types'),
         'customers': await rows('customers'),
-        'app_settings': await txn.query('app_settings', orderBy: 'key'),
+        'app_settings': await txn.query('app_settings', orderBy: 'key'),\n        'cash_sessions': await rows('cash_sessions'),\n        'cash_expenses': await rows('cash_expenses'),
       };
     });
   }
@@ -844,7 +939,7 @@ class PackingTransactionRepository {
 
     final db = await _database.database;
     await db.transaction((txn) async {
-      await txn.delete('receipt_payments');
+      await txn.delete('cash_expenses');\n      await txn.delete('cash_sessions');\n      await txn.delete('receipt_payments');
       await txn.delete('transaction_payments');
       await txn.delete('transaction_materials');
       await txn.delete('packing_transactions');
