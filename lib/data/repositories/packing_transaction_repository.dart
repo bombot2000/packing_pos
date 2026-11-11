@@ -421,18 +421,22 @@ class PackingTransactionRepository {
     final cleanQuery = query.trim().toLowerCase();
     if (cleanQuery.isNotEmpty) {
       conditions.add("""(
-        LOWER(receipt_no) LIKE ?
-        OR LOWER(customer_name) LIKE ?
+        LOWER(receipt_no) LIKE ? ESCAPE '\\'
+        OR LOWER(customer_name) LIKE ? ESCAPE '\\'
         OR EXISTS (
           SELECT 1 FROM packing_transactions AS jobs
           WHERE jobs.receipt_id = packing_receipts.id
             AND (
-              LOWER(jobs.receipt_no) LIKE ?
-              OR LOWER(jobs.item_description) LIKE ?
+              LOWER(jobs.receipt_no) LIKE ? ESCAPE '\\'
+              OR LOWER(jobs.item_description) LIKE ? ESCAPE '\\'
             )
         )
       )""");
-      final pattern = '%$cleanQuery%';
+      final escapedQuery = cleanQuery
+          .replaceAll('\\', '\\\\')
+          .replaceAll('%', '\\%')
+          .replaceAll('_', '\\_');
+      final pattern = '%$escapedQuery%';
       args.addAll([pattern, pattern, pattern, pattern]);
     }
     switch (status) {
