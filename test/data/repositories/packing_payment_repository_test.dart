@@ -355,6 +355,39 @@ void main() {
       await expectLater(repository.addReceiptPayment(receiptId: id, amount: 1, paymentMethod: 'cash'), throwsStateError);
     });
 
+    test('laporan merinci penerimaan menurut metode pembayaran', () async {
+      final receipt = await createReceipt();
+      final id = receipt['id'] as int;
+      await repository.addReceiptPayment(
+        receiptId: id,
+        amount: 30000,
+        paymentMethod: 'cash',
+      );
+      await repository.addReceiptPayment(
+        receiptId: id,
+        amount: 20000,
+        paymentMethod: 'transfer',
+      );
+
+      final report = await repository.reportSummary();
+      final methods = (report['payment_methods'] as List)
+          .cast<Map<String, Object?>>();
+      expect(methods, hasLength(2));
+      final cash = methods.firstWhere((row) => row['payment_method'] == 'cash');
+      final transfer = methods.firstWhere((row) => row['payment_method'] == 'transfer');
+      expect(cash['amount'], 30000);
+      expect(cash['payment_count'], 1);
+      expect(transfer['amount'], 20000);
+      expect(transfer['payment_count'], 1);
+
+      final tomorrow = DateTime.now().add(const Duration(days: 1));
+      final future = await repository.reportSummary(
+        startDate: tomorrow,
+        endDate: tomorrow.add(const Duration(days: 1)),
+      );
+      expect(future['payment_methods'], isEmpty);
+    });
+
     test('laporan menghitung uang masuk dari tanggal pembayaran dan menghitung nota', () async {
       final receipt = await createReceipt();
       final id = receipt['id'] as int;
