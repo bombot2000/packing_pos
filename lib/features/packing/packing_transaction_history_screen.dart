@@ -139,7 +139,7 @@ class _PackingTransactionHistoryScreenState
             ),
             IconButton(
               tooltip: 'Muat ulang',
-              onPressed: () => _refresh(),
+              onPressed: () => _refresh(resetPage: true),
               icon: const Icon(Icons.refresh),
             ),
           ],
@@ -272,7 +272,7 @@ class _PackingTransactionHistoryScreenState
                                     : 'Tidak ada nota pada halaman ini.'),
                               )
                             : RefreshIndicator(
-                                onRefresh: () async => _refresh(),
+                                onRefresh: () async => _refresh(resetPage: true),
                                 child: ListView.separated(
                                   padding: const EdgeInsets.all(12),
                                   itemCount: rows.length,
@@ -311,7 +311,7 @@ class _PackingTransactionHistoryScreenState
                                               receiptId: (row['id'] as num).toInt(),
                                             ),
                                           ));
-                                          if (mounted) _refresh();
+                                          if (mounted) _refresh(resetPage: true);
                                         },
                                       ),
                                     );
