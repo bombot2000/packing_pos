@@ -225,9 +225,28 @@ class PackingReceiptPrinter {
     bytes.addAll(generator.text('Dibayar: ${money(paid)}'));
     bytes.addAll(generator.text('Sisa: ${money(total - paid)}'));
     if (payments.isNotEmpty) {
-      final payment = payments.first;
-      bytes.addAll(generator.text('Metode: ${payment['payment_method'] ?? '-'}'));
-      bytes.addAll(generator.text('Waktu bayar: ${payment['created_at'] ?? '-'}'));
+      bytes.addAll(generator.text(
+        'RIWAYAT PEMBAYARAN',
+        styles: const PosStyles(bold: true),
+      ));
+      for (var i = 0; i < payments.length; i++) {
+        final payment = payments[i];
+        bytes.addAll(generator.text(
+          '${i + 1}. ${money(payment['amount'])} • ${payment['payment_method'] ?? '-'}',
+        ));
+        bytes.addAll(generator.text(
+          '   ${payment['created_at'] ?? '-'}',
+        ));
+        final paymentNote = payment['note']?.toString() ?? '';
+        if (paymentNote.trim().isNotEmpty) {
+          bytes.addAll(generator.text('   Catatan: $paymentNote'));
+        }
+      }
+      final paymentTotal = payments.fold<int>(
+        0,
+        (sum, payment) => sum + ((payment['amount'] as num?)?.toInt() ?? 0),
+      );
+      bytes.addAll(generator.text('Total riwayat bayar: ${money(paymentTotal)}'));
     } else {
       bytes.addAll(generator.text('Status: Belum dibayar'));
     }
