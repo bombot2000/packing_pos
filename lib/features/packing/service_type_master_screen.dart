@@ -16,7 +16,7 @@ class _ServiceTypeMasterScreenState extends State<ServiceTypeMasterScreen> {
 
   String _money(Object? raw) {
     final n = (raw as num?)?.toInt() ?? 0;
-    return 'Rp ' + n.toString().replaceAllMapped(RegExp(r'(?<=\d)(?=(\d{3})+(?!\d))'), (_) => '.');
+    return 'Rp ${n.toString().replaceAllMapped(RegExp(r'(?<=\d)(?=(\d{3})+(?!\d))'), (_) => '.')}';
   }
 
   Future<void> _edit([Map<String, Object?>? row]) async {
