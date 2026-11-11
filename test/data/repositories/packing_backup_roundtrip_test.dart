@@ -145,6 +145,31 @@ void main() {
     );
   });
 
+  test('export and restore preserves cancelled receipt and cancellation reason', () async {
+    final receiptNo = await repository.saveReceipt(
+      [draft(description: 'Peti dibatalkan', price: 7000)],
+      customerName: 'Pelanggan backup',
+      note: 'Nota untuk uji pembatalan',
+    );
+    final receipt = (await repository.listReceipts(limit: 10))
+        .singleWhere((row) => row['receipt_no'] == receiptNo);
+    await repository.cancelReceipt(
+      receiptId: (receipt['id'] as num).toInt(),
+      reason: 'Salah input',
+    );
+
+    final backup = await repository.exportBackup();
+    await repository.restoreBackup(backup);
+
+    final restored = (await repository.listReceipts(limit: 10))
+        .singleWhere((row) => row['receipt_no'] == receiptNo);
+    expect(restored['status'], 'cancelled');
+    final jobs = await repository.jobsForReceipt((restored['id'] as num).toInt());
+    expect(jobs, hasLength(1));
+    expect(jobs.single['status'], 'cancelled');
+    expect(jobs.single['cancellation_reason'], 'Salah input');
+  });
+
   test('invalid restore leaves existing local records untouched', () async {
     await repository.save(draft(description: 'Data lokal', price: 25000));
     final before = await repository.listReceipts(limit: 10);
