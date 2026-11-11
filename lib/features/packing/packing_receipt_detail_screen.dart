@@ -49,7 +49,7 @@ class _PackingReceiptDetailScreenState extends State<PackingReceiptDetailScreen>
 
   String _money(Object? value) {
     final n = (value as num?)?.toInt() ?? 0;
-    return 'Rp ' + n.toString().replaceAllMapped(RegExp(r'(?<=\d)(?=(\d{3})+(?!\d))'), (_) => '.');
+    return 'Rp ${n.toString().replaceAllMapped(RegExp(r'(?<=\d)(?=(\d{3})+(?!\d))'), (_) => '.')}';
   }
 
   int? _parse(String text) => int.tryParse(
