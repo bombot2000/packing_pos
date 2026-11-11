@@ -537,18 +537,18 @@ class PackingTransactionRepository {
     final totals = await db.rawQuery('''
       SELECT COUNT(*) AS transaction_count,
         (SELECT COUNT(*) FROM packing_receipts WHERE status != 'cancelled'$dateFilter) AS receipt_count,
-        COALESCE(SUM(selling_price), 0) AS sales_total,
+        (SELECT COALESCE(SUM(total_amount), 0) FROM packing_receipts WHERE status != 'cancelled'$dateFilter) AS sales_total,
         COALESCE(SUM(material_cost), 0) AS material_cost_total,
         COALESCE(SUM(labor_cost), 0) AS labor_cost_total,
         COALESCE(SUM(overhead_cost), 0) AS overhead_cost_total,
-        COALESCE(SUM(selling_price - material_cost - labor_cost - overhead_cost), 0) AS gross_profit,
+        (SELECT COALESCE(SUM(total_amount), 0) FROM packing_receipts WHERE status != 'cancelled'$dateFilter) - COALESCE(SUM(material_cost + labor_cost + overhead_cost), 0) AS gross_profit,
         (SELECT COALESCE(SUM(receipt_payments.amount), 0) FROM receipt_payments INNER JOIN packing_receipts ON packing_receipts.id = receipt_payments.receipt_id WHERE packing_receipts.status != 'cancelled'$paymentDateFilter) AS paid_total,
         (SELECT COALESCE(SUM(total_amount - paid_amount), 0) FROM packing_receipts WHERE status != 'cancelled'$dateFilter) AS receivable_total,
         (SELECT COUNT(*) FROM packing_receipts WHERE status = 'completed'$dateFilter) AS completed_count,
         (SELECT COUNT(*) FROM packing_receipts WHERE status = 'open'$dateFilter) AS open_count,
         (SELECT COUNT(*) FROM packing_receipts WHERE status = 'cancelled'$dateFilter) AS cancelled_count
       FROM packing_transactions WHERE status != 'cancelled'$dateFilter
-    ''', [...args, ...args, ...args, ...args, ...args, ...args, ...args]);
+    ''', [...args, ...args, ...args, ...args, ...args, ...args, ...args, ...args, ...args]);
     final materials = await db.rawQuery('''
       SELECT material_name_snapshot AS name, unit_snapshot AS unit,
         COALESCE(SUM(actual_quantity), 0) AS quantity,
