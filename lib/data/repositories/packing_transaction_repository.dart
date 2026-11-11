@@ -454,7 +454,11 @@ class PackingTransactionRepository {
       args,
     );
     final rows = await db.rawQuery(
-      'SELECT * FROM packing_receipts$where ORDER BY created_at DESC, id DESC LIMIT ? OFFSET ?',
+      '''SELECT packing_receipts.*,
+        (SELECT COUNT(*) FROM packing_transactions
+         WHERE packing_transactions.receipt_id = packing_receipts.id) AS job_count
+        FROM packing_receipts$where
+        ORDER BY created_at DESC, id DESC LIMIT ? OFFSET ?''',
       [...args, limit, offset],
     );
     return {
