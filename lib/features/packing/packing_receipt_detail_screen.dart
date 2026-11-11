@@ -173,6 +173,7 @@ class _PackingReceiptDetailScreenState extends State<PackingReceiptDetailScreen>
           Text('Pelanggan: ${(receipt['customer_name'] as String).isEmpty ? '-' : receipt['customer_name']}'),
           Text('Tanggal: ${_date(receipt['created_at'])}'),
           Text('Status: ${status == 'completed' ? 'Lunas' : status == 'cancelled' ? 'Dibatalkan' : paid > 0 ? 'Dibayar sebagian' : 'Belum dibayar'}'),
+          if (((receipt['discount_amount'] as num?)?.toInt() ?? 0) > 0) Text('Diskon nota: ${_money(receipt['discount_amount'])}'),
           if ((receipt['note'] as String).isNotEmpty) Text('Catatan: ${receipt['note']}'),
         ]))),
         Text('Rincian pekerjaan • ${_jobs.length}', style: Theme.of(context).textTheme.titleMedium),
@@ -181,11 +182,12 @@ class _PackingReceiptDetailScreenState extends State<PackingReceiptDetailScreen>
           return Card(child: ListTile(
             leading: CircleAvatar(child: Text('${i + 1}')),
             title: Text((job['item_description'] as String).isEmpty ? 'Pekerjaan' : job['item_description'] as String),
-            subtitle: Text('Ukuran: ${job['length_cm']} × ${job['width_cm']} × ${job['height_cm']} cm'),
+            subtitle: Text('Qty ${job['quantity'] ?? 1} • Ukuran: ${job['length_cm']} × ${job['width_cm']} × ${job['height_cm']} cm • Harga satuan ${_money(job['unit_price'] ?? job['selling_price'])}'),
             trailing: Text(_money(job['selling_price']), style: const TextStyle(fontWeight: FontWeight.bold)),
           ));
         }),
         Card(child: Column(children: [
+          if (((receipt['discount_amount'] as num?)?.toInt() ?? 0) > 0) ListTile(title: const Text('Subtotal setelah diskon'), trailing: Text(_money(total + ((receipt['discount_amount'] as num?)?.toInt() ?? 0)))),
           ListTile(title: const Text('Total nota'), trailing: Text(_money(total), style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18))),
           ListTile(title: const Text('Pembayaran'), trailing: Text(_money(paid))),
           ListTile(title: const Text('Sisa'), trailing: Text(_money(total - paid), style: const TextStyle(fontWeight: FontWeight.bold))),
