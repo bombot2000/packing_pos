@@ -58,7 +58,6 @@ class PackingBackupValidator {
       if (transactions.containsKey(id)) {
         throw FormatException('ID transaksi duplikat: $id.');
       }
-      _positiveInt(row['quantity'], 'Qty pekerjaan');
       final unitPrice = _nonNegativeInt(row['unit_price'], 'Harga satuan pekerjaan');
       final quantity = _positiveInt(row['quantity'], 'Qty pekerjaan');
       if (unitPrice * quantity != _int(row['selling_price'], 'selling_price')) {
@@ -174,7 +173,7 @@ class PackingBackupValidator {
     for (final tx in data['packing_transactions']!) {
       final rid = _positiveInt(tx['receipt_id'], 'ID nota pekerjaan');
       if (!headerMap.containsKey(rid)) throw const FormatException('Pekerjaan merujuk nota yang tidak ada.');
-      if (tx['status'] != 'cancelled') sums[rid] = (sums[rid] ?? 0) + _int(tx['selling_price'], 'Harga pekerjaan');
+      sums[rid] = (sums[rid] ?? 0) + _int(tx['selling_price'], 'Harga pekerjaan');
     }
     for (final e in headerMap.entries) {
       final gross = sums[e.key] ?? 0;
