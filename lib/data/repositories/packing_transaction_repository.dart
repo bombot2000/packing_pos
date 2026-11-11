@@ -927,7 +927,9 @@ class PackingTransactionRepository {
         'materials': await rows('materials'),
         'service_types': await rows('service_types'),
         'customers': await rows('customers'),
-        'app_settings': await txn.query('app_settings', orderBy: 'key'),\n        'cash_sessions': await rows('cash_sessions'),\n        'cash_expenses': await rows('cash_expenses'),
+        'app_settings': await txn.query('app_settings', orderBy: 'key'),
+        'cash_sessions': await rows('cash_sessions'),
+        'cash_expenses': await rows('cash_expenses'),
       };
     });
   }
@@ -939,7 +941,9 @@ class PackingTransactionRepository {
 
     final db = await _database.database;
     await db.transaction((txn) async {
-      await txn.delete('cash_expenses');\n      await txn.delete('cash_sessions');\n      await txn.delete('receipt_payments');
+      await txn.delete('cash_expenses');
+      await txn.delete('cash_sessions');
+      await txn.delete('receipt_payments');
       await txn.delete('transaction_payments');
       await txn.delete('transaction_materials');
       await txn.delete('packing_transactions');
