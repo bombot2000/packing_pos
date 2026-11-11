@@ -36,10 +36,10 @@ class _PackingReportsScreenState extends State<PackingReportsScreen> {
 
   String _money(Object? value) {
     final amount = (value as num?)?.toInt() ?? 0;
-    return 'Rp ' + amount.toString().replaceAllMapped(
+    return 'Rp ${amount.toString().replaceAllMapped(
       RegExp(r'(?<=\d)(?=(\d{3})+(?!\d))'),
       (_) => '.',
-    );
+    )}';
   }
 
   String _quantity(Object? value) =>
