@@ -215,12 +215,20 @@ class PackingReceiptPrinter {
       for (final m in materials) {
         bytes.addAll(generator.text('  ${m['material_name_snapshot']}: ${m['actual_quantity']} ${m['unit_snapshot']} = ${money(m['subtotal'])}'));
       }
-      bytes.addAll(generator.text('  Harga pekerjaan: ${money(job['selling_price'])}'));
+      final quantity = (job['quantity'] as num?)?.toInt() ?? 1;
+      final unitPrice = job['unit_price'] ?? job['selling_price'];
+      bytes.addAll(generator.text('  Qty: $quantity x ${money(unitPrice)}'));
+      bytes.addAll(generator.text('  Subtotal pekerjaan: ${money(job['selling_price'])}'));
       if (i != jobs.length - 1) bytes.addAll(generator.hr(ch: '-'));
     }
     bytes.addAll(generator.hr());
     final total = (receipt['total_amount'] as num?)?.toInt() ?? 0;
     final paid = (receipt['paid_amount'] as num?)?.toInt() ?? 0;
+    final discount = (receipt['discount_amount'] as num?)?.toInt() ?? 0;
+    if (discount > 0) {
+      bytes.addAll(generator.text('Subtotal: ${money(total + discount)}'));
+      bytes.addAll(generator.text('Diskon nota: -${money(discount)}'));
+    }
     bytes.addAll(generator.text('TOTAL NOTA: ${money(total)}', styles: const PosStyles(bold: true, height: PosTextSize.size2)));
     bytes.addAll(generator.text('Dibayar: ${money(paid)}'));
     bytes.addAll(generator.text('Sisa: ${money(total - paid)}'));
