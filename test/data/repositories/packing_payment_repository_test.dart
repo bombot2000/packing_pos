@@ -259,6 +259,49 @@ void main() {
     });
   });
 
+  group('edit nota sebelum pembayaran', () {
+    test('mengubah pekerjaan dan total tanpa mengganti identitas nota', () async {
+      final receipt = await createReceipt();
+      final id = receipt['id'] as int;
+      final receiptNo = receipt['receipt_no'] as String;
+      await repository.updateUnpaidReceipt(
+        id,
+        const [PackingTransactionDraft(
+          customerName: 'Pelanggan baru', itemDescription: 'Barang direvisi',
+          quantity: 2, lengthCm: 120, widthCm: 90, heightCm: 70,
+          calculationSnapshot: {'mode': 'edited'}, sellingPrice: 75000,
+        )],
+        customerName: 'Pelanggan baru', note: 'Catatan revisi', discountAmount: 5000,
+      );
+      final saved = (await repository.findReceiptById(id))!;
+      expect(saved['receipt_no'], receiptNo);
+      expect(saved['customer_name'], 'Pelanggan baru');
+      expect(saved['total_amount'], 145000);
+      expect(saved['discount_amount'], 5000);
+      expect(saved['note'], 'Catatan revisi');
+      final jobs = await repository.jobsForReceipt(id);
+      expect(jobs, hasLength(1));
+      expect(jobs.single['item_description'], 'Barang direvisi');
+      expect(jobs.single['selling_price'], 150000);
+    });
+
+    test('menolak edit setelah pembayaran sebagian dan mempertahankan data', () async {
+      final receipt = await createReceipt();
+      final id = receipt['id'] as int;
+      await repository.addReceiptPayment(receiptId: id, amount: 10000, paymentMethod: 'cash');
+      await expectLater(
+        repository.updateUnpaidReceipt(id, const [PackingTransactionDraft(
+          itemDescription: 'Tidak boleh berubah', lengthCm: 10, widthCm: 10, heightCm: 10,
+          calculationSnapshot: {'mode': 'test'}, sellingPrice: 1,
+        )]),
+        throwsStateError,
+      );
+      expect((await repository.findReceiptById(id))!['total_amount'], 100000);
+      expect((await repository.jobsForReceipt(id)).single['item_description'], 'Barang uji');
+      expect(await repository.receiptPaymentsFor(id), hasLength(1));
+    });
+  });
+
   group('pembatalan nota', () {
     test('membatalkan nota beserta seluruh pekerjaannya dan menolak pembayaran', () async {
       final receipt = await createReceipt();
