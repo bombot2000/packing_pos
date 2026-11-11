@@ -23,8 +23,7 @@ class _MaterialMasterScreenState extends State<MaterialMasterScreen> {
     _materials = _repository.listMaterials();
   }
 
-  String _rupiah(int value) => 'Rp ' +
-      value.toString().replaceAllMapped(
+  String _rupiah(int value) => 'Rp ${value.toString().replaceAllMapped(
             RegExp(r'(?<=\d)(?=(\d{3})+(?!\d))'),
             (_) => '.',
           );
