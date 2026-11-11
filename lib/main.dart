@@ -54,7 +54,6 @@ class _HomePageState extends State<HomePage> {
     appBar: AppBar(title: Text(_businessName)),
     body: ListView(padding: const EdgeInsets.all(16), children: [
       Card(child: Padding(padding: const EdgeInsets.all(18), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Text(_businessName, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
         const SizedBox(height: 8),
         const Text('Catat jenis pekerjaan, ukuran barang, dan ongkos jasa secara manual.'),
         const SizedBox(height: 16),
