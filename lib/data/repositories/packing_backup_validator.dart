@@ -284,13 +284,6 @@ class PackingBackupValidator {
                   '-${parsedDate.month.toString().padLeft(2, '0')}' +
                   '-${parsedDate.day.toString().padLeft(2, '0')}' ==
               dateKey;
-      final dateKey = _text(row['date_key'], 'Tanggal sesi kas');
-      final parsedDate = DateTime.tryParse(dateKey);
-      final isRealCalendarDate = parsedDate != null &&
-          parsedDate.year.toString().padLeft(4, '0') +
-                  '-${parsedDate.month.toString().padLeft(2, '0')}' +
-                  '-${parsedDate.day.toString().padLeft(2, '0')}' ==
-              dateKey;
       if (!RegExp(r'^\d{4}-\d{2}-\d{2}$').hasMatch(dateKey) ||
           !isRealCalendarDate ||
           !cashDateKeys.add(dateKey)) {
