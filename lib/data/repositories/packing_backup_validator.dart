@@ -168,7 +168,7 @@ class PackingBackupValidator {
     }
     for (final e in headerMap.entries) {
       final paid = _int(e.value['paid_amount'], 'Pembayaran nota');
-      if ((paidSums[e.key] ?? 0) != 0 && paidSums[e.key] != paid) throw const FormatException('Riwayat pembayaran nota tidak cocok.');
+      if (version >= 4 ? (paidSums[e.key] ?? 0) != paid : ((paidSums[e.key] ?? 0) != 0 && paidSums[e.key] != paid)) throw const FormatException('Riwayat pembayaran nota tidak cocok.');
       if (e.value['status'] == 'completed' && paid != _int(e.value['total_amount'], 'Total nota')) throw const FormatException('Status lunas tidak cocok.');
     }
     final materialIds = <int>{};
