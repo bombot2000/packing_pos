@@ -36,6 +36,24 @@ void main() {
       expect(data['transaction_payments'], isEmpty);
     });
 
+    test('validates cash session and expense relationships in version 7 backups', () {
+      final backup = validBackup(version: 7);
+      backup['packing_receipts'] = [
+        {'id': 1, 'receipt_no': 'RCP-1', 'customer_name': '', 'total_amount': 20000, 'discount_amount': 0, 'paid_amount': 0, 'status': 'open', 'note': '', 'created_at': '2026-11-09T00:00:00.000Z', 'updated_at': '2026-11-09T00:00:00.000Z'},
+      ];
+      backup['packing_transactions']![0]['receipt_id'] = 1;
+      backup['packing_receipts']![0]['total_amount'] = 20000;
+      backup['cash_sessions'] = [
+        {'id': 1, 'date_key': '2026-11-09', 'opening_balance': 10000, 'expected_balance': null, 'counted_balance': null, 'difference': null, 'status': 'open', 'note': '', 'created_at': '2026-11-09T00:00:00.000Z', 'closed_at': null},
+      ];
+      backup['cash_expenses'] = [
+        {'id': 1, 'session_id': 1, 'amount': 1000, 'category': 'Operasional', 'note': '', 'created_at': '2026-11-09T00:00:00.000Z'},
+      ];
+      expect(PackingBackupValidator.validate(backup)['cash_expenses'], hasLength(1));
+      backup['cash_expenses']![0]['session_id'] = 999;
+      expect(() => PackingBackupValidator.validate(backup), throwsFormatException);
+    });
+
     test('accepts version 1 backups without the cancellation reason column', () {
       expect(
         () => PackingBackupValidator.validate(validBackup(version: 1)),
