@@ -152,7 +152,7 @@ class _PrinterSettingsScreenState extends State<PrinterSettingsScreen> {
       if (_loading) const LinearProgressIndicator(),
       if (_devices.isNotEmpty)
         DropdownButtonFormField<String>(
-          value: _selectedMac,
+          initialValue: _selectedMac,
           isExpanded: true,
           decoration: const InputDecoration(labelText: 'Pilih printer', border: OutlineInputBorder()),
           items: _devices.map((device) => DropdownMenuItem(
