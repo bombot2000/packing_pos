@@ -275,37 +275,8 @@ class PackingReceiptPrinter {
       linesAfter: 1,
     ));
 
-    final paymentTotal = payments.fold<int>(
-      0,
-      (sum, payment) => sum + ((payment['amount'] as num?)?.toInt() ?? 0),
-    );
-    if (payments.isNotEmpty || paid != 0) {
-      bytes.addAll(generator.text(
-        'RIWAYAT PEMBAYARAN',
-        styles: const PosStyles(bold: true),
-      ));
-      for (var i = 0; i < payments.length; i++) {
-        final payment = payments[i];
-        bytes.addAll(generator.text(
-          '${i + 1}. ${money(payment['amount'])} - ${payment['payment_method'] ?? '-'}',
-        ));
-        final paymentDate = DateTime.tryParse(payment['created_at']?.toString() ?? '');
-        bytes.addAll(generator.text(
-          '   ${paymentDate == null ? '-' : DateFormat('dd/MM/yyyy HH:mm').format(paymentDate.toLocal())}',
-        ));
-        final paymentNote = payment['note']?.toString() ?? '';
-        if (paymentNote.trim().isNotEmpty) {
-          bytes.addAll(generator.text('   Catatan: $paymentNote'));
-        }
-      }
-      bytes.addAll(generator.text('Total riwayat bayar: ${money(paymentTotal)}'));
-      if (paymentTotal != paid) {
-        bytes.addAll(generator.text(
-          'PERHATIAN: total riwayat pembayaran berbeda dari saldo dibayar.',
-          styles: const PosStyles(bold: true),
-        ));
-      }
-    }
+    // Payment history remains available in the app; the printed receipt
+    // contains only the paid amount, balance, and status summary above.
     final note = receipt['note']?.toString() ?? '';
     if (note.trim().isNotEmpty) bytes.addAll(generator.text('Catatan: $note'));
     bytes.addAll(generator.hr());
