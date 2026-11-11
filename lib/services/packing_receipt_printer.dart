@@ -246,18 +246,18 @@ class PackingReceiptPrinter {
     bytes.addAll(generator.text('Sisa: ${money(total - paid)}'));
 
     final receiptStatus = receipt['status']?.toString() ?? 'open';
-    final statusLabel = switch (receiptStatus) {
-      'completed' => 'LUNAS',
-      'cancelled' => 'DIBATALKAN',
-      _ when paid > 0 => 'DIBAYAR SEBAGIAN',
-      _ => 'BELUM DIBAYAR',
-    };
+    final statusLabel = receiptStatus == 'completed'
+        ? 'LUNAS'
+        : receiptStatus == 'cancelled'
+            ? 'DIBATALKAN'
+            : paid > 0
+                ? 'DIBAYAR SEBAGIAN'
+                : 'BELUM DIBAYAR';
     bytes.addAll(generator.text(
       'STATUS: $statusLabel',
-      styles: PosStyles(
+      styles: const PosStyles(
         bold: true,
         align: PosAlign.center,
-        reverse: receiptStatus == 'cancelled',
       ),
       linesAfter: 1,
     ));
