@@ -66,10 +66,11 @@ void main() {
 
     final backup = await repository.exportBackup();
     expect(backup['version'], 5);
-    expect(backup['packing_receipts'], hasLength(1));
+    final backupReceipts = backup['packing_receipts'] as List<dynamic>;
+    expect(backupReceipts, hasLength(1));
     expect(backup['receipt_payments'], hasLength(1));
     expect(backup['packing_transactions'], hasLength(2));
-    expect(backup['packing_receipts'].single['discount_amount'], 0);
+    expect(backupReceipts.single['discount_amount'], 0);
     expect(
       (backup['packing_transactions'] as List)
           .every((job) => job['quantity'] == 1 && job['unit_price'] == job['selling_price']),
