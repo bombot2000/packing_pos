@@ -516,23 +516,23 @@ class PackingTransactionRepository {
       conditions.add('created_at < ?');
       args.add(endDate.toUtc().toIso8601String());
     }
-    final dateFilter = conditions.isEmpty ? '' : ' AND ' + conditions.join(' AND ');
+    final dateFilter = conditions.isEmpty ? '' : ' AND ${conditions.join(' AND ')}';
     final paymentDateFilter = dateFilter.replaceAll('created_at', 'receipt_payments.created_at');
     final materialDateConditions = <String>[];
     if (startDate != null) materialDateConditions.add('packing_transactions.created_at >= ?');
     if (endDate != null) materialDateConditions.add('packing_transactions.created_at < ?');
     final materialDateFilter = materialDateConditions.isEmpty
         ? ''
-        : ' AND ' + materialDateConditions.join(' AND ');
+        : ' AND ${materialDateConditions.join(' AND ')}';
     final totals = await db.rawQuery('''
       SELECT COUNT(*) AS transaction_count,
-        (SELECT COUNT(*) FROM packing_receipts WHERE status != 'cancelled'${dateFilter}) AS receipt_count,
+        (SELECT COUNT(*) FROM packing_receipts WHERE status != 'cancelled'$dateFilter) AS receipt_count,
         COALESCE(SUM(selling_price), 0) AS sales_total,
         COALESCE(SUM(material_cost), 0) AS material_cost_total,
         COALESCE(SUM(labor_cost), 0) AS labor_cost_total,
         COALESCE(SUM(overhead_cost), 0) AS overhead_cost_total,
         COALESCE(SUM(selling_price - material_cost - labor_cost - overhead_cost), 0) AS gross_profit,
-        (SELECT COALESCE(SUM(receipt_payments.amount), 0) FROM receipt_payments INNER JOIN packing_receipts ON packing_receipts.id = receipt_payments.receipt_id WHERE packing_receipts.status != 'cancelled'${paymentDateFilter}) AS paid_total,
+        (SELECT COALESCE(SUM(receipt_payments.amount), 0) FROM receipt_payments INNER JOIN packing_receipts ON packing_receipts.id = receipt_payments.receipt_id WHERE packing_receipts.status != 'cancelled'$paymentDateFilter) AS paid_total,
         (SELECT COALESCE(SUM(total_amount - paid_amount), 0) FROM packing_receipts WHERE status != 'cancelled'${dateFilter}) AS receivable_total,
         (SELECT COUNT(*) FROM packing_receipts WHERE status = 'completed'${dateFilter}) AS completed_count,
         (SELECT COUNT(*) FROM packing_receipts WHERE status = 'open'${dateFilter}) AS open_count,
@@ -546,7 +546,7 @@ class PackingTransactionRepository {
       FROM transaction_materials
       INNER JOIN packing_transactions
         ON packing_transactions.id = transaction_materials.transaction_id
-      WHERE packing_transactions.status != 'cancelled'${materialDateFilter}
+      WHERE packing_transactions.status != 'cancelled'$materialDateFilter
       GROUP BY material_name_snapshot, unit_snapshot
       ORDER BY cost DESC, name COLLATE NOCASE
     ''', args);
