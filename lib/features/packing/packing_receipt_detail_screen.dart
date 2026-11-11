@@ -5,6 +5,7 @@ import 'package:intl/intl.dart';
 import 'packing_calculator_screen.dart';
 import '../../data/repositories/packing_transaction_repository.dart';
 import '../../services/packing_receipt_printer.dart';
+import '../../data/repositories/packing_identity_repository.dart';
 
 class PackingReceiptDetailScreen extends StatefulWidget {
   const PackingReceiptDetailScreen({super.key, required this.receiptId});
@@ -24,6 +25,7 @@ class _PackingReceiptDetailScreenState extends State<PackingReceiptDetailScreen>
   List<Map<String, Object?>> _jobs = [];
   List<Map<String, Object?>> _payments = [];
   String? _error;
+  Map<String, String> _identity = PackingIdentityRepository.defaults;
 
   @override
   void initState() { super.initState(); _load(); }
@@ -32,12 +34,14 @@ class _PackingReceiptDetailScreenState extends State<PackingReceiptDetailScreen>
 
   Future<void> _load() async {
     try {
+      final identity = await PackingIdentityRepository().getSettings();
       final receipt = await _repo.findReceiptById(widget.receiptId);
       if (receipt == null) throw StateError('Nota tidak ditemukan.');
       final jobs = await _repo.jobsForReceipt(widget.receiptId);
       final payments = await _repo.receiptPaymentsFor(widget.receiptId);
       if (!mounted) return;
       setState(() {
+        _identity = identity;
         _receipt = receipt;
         _jobs = jobs;
         _payments = payments;
@@ -184,6 +188,12 @@ class _PackingReceiptDetailScreenState extends State<PackingReceiptDetailScreen>
       ]),
       body: ListView(padding: const EdgeInsets.all(16), children: [
         Card(child: Padding(padding: const EdgeInsets.all(16), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Center(child: Column(children: [
+            Text(_identity['business_name'] ?? 'Packing POS', style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold), textAlign: TextAlign.center),
+            if ((_identity['business_address'] ?? '').isNotEmpty) Text(_identity['business_address']!, textAlign: TextAlign.center),
+            if ((_identity['business_phone'] ?? '').isNotEmpty) Text('Telp. ${_identity['business_phone']}', textAlign: TextAlign.center),
+          ])),
+          const Divider(height: 24),
           Text(receipt['receipt_no'] as String, style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold)),
           const SizedBox(height: 8),
           Text('Pelanggan: ${(receipt['customer_name'] as String).isEmpty ? '-' : receipt['customer_name']}'),
