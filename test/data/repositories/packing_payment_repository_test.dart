@@ -30,6 +30,59 @@ void main() {
     return (await repository.listReceipts(limit: 1)).single;
   }
 
+  group('qty dan diskon nota', () {
+    test('mengalikan harga satuan dengan qty lalu mengurangi diskon nota', () async {
+      final receiptNo = await repository.saveReceipt(
+        const [
+          PackingTransactionDraft(
+            customerName: 'Pelanggan qty',
+            itemDescription: 'Kardus ukuran sama',
+            quantity: 3,
+            lengthCm: 100,
+            widthCm: 80,
+            heightCm: 60,
+            calculationSnapshot: {'mode': 'test'},
+            sellingPrice: 20000,
+          ),
+        ],
+        discountAmount: 5000,
+      );
+
+      final receipt = (await repository.findReceiptByNo(receiptNo))!;
+      final job = (await repository.jobsForReceipt(receipt['id'] as int)).single;
+      expect(job['quantity'], 3);
+      expect(job['unit_price'], 20000);
+      expect(job['selling_price'], 60000);
+      expect(receipt['discount_amount'], 5000);
+      expect(receipt['total_amount'], 55000);
+    });
+
+    test('menolak qty nol dan diskon melebihi subtotal', () async {
+      const invalidQty = PackingTransactionDraft(
+        lengthCm: 10,
+        widthCm: 10,
+        heightCm: 10,
+        quantity: 0,
+        calculationSnapshot: {'mode': 'test'},
+        sellingPrice: 10000,
+      );
+      await expectLater(repository.saveReceipt([invalidQty]), throwsArgumentError);
+
+      const validJob = PackingTransactionDraft(
+        lengthCm: 10,
+        widthCm: 10,
+        heightCm: 10,
+        quantity: 2,
+        calculationSnapshot: {'mode': 'test'},
+        sellingPrice: 10000,
+      );
+      await expectLater(
+        repository.saveReceipt([validJob], discountAmount: 20001),
+        throwsArgumentError,
+      );
+    });
+  });
+
   group('pembayaran tingkat nota', () {
     test('menolak pembayaran langsung pada pekerjaan', () async {
       final receipt = await createReceipt();
