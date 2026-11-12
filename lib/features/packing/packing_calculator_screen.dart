@@ -1,6 +1,11 @@
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import '../../core/format/dimensions.dart';
+import '../../core/format/friendly_error.dart';
+import '../../core/format/money_input.dart';
+import '../../core/format/rupiah.dart';
 import '../../data/repositories/packing_transaction_repository.dart';
 import 'packing_receipt_detail_screen.dart';
 import 'service_type_master_screen.dart';
@@ -21,7 +26,7 @@ class _PackingCalculatorScreenState extends State<PackingCalculatorScreen> {
   final _height = TextEditingController();
   final _charge = TextEditingController();
   final _quantity = TextEditingController(text: '1');
-  final _discount = TextEditingController(text: '0');
+  final _discount = TextEditingController();
   final _note = TextEditingController();
   final _receiptNote = TextEditingController();
   final _repo = PackingTransactionRepository();
@@ -29,7 +34,7 @@ class _PackingCalculatorScreenState extends State<PackingCalculatorScreen> {
   List<Map<String, Object?>> _services = [];
   List<Map<String, Object?>> _customers = [];
   int? _serviceId;
-  bool _loadingServices = true, _saving = false;
+  bool _loadingServices = true, _saving = false, _allowLeave = false;
   String? _error;
 
   @override
@@ -87,7 +92,8 @@ class _PackingCalculatorScreenState extends State<PackingCalculatorScreen> {
       setState(() {
         _customer.text = receipt['customer_name'] as String? ?? '';
         _receiptNote.text = receipt['note'] as String? ?? '';
-        _discount.text = ((receipt['discount_amount'] as num?)?.toInt() ?? 0).toString();
+        final savedDiscount = (receipt['discount_amount'] as num?)?.toInt() ?? 0;
+        _discount.text = savedDiscount > 0 ? groupThousands(savedDiscount) : '';
         _jobs
           ..clear()
           ..addAll(drafts);
@@ -105,7 +111,7 @@ class _PackingCalculatorScreenState extends State<PackingCalculatorScreen> {
         }
       });
     } catch (e) {
-      if (mounted) setState(() => _error = 'Nota tidak dapat dimuat untuk diedit: $e');
+      if (mounted) setState(() => _error = 'Nota tidak dapat dimuat untuk diedit: ${friendlyError(e)}');
     }
   }
 
@@ -114,7 +120,7 @@ class _PackingCalculatorScreenState extends State<PackingCalculatorScreen> {
       final rows = await _repo.listCustomers();
       if (mounted) setState(() => _customers = rows);
     } catch (e) {
-      if (mounted) setState(() => _error = 'Master pelanggan gagal dimuat: $e');
+      if (mounted) setState(() => _error = 'Master pelanggan gagal dimuat: ${friendlyError(e)}');
     }
   }
   @override
@@ -134,13 +140,13 @@ class _PackingCalculatorScreenState extends State<PackingCalculatorScreen> {
         final selectedServiceExists = _services.any((service) => service['id'] == _serviceId);
         if (_services.isNotEmpty && !selectedServiceExists) {
           _serviceId = _services.first['id'] as int;
-          _charge.text = (_services.first['default_price'] as num).toInt().toString();
+          _charge.text = groupThousands((_services.first['default_price'] as num).toInt());
         } else if (_serviceId != null && !selectedServiceExists) {
           _serviceId = null;
         }
       });
     } catch (e) {
-      if (mounted) setState(() { _loadingServices = false; _error = 'Master pekerjaan gagal dimuat: $e'; });
+      if (mounted) setState(() { _loadingServices = false; _error = 'Master pekerjaan gagal dimuat: ${friendlyError(e)}'; });
     }
   }
 
@@ -148,7 +154,7 @@ class _PackingCalculatorScreenState extends State<PackingCalculatorScreen> {
     final selected = _serviceById(id);
     setState(() {
       _serviceId = id;
-      if (selected != null) _charge.text = (selected['default_price'] as num).toInt().toString();
+      if (selected != null) _charge.text = groupThousands((selected['default_price'] as num).toInt());
     });
   }
 
@@ -161,37 +167,46 @@ class _PackingCalculatorScreenState extends State<PackingCalculatorScreen> {
     final n = double.tryParse(c.text.trim().replaceAll(',', '.'));
     return n != null && n.isFinite && n > 0 ? n : null;
   }
-  int? _price() {
-    final n = int.tryParse(_charge.text.replaceAll('Rp', '').replaceAll('.', '').replaceAll(',', '').replaceAll(' ', '').trim());
-    return n != null && n >= 0 ? n : null;
-  }
-  String _money(int n) => 'Rp ${n.toString().replaceAllMapped(RegExp(r'(?<=\d)(?=(\d{3})+(?!\d))'), (_) => '.')}';
+  int? _price() => parseRupiah(_charge.text);
+  String _money(int n) => formatRupiah(n);
   int get _grandSubtotal => _jobs.fold<int>(0, (sum, job) => sum + job.sellingPrice * job.quantity);
-  int get _discountAmount => int.tryParse(_discount.text.replaceAll('.', '').replaceAll(',', '').trim()) ?? 0;
+  int get _discountAmount => parseRupiah(_discount.text) ?? 0;
   int get _grandTotal => _grandSubtotal - _discountAmount;
 
-  void _addJob() {
+  int get _quantityValue => int.tryParse(_quantity.text.trim()) ?? 1;
+  void _changeQuantity(int delta) { final next = (_quantityValue + delta).clamp(1, 9999); setState(() => _quantity.text = next.toString()); }
+
+  Future<void> _addJob() async {
     FocusScope.of(context).unfocus();
     final service = _serviceById(_serviceId);
-    final l = _dimension(_length), w = _dimension(_width), h = _dimension(_height), amount = _price();
+    final amount = _price();
+    final anyDimension = [_length, _width, _height].any((c) => c.text.trim().isNotEmpty);
+    final l = _dimension(_length), w = _dimension(_width), h = _dimension(_height);
     final quantity = int.tryParse(_quantity.text.trim());
     String? error;
     if (service == null) {
-      error = 'Tambahkan jenis pekerjaan terlebih dahulu.';
-    } else if (l == null || w == null || h == null) {
-      error = 'Panjang, lebar, dan tinggi harus diisi angka lebih dari nol.';
+      error = 'Pilih jenis pekerjaan terlebih dahulu.';
+    } else if (anyDimension && (l == null || w == null || h == null)) {
+      error = 'Isi ketiga ukuran dengan angka lebih dari nol, atau kosongkan semuanya.';
     } else if (quantity == null || quantity < 1) {
-      error = 'Qty pekerjaan harus berupa bilangan bulat minimal 1.';
+      error = 'Jumlah koli minimal 1.';
     } else if (amount == null) {
-      error = 'Ongkos harus berupa nominal Rupiah yang valid.';
+      error = 'Isi harga pekerjaan dalam Rupiah.';
     }
     if (error != null) { setState(() => _error = error); return; }
+    if (amount == 0) {
+      final proceed = await showDialog<bool>(context: context, builder: (ctx) => AlertDialog(
+        title: const Text('Harga Rp 0'), content: const Text('Harga pekerjaan ini Rp 0. Lanjutkan menambahkan ke nota?'),
+        actions: [TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Perbaiki harga')), FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Lanjutkan'))],
+      ));
+      if (proceed != true || !mounted) return;
+    }
     final job = service!['name'].toString();
-    final description = _item.text.trim().isEmpty ? job : '$job • ${_item.text.trim()}';
+    final description = _item.text.trim().isEmpty ? job : '$job - ${_item.text.trim()}';
     final draft = PackingTransactionDraft(
       customerName: _customer.text.trim(), itemDescription: description,
       quantity: quantity!,
-      lengthCm: l!, widthCm: w!, heightCm: h!,
+      lengthCm: l ?? 0, widthCm: w ?? 0, heightCm: h ?? 0,
       calculationSnapshot: {
         'mode': 'manual_service_charge', 'jobTypeId': _serviceId,
         'jobType': job, 'defaultPriceSnapshot': (service['default_price'] as num).toInt(),
@@ -258,14 +273,26 @@ class _PackingCalculatorScreenState extends State<PackingCalculatorScreen> {
         _item.clear(); _length.clear(); _width.clear(); _height.clear(); _note.clear();
       });
     } catch (e) {
-      if (mounted) setState(() => _error = 'Gagal menyimpan nota: $e');
+      if (mounted) setState(() => _error = 'Gagal menyimpan nota: ${friendlyError(e)}');
     } finally {
       if (mounted) setState(() => _saving = false);
     }
   }
 
-  Widget _field(String label, TextEditingController c, {String? hint, String? suffix, TextInputType? type}) =>
-    TextField(controller: c, keyboardType: type, decoration: InputDecoration(labelText: label, hintText: hint, suffixText: suffix, border: const OutlineInputBorder()));
+  Widget _field(String label, TextEditingController c, {String? hint, String? suffix, String? prefix, TextInputType? type, List<TextInputFormatter>? formatters, ValueChanged<String>? onChanged}) =>
+    TextField(controller: c, keyboardType: type, inputFormatters: formatters, onChanged: onChanged, decoration: InputDecoration(labelText: label, hintText: hint, suffixText: suffix, prefixText: prefix, border: const OutlineInputBorder()));
+
+  Widget _serviceChips() => Wrap(spacing: 8, runSpacing: 4, children: _services.map((e) {
+    final id = e['id'] as int;
+    return ChoiceChip(selected: id == _serviceId, onSelected: (_) => _selectService(id), label: Text('${e['name']} · ${_money((e['default_price'] as num).toInt())}'));
+  }).toList());
+
+  Widget _quantityStepper() => Row(children: [
+    const Expanded(child: Text('Jumlah koli', style: TextStyle(fontSize: 16))),
+    IconButton.filledTonal(tooltip: 'Kurangi', onPressed: _quantityValue > 1 ? () => _changeQuantity(-1) : null, icon: const Icon(Icons.remove)),
+    SizedBox(width: 64, child: TextField(controller: _quantity, textAlign: TextAlign.center, keyboardType: TextInputType.number, inputFormatters: [FilteringTextInputFormatter.digitsOnly], onChanged: (_) => setState(() {}), decoration: const InputDecoration(border: OutlineInputBorder(), isDense: true))),
+    IconButton.filledTonal(tooltip: 'Tambah', onPressed: () => _changeQuantity(1), icon: const Icon(Icons.add)),
+  ]);
 
   @override
   Widget build(BuildContext context) => Scaffold(
@@ -348,7 +375,7 @@ class _PackingCalculatorScreenState extends State<PackingCalculatorScreen> {
       const SizedBox(height: 10),
       _field('Nama / deskripsi barang', _item, hint: 'Contoh: Mesin, lemari, elektronik'),
       const SizedBox(height: 16),
-      Text('Ukuran barang (informasi saja)', style: Theme.of(context).textTheme.titleSmall),
+      ExpansionTile(tilePadding: EdgeInsets.zero, title: const Text('Ukuran barang (opsional)'), subtitle: const Text('Hanya sebagai catatan, tidak memengaruhi harga'), children: [
       const SizedBox(height: 8),
       Row(children: [
         Expanded(child: _field('Panjang', _length, suffix: 'cm', type: const TextInputType.numberWithOptions(decimal: true))),
@@ -357,10 +384,11 @@ class _PackingCalculatorScreenState extends State<PackingCalculatorScreen> {
         const SizedBox(width: 8),
         Expanded(child: _field('Tinggi', _height, suffix: 'cm', type: const TextInputType.numberWithOptions(decimal: true))),
       ]),
+      ]),
       const SizedBox(height: 16),
-      _field('Qty / jumlah koli', _quantity, hint: 'Contoh: 3', suffix: 'koli', type: TextInputType.number),
+      _quantityStepper(),
       const SizedBox(height: 12),
-      _field('Harga per koli / pekerjaan', _charge, hint: 'Harga standar dapat diubah', suffix: 'Rupiah', type: TextInputType.number),
+      _field('Harga per koli / pekerjaan', _charge, hint: 'Harga standar dapat diubah', prefix: 'Rp ', type: TextInputType.number, formatters: [RupiahInputFormatter()]),
       const SizedBox(height: 12),
       _field('Catatan pekerjaan', _note, hint: 'Opsional'),
       const SizedBox(height: 12),
@@ -376,7 +404,7 @@ class _PackingCalculatorScreenState extends State<PackingCalculatorScreen> {
           return Card(child: ListTile(
             leading: CircleAvatar(child: Text('${i + 1}')),
             title: Text(job.itemDescription),
-            subtitle: Text('Qty ${job.quantity} • ${job.lengthCm} × ${job.widthCm} × ${job.heightCm} cm • ${_money(job.sellingPrice)} / koli'),
+            subtitle: Text('${job.quantity} koli x ${_money(job.sellingPrice)}${dimensionsLabel(job.lengthCm, job.widthCm, job.heightCm) == null ? '' : ' • ${dimensionsLabel(job.lengthCm, job.widthCm, job.heightCm)}'}'),
             trailing: Row(mainAxisSize: MainAxisSize.min, children: [
               Text(_money(job.sellingPrice * job.quantity), style: const TextStyle(fontWeight: FontWeight.bold)),
               IconButton(tooltip: 'Hapus pekerjaan', onPressed: () => _removeJob(i), icon: const Icon(Icons.delete_outline)),
@@ -394,6 +422,7 @@ class _PackingCalculatorScreenState extends State<PackingCalculatorScreen> {
             TextField(
               controller: _discount,
               keyboardType: TextInputType.number,
+              inputFormatters: [RupiahInputFormatter()],
               onChanged: (_) => setState(() {}),
               decoration: const InputDecoration(
                 labelText: 'Diskon nota (Rupiah)',
