@@ -107,7 +107,7 @@ class PackingReceiptPrinter {
 
     final note = transaction['note']?.toString() ?? '';
     if (note.trim().isNotEmpty) {
-      bytes.addAll(generator.text('Catatan: $note'));
+      bytes.addAll(generator.text('Catatan: ${printable(note)}'));
     }
     final cancellationReason =
         transaction['cancellation_reason']?.toString() ?? '';
@@ -206,6 +206,10 @@ class PackingReceiptPrinter {
       final n = (raw as num?)?.toInt() ?? 0;
       return 'Rp ${n.toString().replaceAllMapped(RegExp(r'(?<=\d)(?=(\d{3})+(?!\d))'), (_) => '.')}';
     }
+    // Replace characters unsupported by common ESC/POS code pages.
+    String printable(Object? raw) =>
+        (raw?.toString() ?? '').replaceAll('•', '-');
+
     bytes.addAll(generator.reset());
     bytes.addAll(generator.text(identity['business_name'] ?? 'Packing POS', styles: const PosStyles(align: PosAlign.center, bold: true, height: PosTextSize.size2, width: PosTextSize.size2), linesAfter: 1));
     final businessAddress = identity['business_address'] ?? '';
@@ -221,7 +225,7 @@ class PackingReceiptPrinter {
     for (var i = 0; i < jobs.length; i++) {
       final job = jobs[i];
       final desc = job['item_description']?.toString().trim();
-      bytes.addAll(generator.text('${i + 1}. ${desc == null || desc.isEmpty ? 'Pekerjaan' : desc}', styles: const PosStyles(bold: true)));
+      bytes.addAll(generator.text('${i + 1}. ${desc == null || desc.isEmpty ? 'Pekerjaan' : printable(desc)}', styles: const PosStyles(bold: true)));
       bytes.addAll(generator.text('Ukuran: ${job['length_cm']} x ${job['width_cm']} x ${job['height_cm']} cm'));
       final materials = materialsByJob[(job['id'] as num).toInt()] ?? const [];
       for (final m in materials) {
@@ -233,7 +237,7 @@ class PackingReceiptPrinter {
       bytes.addAll(generator.text('  Subtotal pekerjaan: ${money(job['selling_price'])}'));
       final jobNote = job['note']?.toString().trim() ?? '';
       if (jobNote.isNotEmpty) {
-        bytes.addAll(generator.text('  Catatan pekerjaan: $jobNote'));
+        bytes.addAll(generator.text('  Catatan pekerjaan: ${printable(jobNote)}'));
       }
       if (receipt['status']?.toString() == 'cancelled') {
         final cancellationReason =
@@ -293,7 +297,7 @@ class PackingReceiptPrinter {
             : DateFormat('dd/MM/yy HH:mm').format(paymentDate.toLocal());
         final method = payment['payment_method']?.toString().trim();
         bytes.addAll(generator.text(
-          '$dateLabel • ${method == null || method.isEmpty ? 'Lainnya' : method.toUpperCase()}',
+          '$dateLabel - ${method == null || method.isEmpty ? 'Lainnya' : method.toUpperCase()}',
         ));
         bytes.addAll(generator.text(
           '  ${money(payment['amount'])}',
@@ -301,7 +305,7 @@ class PackingReceiptPrinter {
         ));
         final paymentNote = payment['note']?.toString().trim() ?? '';
         if (paymentNote.isNotEmpty) {
-          bytes.addAll(generator.text('  Catatan: $paymentNote'));
+          bytes.addAll(generator.text('  Catatan: ${printable(paymentNote)}'));
         }
       }
     }
