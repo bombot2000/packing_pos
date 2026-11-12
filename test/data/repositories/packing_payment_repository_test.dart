@@ -519,6 +519,32 @@ void main() {
   });
 
   group('pembayaran bertahap nota', () {
+    test('dua pembayaran bersamaan tidak dapat melewati sisa tagihan', () async {
+      final receipt = await createReceipt();
+      final id = receipt['id'] as int;
+
+      final results = await Future.wait([
+        repository.addReceiptPayment(
+          receiptId: id,
+          amount: 60000,
+          paymentMethod: 'cash',
+        ).then((_) => true, onError: (_) => false),
+        repository.addReceiptPayment(
+          receiptId: id,
+          amount: 60000,
+          paymentMethod: 'transfer',
+        ).then((_) => true, onError: (_) => false),
+      ]);
+
+      expect(results.where((accepted) => accepted), hasLength(1));
+      final saved = (await repository.findReceiptById(id))!;
+      expect(saved['paid_amount'], 60000);
+      expect(saved['status'], 'open');
+      final payments = await repository.receiptPaymentsFor(id);
+      expect(payments, hasLength(1));
+      expect(payments.single['amount'], 60000);
+    });
+
     test('DP lalu pelunasan mengubah status hanya saat sisa nol', () async {
       final receipt = await createReceipt();
       final id = receipt['id'] as int;
