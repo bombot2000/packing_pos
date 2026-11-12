@@ -1109,8 +1109,9 @@ class PackingTransactionRepository {
       throw ArgumentError('Qty pekerjaan minimal 1.');
     }
     if (![draft.lengthCm, draft.widthCm, draft.heightCm]
-        .every((v) => v.isFinite && v > 0)) {
-      throw ArgumentError('Dimensi harus berupa angka lebih dari nol.');
+        .every((v) => v.isFinite && v >= 0)) {
+      // 0 means "size not recorded"; negative or non-finite values are invalid.
+      throw ArgumentError('Ukuran tidak boleh negatif.');
     }
     if ([draft.materialCost, draft.laborCost, draft.overheadCost, draft.sellingPrice]
         .any((v) => v < 0)) {
