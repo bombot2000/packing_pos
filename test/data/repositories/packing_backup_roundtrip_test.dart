@@ -43,6 +43,47 @@ void main() {
     );
   }
 
+  test('cash payments normalize method casing for cash session totals', () async {
+    final sessionId = await repository.startCashSession(
+      date: DateTime.now(),
+      openingBalance: 0,
+    );
+    final firstNo = await repository.saveReceipt(
+      [draft(description: 'Pembayaran bertahap', price: 10000)],
+      customerName: 'Pelanggan cash',
+    );
+    final firstReceipt = (await repository.listReceipts(limit: 10))
+        .singleWhere((row) => row['receipt_no'] == firstNo);
+    await repository.addReceiptPayment(
+      receiptId: (firstReceipt['id'] as num).toInt(),
+      amount: 10000,
+      paymentMethod: ' CASH ',
+    );
+
+    final secondNo = await repository.saveReceipt(
+      [draft(description: 'Pembayaran lunas', price: 5000)],
+      customerName: 'Pelanggan cash kedua',
+    );
+    final secondReceipt = (await repository.listReceipts(limit: 10))
+        .singleWhere((row) => row['receipt_no'] == secondNo);
+    await repository.settleReceipt(
+      receiptId: (secondReceipt['id'] as num).toInt(),
+      amount: 5000,
+      paymentMethod: 'Cash',
+    );
+
+    final summary = await repository.cashSessionSummary(sessionId);
+    expect(summary['cash_received'], 15000);
+    final firstPayments = await repository.receiptPaymentsFor(
+      (firstReceipt['id'] as num).toInt(),
+    );
+    final secondPayments = await repository.receiptPaymentsFor(
+      (secondReceipt['id'] as num).toInt(),
+    );
+    expect(firstPayments.single['payment_method'], 'cash');
+    expect(secondPayments.single['payment_method'], 'cash');
+  });
+
   test('receipt history search matches job number and item description once per receipt', () async {
     final receiptNo = await repository.saveReceipt(
       [
