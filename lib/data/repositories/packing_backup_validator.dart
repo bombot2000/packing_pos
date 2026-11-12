@@ -352,7 +352,7 @@ class PackingBackupValidator {
         final receipt = headerMap[receiptId];
         if (receipt != null &&
             receipt['status'] != 'cancelled' &&
-            payment['payment_method'] == 'cash' &&
+            payment['payment_method'].toString().trim().toLowerCase() == 'cash' &&
             inSessionDate(payment['created_at'])) {
           cashIn += _positiveInt(payment['amount'], 'Nominal pembayaran nota');
         }
@@ -362,7 +362,7 @@ class PackingBackupValidator {
         final transaction = transactions[transactionId]!;
         if (transaction['receipt_id'] == null &&
             transaction['status'] != 'cancelled' &&
-            payment['payment_method'] == 'cash' &&
+            payment['payment_method'].toString().trim().toLowerCase() == 'cash' &&
             inSessionDate(payment['created_at'])) {
           cashIn += _positiveInt(payment['amount'], 'Nominal pembayaran');
         }
