@@ -562,6 +562,87 @@ void main() {
     expect(after.single['total_amount'], before.single['total_amount']);
   });
 
+  test('restore multi-job mempertahankan beberapa DP, sisa tagihan, dan status nota', () async {
+    final receiptNo = await repository.saveReceipt(
+      [
+        draft(description: 'Kardus multi-DP', price: 60000),
+        draft(description: 'Peti multi-DP', price: 40000),
+      ],
+      customerName: 'Pelanggan multi-DP',
+    );
+    final receipt = (await repository.listReceipts(limit: 10))
+        .singleWhere((row) => row['receipt_no'] == receiptNo);
+    final receiptId = (receipt['id'] as num).toInt();
+
+    await repository.addReceiptPayment(
+      receiptId: receiptId,
+      amount: 20000,
+      paymentMethod: 'cash',
+      note: 'DP pertama',
+    );
+    await repository.addReceiptPayment(
+      receiptId: receiptId,
+      amount: 15000,
+      paymentMethod: 'transfer',
+      note: 'DP kedua',
+    );
+    await repository.addReceiptPayment(
+      receiptId: receiptId,
+      amount: 25000,
+      paymentMethod: 'qris',
+      note: 'DP ketiga',
+    );
+
+    final backup = await repository.exportBackup();
+    expect(backup['receipt_payments'], hasLength(3));
+
+    await repository.saveReceipt(
+      [draft(description: 'Data sementara', price: 5000)],
+      customerName: 'Data lokal tambahan',
+    );
+    await repository.restoreBackup(backup);
+
+    final restored = (await repository.listReceipts(limit: 10))
+        .singleWhere((row) => row['receipt_no'] == receiptNo);
+    final restoredId = (restored['id'] as num).toInt();
+    expect(restored['total_amount'], 100000);
+    expect(restored['paid_amount'], 60000);
+    expect(restored['status'], 'open');
+
+    final payments = await repository.receiptPaymentsFor(restoredId);
+    expect(payments, hasLength(3));
+    expect(
+      payments.map((payment) => payment['amount']).toList(),
+      [25000, 15000, 20000],
+    );
+    expect(
+      payments.fold<int>(
+        0,
+        (sum, payment) => sum + (payment['amount'] as num).toInt(),
+      ),
+      60000,
+    );
+    expect(
+      payments.map((payment) => payment['note']).toList(),
+      ['DP ketiga', 'DP kedua', 'DP pertama'],
+    );
+
+    final jobs = await repository.jobsForReceipt(restoredId);
+    expect(jobs, hasLength(2));
+    expect(jobs.every((job) => job['status'] == 'open'), isTrue);
+
+    final receivables = await repository.listReceivables();
+    expect(receivables, hasLength(1));
+    expect(receivables.single['receipt_no'], receiptNo);
+    expect(receivables.single['remaining_amount'], 40000);
+
+    final totals = (await repository.reportSummary())['totals'] as Map;
+    expect(totals['paid_total'], 60000);
+    expect(totals['receivable_total'], 40000);
+    expect(totals['open_count'], 1);
+    expect(totals['completed_count'], 0);
+  });
+
   test('export and restore preserves every staged payment and settled status', () async {
     final receiptNo = await repository.saveReceipt(
       [
