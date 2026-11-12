@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../core/format/friendly_error.dart';
 
 import '../../data/repositories/packing_identity_repository.dart';
 
@@ -41,7 +42,7 @@ class _PackingIdentitySettingsScreenState
       _address.text = values['business_address'] ?? '';
       _phone.text = values['business_phone'] ?? '';
     } catch (error) {
-      _message('Gagal memuat pengaturan: $error', error: true);
+      _message('Gagal memuat pengaturan: ${friendlyError(error)}', error: true);
     } finally {
       if (mounted) setState(() => _loading = false);
     }
@@ -68,7 +69,7 @@ class _PackingIdentitySettingsScreenState
       _message('Identitas usaha berhasil disimpan.');
       Navigator.of(context).pop(true);
     } catch (error) {
-      _message(error.toString().replaceFirst('ArgumentError: ', ''), error: true);
+      _message(friendlyError(error), error: true);
     } finally {
       if (mounted) setState(() => _saving = false);
     }
