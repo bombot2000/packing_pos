@@ -353,23 +353,18 @@ class _PackingCalculatorScreenState extends State<PackingCalculatorScreen> {
         trailing: const Icon(Icons.chevron_right),
         onTap: () async { await Navigator.of(context).push(MaterialPageRoute(builder: (_) => const ServiceTypeMasterScreen())); await _loadServices(); },
       ))
-      else DropdownButtonFormField<int>(
-        initialValue: _serviceId, isExpanded: true,
-        decoration: const InputDecoration(labelText: 'Jenis pekerjaan', border: OutlineInputBorder()),
-        items: _services.map((e) => DropdownMenuItem<int>(
-          value: e['id'] as int,
-          child: Text('${e['name']} • ${_money((e['default_price'] as num).toInt())}', overflow: TextOverflow.ellipsis),
-        )).toList(),
-        onChanged: _selectService,
-      ),
-      const SizedBox(height: 12),
-      OutlinedButton.icon(
-        onPressed: () async {
-          await Navigator.of(context).push(MaterialPageRoute(builder: (_) => const ServiceTypeMasterScreen()));
-          await _loadServices();
-        },
-        icon: const Icon(Icons.settings), label: const Text('Kelola jenis pekerjaan dan harga'),
-      ),
+      else ...[
+        Text('Jenis pekerjaan', style: Theme.of(context).textTheme.titleSmall),
+        const SizedBox(height: 6),
+        _serviceChips(),
+        Align(alignment: Alignment.centerLeft, child: TextButton.icon(
+          onPressed: () async {
+            await Navigator.of(context).push(MaterialPageRoute(builder: (_) => const ServiceTypeMasterScreen()));
+            await _loadServices();
+          },
+          icon: const Icon(Icons.settings, size: 18), label: const Text('Kelola jenis pekerjaan dan harga'),
+        )),
+      ],
       const Divider(height: 28),
       Text('Pekerjaan berikutnya', style: Theme.of(context).textTheme.titleMedium),
       const SizedBox(height: 10),
