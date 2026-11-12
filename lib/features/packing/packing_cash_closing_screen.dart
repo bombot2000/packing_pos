@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import '../../core/format/money_input.dart';
+import '../../core/format/friendly_error.dart';
 
 import '../../data/repositories/packing_transaction_repository.dart';
 
@@ -52,7 +54,7 @@ class _PackingCashClosingScreenState extends State<PackingCashClosingScreen> {
         });
       }
     } catch (error) {
-      if (mounted) setState(() => _error = error.toString());
+      if (mounted) setState(() => _error = friendlyError(error));
     }
   }
 
@@ -67,14 +69,14 @@ class _PackingCashClosingScreenState extends State<PackingCashClosingScreen> {
       await action();
       await _load();
     } catch (error) {
-      if (mounted) setState(() => _error = error.toString());
+      if (mounted) setState(() => _error = friendlyError(error));
     } finally {
       if (mounted) setState(() => _busy = false);
     }
   }
 
   Future<void> _start() async {
-    final amount = int.tryParse(_opening.text.trim());
+    final amount = parseRupiah(_opening.text);
     if (amount == null || amount < 0) {
       setState(() => _error = 'Masukkan saldo awal berupa angka nol atau lebih.');
       return;
@@ -84,7 +86,7 @@ class _PackingCashClosingScreenState extends State<PackingCashClosingScreen> {
 
   Future<void> _addExpense() async {
     final session = _summary?['session'] as Map<String, Object?>?;
-    final amount = int.tryParse(_expenseAmount.text.trim());
+    final amount = parseRupiah(_expenseAmount.text);
     if (session == null || amount == null || amount <= 0 || _expenseCategory.text.trim().isEmpty) {
       setState(() => _error = 'Isi nominal dan kategori pengeluaran dengan benar.'); return;
     }
@@ -99,7 +101,7 @@ class _PackingCashClosingScreenState extends State<PackingCashClosingScreen> {
 
   Future<void> _close() async {
     final session = _summary?['session'] as Map<String, Object?>?;
-    final amount = int.tryParse(_counted.text.trim());
+    final amount = parseRupiah(_counted.text);
     if (session == null || amount == null || amount < 0) { setState(() => _error = 'Masukkan jumlah uang fisik yang dihitung.'); return; }
     await _run(() async {
       await _repository.closeCashSession(sessionId: (session['id'] as num).toInt(), countedBalance: amount);
@@ -125,7 +127,7 @@ class _PackingCashClosingScreenState extends State<PackingCashClosingScreen> {
         if (_error != null) Card(color: Theme.of(context).colorScheme.errorContainer, child: Padding(padding: const EdgeInsets.all(12), child: Text(_error!))),
         if (summary == null || session == null) ...[
           const Card(child: Padding(padding: EdgeInsets.all(16), child: Text('Sesi kas hari ini belum dimulai. Masukkan uang tunai awal di laci sebelum transaksi berjalan.'))),
-          TextField(controller: _opening, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'Saldo awal / modal kas (Rp)', border: OutlineInputBorder())),
+          TextField(controller: _opening, keyboardType: TextInputType.number, inputFormatters: [RupiahInputFormatter()], decoration: const InputDecoration(labelText: 'Saldo awal / modal kas (Rp)', border: OutlineInputBorder())),
           const SizedBox(height: 12),
           FilledButton.icon(onPressed: _busy ? null : _start, icon: const Icon(Icons.play_arrow), label: const Text('Mulai sesi kas')),
         ] else ...[
@@ -149,7 +151,7 @@ class _PackingCashClosingScreenState extends State<PackingCashClosingScreen> {
               : expenseTiles)),
           if (status == 'open') ...[
             const SizedBox(height: 12),
-            TextField(controller: _expenseAmount, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'Nominal pengeluaran (Rp)', border: OutlineInputBorder())),
+            TextField(controller: _expenseAmount, keyboardType: TextInputType.number, inputFormatters: [RupiahInputFormatter()], decoration: const InputDecoration(labelText: 'Nominal pengeluaran (Rp)', border: OutlineInputBorder())),
             const SizedBox(height: 8),
             TextField(controller: _expenseCategory, decoration: const InputDecoration(labelText: 'Kategori (contoh: makan, transport, operasional)', border: OutlineInputBorder())),
             const SizedBox(height: 8),
@@ -157,7 +159,7 @@ class _PackingCashClosingScreenState extends State<PackingCashClosingScreen> {
             const SizedBox(height: 8),
             OutlinedButton.icon(onPressed: _busy ? null : _addExpense, icon: const Icon(Icons.add), label: const Text('Catat pengeluaran')),
             const Divider(height: 28),
-            TextField(controller: _counted, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'Uang fisik hasil hitung (Rp)', border: OutlineInputBorder())),
+            TextField(controller: _counted, keyboardType: TextInputType.number, inputFormatters: [RupiahInputFormatter()], decoration: const InputDecoration(labelText: 'Uang fisik hasil hitung (Rp)', border: OutlineInputBorder())),
             const SizedBox(height: 8),
             FilledButton.icon(onPressed: _busy ? null : _close, icon: const Icon(Icons.lock), label: const Text('Tutup kas hari ini')),
           ],
