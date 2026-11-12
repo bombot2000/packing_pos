@@ -2,6 +2,11 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:share_plus/share_plus.dart';
+import '../../core/format/dimensions.dart';
+import '../../core/format/friendly_error.dart';
+import '../../core/format/money_input.dart';
+import '../../core/format/rupiah.dart';
 import 'packing_calculator_screen.dart';
 import '../../data/repositories/packing_transaction_repository.dart';
 import '../../services/packing_receipt_printer.dart';
@@ -47,19 +52,13 @@ class _PackingReceiptDetailScreenState extends State<PackingReceiptDetailScreen>
         _payments = payments;
         _error = null;
         final remaining = (receipt['total_amount'] as num).toInt() - (receipt['paid_amount'] as num).toInt();
-        _amount.text = remaining > 0 ? remaining.toString() : '';
+        _amount.text = remaining > 0 ? groupThousands(remaining) : '';
       });
-    } catch (e) { if (mounted) setState(() => _error = e.toString()); }
+    } catch (e) { if (mounted) setState(() => _error = friendlyError(e)); }
   }
 
-  String _money(Object? value) {
-    final n = (value as num?)?.toInt() ?? 0;
-    return 'Rp ${n.toString().replaceAllMapped(RegExp(r'(?<=\d)(?=(\d{3})+(?!\d))'), (_) => '.')}';
-  }
-
-  int? _parse(String text) => int.tryParse(
-    text.replaceAll('Rp', '').replaceAll('.', '').replaceAll(',', '').replaceAll(' ', '').trim(),
-  );
+  String _money(Object? value) => formatRupiah(value);
+  int? _parse(String text) => parseRupiah(text);
 
   String _date(Object? raw) {
     final date = DateTime.tryParse(raw?.toString() ?? '');
@@ -100,10 +99,84 @@ class _PackingReceiptDetailScreenState extends State<PackingReceiptDetailScreen>
         );
       }
     } catch (e) {
-      if (mounted) setState(() => _error = e.toString());
+      if (mounted) setState(() => _error = friendlyError(e));
     } finally {
       if (mounted) setState(() => _busy = false);
     }
+  }
+
+  String _receiptText() {
+    final r = _receipt!;
+    final total = (r['total_amount'] as num).toInt();
+    final paid = (r['paid_amount'] as num).toInt();
+    final discount = (r['discount_amount'] as num?)?.toInt() ?? 0;
+    final b = StringBuffer()
+      ..writeln(_identity['business_name'] ?? 'Packing POS')
+      ..writeln('Nota ${r['receipt_no']}')
+      ..writeln('Tanggal: ${_date(r['created_at'])}');
+    final customer = (r['customer_name'] as String?) ?? '';
+    if (customer.isNotEmpty) b.writeln('Pelanggan: $customer');
+    b.writeln();
+    for (var i = 0; i < _jobs.length; i++) {
+      final job = _jobs[i];
+      final desc = (job['item_description'] as String? ?? '').replaceAll('•', '-');
+      b.writeln('${i + 1}. ${desc.isEmpty ? 'Pekerjaan' : desc}');
+      b.writeln('   ${job['quantity'] ?? 1} x ${_money(job['unit_price'] ?? job['selling_price'])} = ${_money(job['selling_price'])}');
+    }
+    b.writeln();
+    if (discount > 0) { b.writeln('Subtotal: ${_money(total + discount)}'); b.writeln('Diskon: -${_money(discount)}'); }
+    b.writeln('TOTAL: ${_money(total)}');
+    b.writeln('Dibayar: ${_money(paid)}');
+    if (total - paid > 0) b.writeln('Sisa: ${_money(total - paid)}');
+    b.writeln('Status: ${r['status'] == 'completed' ? 'LUNAS' : r['status'] == 'cancelled' ? 'DIBATALKAN' : paid > 0 ? 'DIBAYAR SEBAGIAN' : 'BELUM DIBAYAR'}');
+    b.writeln(); b.write('Terima kasih');
+    return b.toString();
+  }
+
+  Future<void> _shareReceipt() async {
+    if (_receipt == null) return;
+    try { await Share.share(_receiptText(), subject: 'Nota ${_receipt!['receipt_no']}'); }
+    catch (e) { if (mounted) setState(() => _error = friendlyError(e)); }
+  }
+
+  Future<void> _showPaymentSuccess({required bool done, required int amount, required int change}) async {
+    final color = Theme.of(context).colorScheme.primary;
+    final action = await showModalBottomSheet<String>(context: context, showDragHandle: true,
+      builder: (ctx) => SafeArea(child: Padding(
+        padding: const EdgeInsets.fromLTRB(20, 0, 20, 16),
+        child: Column(mainAxisSize: MainAxisSize.min, children: [
+          Icon(Icons.check_circle, size: 56, color: color), const SizedBox(height: 8),
+          Text(done ? 'Nota lunas' : 'Pembayaran tersimpan', style: Theme.of(ctx).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold)),
+          Text('Diterima ${_money(amount)}'),
+          if (change > 0) ...[const SizedBox(height: 12), const Text('Kembalian'), Text(_money(change), style: Theme.of(ctx).textTheme.headlineMedium?.copyWith(fontWeight: FontWeight.bold, color: color))],
+          const SizedBox(height: 16),
+          SizedBox(width: double.infinity, child: FilledButton.icon(onPressed: () => Navigator.pop(ctx, 'print'), icon: const Icon(Icons.print), label: const Text('Cetak struk'))),
+          const SizedBox(height: 8),
+          SizedBox(width: double.infinity, child: OutlinedButton.icon(onPressed: () => Navigator.pop(ctx, 'share'), icon: const Icon(Icons.share), label: const Text('Bagikan ke WhatsApp / aplikasi lain'))),
+          Row(children: [
+            Expanded(child: TextButton(onPressed: () => Navigator.pop(ctx, 'new'), child: const Text('Nota baru'))),
+            Expanded(child: TextButton(onPressed: () => Navigator.pop(ctx, 'done'), child: const Text('Selesai'))),
+          ]),
+        ]),
+      )));
+    if (!mounted) return;
+    if (action == 'print') await _printReceipt();
+    else if (action == 'share') await _shareReceipt();
+    else if (action == 'new') await Navigator.of(context).pushReplacement(MaterialPageRoute(builder: (_) => const PackingCalculatorScreen()));
+  }
+
+  Widget _methodChips() {
+    const methods = {'cash': 'Tunai', 'transfer': 'Transfer', 'qris': 'QRIS', 'other': 'Lainnya'};
+    return Wrap(spacing: 8, children: methods.entries.map((e) => ChoiceChip(
+      label: Text(e.value), selected: _method == e.key, onSelected: (_) => setState(() => _method = e.key),
+    )).toList());
+  }
+
+  List<int> _cashSuggestions(int amount) {
+    if (amount <= 0) return const [];
+    int roundUp(int step) => ((amount + step - 1) ~/ step) * step;
+    final values = <int>{amount, roundUp(10000), roundUp(50000), roundUp(100000)}.toList()..sort();
+    return values.take(4).toList();
   }
 
   Future<void> _pay() async {
@@ -120,7 +193,7 @@ class _PackingReceiptDetailScreenState extends State<PackingReceiptDetailScreen>
       if (received == null || received < amount) { setState(() => _error = 'Uang diterima kurang dari nominal pembayaran.'); return; }
       change = received - amount;
       final cashNote = 'Diterima ${_money(received)}, kembali ${_money(change)}';
-      note = note.isEmpty ? cashNote : '$note • $cashNote';
+      note = note.isEmpty ? cashNote : '$note - $cashNote';
     }
     setState(() { _busy = true; _error = null; });
     try {
@@ -128,13 +201,10 @@ class _PackingReceiptDetailScreenState extends State<PackingReceiptDetailScreen>
       _received.clear(); _note.clear();
       await _load();
       if (mounted) {
-        final done = amount == remaining;
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          duration: Duration(seconds: change > 0 ? 10 : 4),
-          content: Text('${done ? 'Nota lunas' : 'Pembayaran tersimpan'}${change > 0 ? ' • Kembalian ${_money(change)}' : ''}'),
-        ));
+        setState(() => _busy = false);
+        await _showPaymentSuccess(done: amount == remaining, amount: amount, change: change);
       }
-    } catch (e) { if (mounted) setState(() => _error = e.toString()); }
+    } catch (e) { if (mounted) setState(() => _error = friendlyError(e)); }
     finally { if (mounted) setState(() => _busy = false); }
   }
 
@@ -168,7 +238,7 @@ class _PackingReceiptDetailScreenState extends State<PackingReceiptDetailScreen>
       await _repo.cancelReceipt(receiptId: widget.receiptId, reason: text);
       await _load();
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Nota dibatalkan.')));
-    } catch (e) { if (mounted) setState(() => _error = e.toString()); }
+    } catch (e) { if (mounted) setState(() => _error = friendlyError(e)); }
     finally { if (mounted) setState(() => _busy = false); }
   }
 
@@ -181,6 +251,7 @@ class _PackingReceiptDetailScreenState extends State<PackingReceiptDetailScreen>
     final status = receipt['status'] as String;
     return Scaffold(
       appBar: AppBar(title: const Text('Detail nota'), actions: [
+        IconButton(tooltip: 'Bagikan nota', onPressed: _busy ? null : _shareReceipt, icon: const Icon(Icons.share_outlined)),
         if (status == 'open' && paid == 0 && _payments.isEmpty)
           IconButton(tooltip: 'Edit nota', onPressed: _busy ? null : _editReceipt, icon: const Icon(Icons.edit_outlined)),
         if (status == 'open' && paid == 0 && _payments.isEmpty)
@@ -224,28 +295,21 @@ class _PackingReceiptDetailScreenState extends State<PackingReceiptDetailScreen>
         if (status == 'open' && total - paid > 0) ...[
           Text(paid > 0 ? 'Pelunasan / pembayaran berikutnya' : 'Pembayaran (penuh atau DP)', style: Theme.of(context).textTheme.titleMedium),
           const SizedBox(height: 8),
-          TextField(controller: _amount, keyboardType: TextInputType.number, onChanged: (_) => setState(() {}), decoration: InputDecoration(
+          TextField(controller: _amount, keyboardType: TextInputType.number, inputFormatters: [RupiahInputFormatter()], onChanged: (_) => setState(() {}), decoration: InputDecoration(
             labelText: 'Nominal pembayaran', prefixText: 'Rp ', border: const OutlineInputBorder(),
             helperText: 'Sisa tagihan ${_money(total - paid)}',
             suffixIcon: TextButton(onPressed: () => setState(() => _amount.text = (total - paid).toString()), child: const Text('Lunas')),
           )),
           const SizedBox(height: 8),
-          DropdownButtonFormField<String>(
-            initialValue: _method,
-            decoration: const InputDecoration(labelText: 'Metode pembayaran', border: OutlineInputBorder()),
-            items: const [
-              DropdownMenuItem(value: 'cash', child: Text('Tunai')),
-              DropdownMenuItem(value: 'transfer', child: Text('Transfer')),
-              DropdownMenuItem(value: 'qris', child: Text('QRIS')),
-              DropdownMenuItem(value: 'other', child: Text('Lainnya')),
-            ],
-            onChanged: (v) { if (v != null) setState(() => _method = v); },
-          ),
+          const Text('Metode pembayaran'),
+          const SizedBox(height: 4),
+          _methodChips(),
           if (_method == 'cash') ...[
             const SizedBox(height: 8),
             TextField(
               controller: _received,
               keyboardType: TextInputType.number,
+              inputFormatters: [RupiahInputFormatter()],
               onChanged: (_) => setState(() {}),
               decoration: InputDecoration(
                 labelText: 'Uang diterima (opsional)',
