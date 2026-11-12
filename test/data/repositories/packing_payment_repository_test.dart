@@ -353,6 +353,38 @@ void main() {
     });
   });
 
+  test('pembayaran bersamaan tidak dapat melewati sisa tagihan', () async {
+    final receipt = await createReceipt(total: 100000);
+    final receiptId = receipt['id'] as int;
+
+    Future<bool> tryPayment() async {
+      try {
+        await repository.addReceiptPayment(
+          receiptId: receiptId,
+          amount: 60000,
+          paymentMethod: 'transfer',
+        );
+        return true;
+      } on ArgumentError {
+        return false;
+      }
+    }
+
+    final results = await Future.wait([tryPayment(), tryPayment()]);
+    expect(results.where((accepted) => accepted), hasLength(1));
+    expect(results.where((accepted) => !accepted), hasLength(1));
+
+    final saved = (await repository.findReceiptById(receiptId))!;
+    expect(saved['total_amount'], 100000);
+    expect(saved['paid_amount'], 60000);
+    expect(saved['status'], 'open');
+    final payments = await repository.receiptPaymentsFor(receiptId);
+    expect(payments, hasLength(1));
+    expect(payments.single['amount'], 60000);
+    final receivables = await repository.listReceivables();
+    expect(receivables.single['remaining_amount'], 40000);
+  });
+
   group('pembatalan nota', () {
     test('membatalkan nota beserta seluruh pekerjaannya dan menolak pembayaran', () async {
       final receipt = await createReceipt();
