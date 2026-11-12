@@ -329,6 +329,57 @@ class PackingBackupValidator {
       _text(row['created_at'], 'Tanggal pengeluaran kas');
     }
 
+    // A closed cash session is a historical snapshot. Verify its expected
+    // balance against the same date-scoped cash inflows and linked expenses
+    // used by cashSessionSummary/closeCashSession.
+    for (final row in data['cash_sessions'] ?? const <Map<String, Object?>>[]) {
+      if (row['status'] != 'closed') continue;
+      final sessionId = _positiveInt(row['id'], 'ID sesi kas');
+      final dateKey = _text(row['date_key'], 'Tanggal sesi kas');
+      final date = DateTime.parse(dateKey);
+      final start = DateTime(date.year, date.month, date.day).toUtc();
+      final end = DateTime(date.year, date.month, date.day + 1).toUtc();
+      bool inSessionDate(Object? value) {
+        final parsed = DateTime.tryParse(value is String ? value : '');
+        if (parsed == null) return false;
+        final utc = parsed.toUtc();
+        return !utc.isBefore(start) && utc.isBefore(end);
+      }
+
+      var cashIn = 0;
+      for (final payment in data['receipt_payments']!) {
+        final receiptId = _positiveInt(payment['receipt_id'], 'ID nota pembayaran');
+        final receipt = headerMap[receiptId];
+        if (receipt != null &&
+            receipt['status'] != 'cancelled' &&
+            payment['payment_method'] == 'cash' &&
+            inSessionDate(payment['created_at'])) {
+          cashIn += _positiveInt(payment['amount'], 'Nominal pembayaran nota');
+        }
+      }
+      for (final payment in data['transaction_payments']!) {
+        final transactionId = _positiveInt(payment['transaction_id'], 'ID transaksi pembayaran');
+        final transaction = transactions[transactionId]!;
+        if (transaction['receipt_id'] == null &&
+            transaction['status'] != 'cancelled' &&
+            payment['payment_method'] == 'cash' &&
+            inSessionDate(payment['created_at'])) {
+          cashIn += _positiveInt(payment['amount'], 'Nominal pembayaran');
+        }
+      }
+      var expenses = 0;
+      for (final expense in data['cash_expenses']!) {
+        if (_positiveInt(expense['session_id'], 'ID sesi pengeluaran kas') == sessionId) {
+          expenses += _positiveInt(expense['amount'], 'Nominal pengeluaran kas');
+        }
+      }
+      final expected = _positiveInt(row['opening_balance'], 'Saldo awal kas') +
+          cashIn - expenses;
+      if (_signedInt(row['expected_balance'], 'Saldo kas seharusnya') != expected) {
+        throw FormatException('Saldo kas seharusnya pada sesi $sessionId tidak cocok dengan transaksi dan pengeluaran.');
+      }
+    }
+
     final settingKeys = <String>{};
     for (final row in data['app_settings']!) {
       final key = _text(row['key'], 'Kunci pengaturan');
