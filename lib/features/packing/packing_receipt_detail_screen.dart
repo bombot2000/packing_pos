@@ -161,7 +161,7 @@ class _PackingReceiptDetailScreenState extends State<PackingReceiptDetailScreen>
       )),
     );
     final text = reason.text.trim();
-    reason.dispose();
+    // Keep the controller alive until the dialog route has fully closed.
     if (confirmed != true) return;
     setState(() { _busy = true; _error = null; });
     try {
