@@ -129,14 +129,31 @@ class PackingDatabase {
     if (oldVersion < 3) await _createServiceTypes(db);
     if (oldVersion < 4) await _upgradeToReceiptHeaders(db);
     if (oldVersion < 5) {
-      await db.execute('ALTER TABLE packing_transactions ADD COLUMN quantity INTEGER NOT NULL DEFAULT 1 CHECK(quantity > 0)');
-      await db.execute('ALTER TABLE packing_transactions ADD COLUMN unit_price INTEGER NOT NULL DEFAULT 0 CHECK(unit_price >= 0)');
-      await db.execute('UPDATE packing_transactions SET unit_price = selling_price');
-      await db.execute('ALTER TABLE packing_receipts ADD COLUMN discount_amount INTEGER NOT NULL DEFAULT 0 CHECK(discount_amount >= 0)');
+      // Upgrades from v<4 create packing_receipts during v4 migration,
+      // where discount_amount already exists. Guard each ALTER for that path.
+      if (!await _hasColumn(db, 'packing_transactions', 'quantity')) {
+        await db.execute('ALTER TABLE packing_transactions ADD COLUMN quantity INTEGER NOT NULL DEFAULT 1 CHECK(quantity > 0)');
+      }
+      if (!await _hasColumn(db, 'packing_transactions', 'unit_price')) {
+        await db.execute('ALTER TABLE packing_transactions ADD COLUMN unit_price INTEGER NOT NULL DEFAULT 0 CHECK(unit_price >= 0)');
+        await db.execute('UPDATE packing_transactions SET unit_price = selling_price');
+      }
+      if (!await _hasColumn(db, 'packing_receipts', 'discount_amount')) {
+        await db.execute('ALTER TABLE packing_receipts ADD COLUMN discount_amount INTEGER NOT NULL DEFAULT 0 CHECK(discount_amount >= 0)');
+      }
     }
     if (oldVersion < 6) await _createCustomers(db);
     if (oldVersion < 7) await _createCashTables(db);
   }
+
+  Future<bool> _hasColumn(Database db, String table, String column) async {
+    final rows = await db.rawQuery('PRAGMA table_info($table)');
+    return rows.any((row) => row['name'] == column);
+  }
+
+  /// Exposes the migration path to regression tests.
+  Future<void> upgradeForTesting(Database db, int oldVersion, int newVersion) =>
+      _upgrade(db, oldVersion, newVersion);
 
   Future<void> _createCashTables(Database db) async {
     await db.execute('''
