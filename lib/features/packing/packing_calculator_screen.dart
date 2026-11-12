@@ -34,7 +34,7 @@ class _PackingCalculatorScreenState extends State<PackingCalculatorScreen> {
   List<Map<String, Object?>> _services = [];
   List<Map<String, Object?>> _customers = [];
   int? _serviceId;
-  bool _loadingServices = true, _saving = false, _allowLeave = false;
+  bool _loadingServices = true, _saving = false;
   String? _error;
 
   @override
