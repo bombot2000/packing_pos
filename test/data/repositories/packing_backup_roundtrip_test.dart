@@ -206,7 +206,7 @@ void main() {
 
   test('receipt history escapes backslash together with SQL wildcard characters', () async {
     await repository.saveReceipt(
-      [draft(description: r'Barang 100\\%_siap', price: 10000)],
+      [draft(description: r'Barang 100\%_siap', price: 10000)],
       customerName: 'Pelanggan backslash',
     );
     await repository.saveReceipt(
@@ -214,7 +214,7 @@ void main() {
       customerName: 'Pelanggan pembanding',
     );
 
-    final result = await repository.searchReceipts(query: r'100\\%_');
+    final result = await repository.searchReceipts(query: r'100\%_');
     expect(result['total'], 1);
     expect((result['rows'] as List).single['customer_name'], 'Pelanggan backslash');
   });
