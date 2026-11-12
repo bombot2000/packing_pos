@@ -5,6 +5,8 @@ import 'package:intl/intl.dart';
 import 'package:print_bluetooth_thermal/print_bluetooth_thermal.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../core/format/dimensions.dart';
+
 import '../data/repositories/packing_identity_repository.dart';
 
 class PackingReceiptPrinter {
@@ -226,7 +228,8 @@ class PackingReceiptPrinter {
       final job = jobs[i];
       final desc = job['item_description']?.toString().trim();
       bytes.addAll(generator.text('${i + 1}. ${desc == null || desc.isEmpty ? 'Pekerjaan' : printable(desc)}', styles: const PosStyles(bold: true)));
-      bytes.addAll(generator.text('Ukuran: ${job['length_cm']} x ${job['width_cm']} x ${job['height_cm']} cm'));
+      final size = dimensionsLabel(job['length_cm'], job['width_cm'], job['height_cm']);
+      if (size != null) bytes.addAll(generator.text('Ukuran: ${size.replaceAll('×', 'x')}'));
       final materials = materialsByJob[(job['id'] as num).toInt()] ?? const [];
       for (final m in materials) {
         bytes.addAll(generator.text('  ${m['material_name_snapshot']}: ${m['actual_quantity']} ${m['unit_snapshot']} = ${money(m['subtotal'])}'));
