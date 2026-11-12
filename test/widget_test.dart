@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:sqflite_common_ffi/sqflite_ffi.dart';
+import 'package:sqflite_common_ffi/sqflite_common_ffi.dart';
 import 'package:packing_pos/main.dart';
 
 void main() {
@@ -16,8 +16,14 @@ void main() {
     expect(find.text('Transaksi packing baru'), findsOneWidget);
     expect(find.text('Riwayat transaksi'), findsOneWidget);
 
-    // Master entries live inside the collapsed settings ExpansionTile.
-    await tester.tap(find.text('Pengaturan & data'));
+    // Settings are below the dashboard shortcuts in the scrollable home page.
+    final settings = find.text('Pengaturan & data');
+    await tester.scrollUntilVisible(
+      settings,
+      300,
+      scrollable: find.byType(Scrollable).first,
+    );
+    await tester.tap(settings);
     await tester.pumpAndSettle();
 
     expect(find.text('Master bahan (arsip)'), findsOneWidget);
