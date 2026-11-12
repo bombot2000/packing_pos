@@ -509,6 +509,40 @@ void main() {
     expect(newExpenses.single['id'], greaterThan(1000));
   });
 
+  test('restore rejects closed cash session with inconsistent expected balance without data loss', () async {
+    await repository.save(draft(description: 'Data lokal tetap', price: 25000));
+    final sessionId = await repository.startCashSession(
+      date: DateTime.now(),
+      openingBalance: 5000,
+    );
+    await repository.addCashExpense(
+      sessionId: sessionId,
+      amount: 1000,
+      category: 'Operasional',
+    );
+    await repository.closeCashSession(
+      sessionId: sessionId,
+      countedBalance: 4000,
+    );
+
+    final backup = Map<String, dynamic>.from(await repository.exportBackup());
+    final sessions = (backup['cash_sessions'] as List)
+        .map((row) => Map<String, Object?>.from(row as Map))
+        .toList();
+    sessions.single['expected_balance'] = 3500;
+    sessions.single['difference'] = 500;
+    backup['cash_sessions'] = sessions;
+
+    await expectLater(
+      repository.restoreBackup(backup),
+      throwsFormatException,
+    );
+
+    final local = await repository.listReceipts(limit: 10);
+    expect(local, hasLength(1));
+    expect(local.single['customer_name'], 'Pelanggan backup');
+  });
+
   test('invalid restore leaves existing local records untouched', () async {
     await repository.save(draft(description: 'Data lokal', price: 25000));
     final before = await repository.listReceipts(limit: 10);
