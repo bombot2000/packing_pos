@@ -903,13 +903,13 @@ class PackingTransactionRepository {
       SELECT
         COALESCE((SELECT SUM(rp.amount)
           FROM receipt_payments rp INNER JOIN packing_receipts pr ON pr.id = rp.receipt_id
-          WHERE pr.status != 'cancelled' AND rp.payment_method = 'cash'
+          WHERE pr.status != 'cancelled' AND rp.LOWER(TRIM(payment_method)) = 'cash'
             AND rp.created_at >= ? AND rp.created_at < ?), 0)
         + COALESCE((SELECT SUM(tp.amount)
           FROM transaction_payments tp
           INNER JOIN packing_transactions pt ON pt.id = tp.transaction_id
           WHERE pt.receipt_id IS NULL AND pt.status != 'cancelled'
-            AND tp.payment_method = 'cash'
+            AND tp.LOWER(TRIM(payment_method)) = 'cash'
             AND tp.created_at >= ? AND tp.created_at < ?), 0) AS total
     ''', [start, end, start, end]);
     final expenses = await db.rawQuery('SELECT COALESCE(SUM(amount), 0) AS total FROM cash_expenses WHERE session_id = ?', [sessionId]);
@@ -939,12 +939,12 @@ class PackingTransactionRepository {
         SELECT
           COALESCE((SELECT SUM(rp.amount) FROM receipt_payments rp
             INNER JOIN packing_receipts pr ON pr.id = rp.receipt_id
-            WHERE pr.status != 'cancelled' AND rp.payment_method = 'cash'
+            WHERE pr.status != 'cancelled' AND rp.LOWER(TRIM(payment_method)) = 'cash'
               AND rp.created_at >= ? AND rp.created_at < ?), 0)
           + COALESCE((SELECT SUM(tp.amount) FROM transaction_payments tp
             INNER JOIN packing_transactions pt ON pt.id = tp.transaction_id
             WHERE pt.receipt_id IS NULL AND pt.status != 'cancelled'
-              AND tp.payment_method = 'cash'
+              AND tp.LOWER(TRIM(payment_method)) = 'cash'
               AND tp.created_at >= ? AND tp.created_at < ?), 0) AS total
       ''', [start, end, start, end]);
       final expenses = await txn.rawQuery('SELECT COALESCE(SUM(amount), 0) AS total FROM cash_expenses WHERE session_id = ?', [sessionId]);
@@ -993,8 +993,8 @@ class PackingTransactionRepository {
         COALESCE(SUM(overhead_cost), 0) AS overhead_cost_total,
         (SELECT COALESCE(SUM(total_amount), 0) FROM packing_receipts WHERE status != 'cancelled'$dateFilter) - COALESCE(SUM(material_cost + labor_cost + overhead_cost), 0) AS gross_profit,
         (SELECT COALESCE(SUM(receipt_payments.amount), 0) FROM receipt_payments INNER JOIN packing_receipts ON packing_receipts.id = receipt_payments.receipt_id WHERE packing_receipts.status != 'cancelled'$paymentDateFilter) AS paid_total,
-        (SELECT COALESCE(SUM(receipt_payments.amount), 0) FROM receipt_payments INNER JOIN packing_receipts ON packing_receipts.id = receipt_payments.receipt_id WHERE packing_receipts.status != 'cancelled' AND receipt_payments.payment_method = 'cash'$paymentDateFilter) AS cash_received_total,
-        (SELECT COALESCE(SUM(receipt_payments.amount), 0) FROM receipt_payments INNER JOIN packing_receipts ON packing_receipts.id = receipt_payments.receipt_id WHERE packing_receipts.status != 'cancelled' AND receipt_payments.payment_method != 'cash'$paymentDateFilter) AS non_cash_received_total,
+        (SELECT COALESCE(SUM(receipt_payments.amount), 0) FROM receipt_payments INNER JOIN packing_receipts ON packing_receipts.id = receipt_payments.receipt_id WHERE packing_receipts.status != 'cancelled' AND receipt_payments.LOWER(TRIM(payment_method)) = 'cash'$paymentDateFilter) AS cash_received_total,
+        (SELECT COALESCE(SUM(receipt_payments.amount), 0) FROM receipt_payments INNER JOIN packing_receipts ON packing_receipts.id = receipt_payments.receipt_id WHERE packing_receipts.status != 'cancelled' AND receipt_payments.LOWER(TRIM(payment_method)) != 'cash'$paymentDateFilter) AS non_cash_received_total,
         (SELECT COALESCE(SUM(total_amount - paid_amount), 0) FROM packing_receipts WHERE status != 'cancelled'$dateFilter) AS receivable_total,
         (SELECT COUNT(*) FROM packing_receipts WHERE status = 'completed'$dateFilter) AS completed_count,
         (SELECT COUNT(*) FROM packing_receipts WHERE status = 'open'$dateFilter) AS open_count,
