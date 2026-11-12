@@ -67,7 +67,7 @@ class PackingBackupValidator {
         throw FormatException('Subtotal pekerjaan $id tidak cocok dengan qty dan harga satuan.');
       }
       for (final field in ['length_cm', 'width_cm', 'height_cm']) {
-        _positiveNumber(row[field], field);
+        _nonNegativeNumber(row[field], field);
       }
       final snapshot = _text(row['calculation_snapshot'], 'Snapshot perhitungan');
       try {
@@ -434,12 +434,6 @@ class PackingBackupValidator {
       throw FormatException('$field harus berupa angka yang valid.');
     }
     return value.toDouble();
-  }
-
-  static double _positiveNumber(Object? value, String field) {
-    final result = _number(value, field);
-    if (result <= 0) throw FormatException('$field harus lebih dari nol.');
-    return result;
   }
 
   static double _nonNegativeNumber(Object? value, String field) {
