@@ -1,4 +1,7 @@
 import 'package:flutter/material.dart';
+import '../../core/format/rupiah.dart';
+import '../../core/format/money_input.dart';
+import '../../core/format/friendly_error.dart';
 import '../../data/repositories/packing_transaction_repository.dart';
 
 class ServiceTypeMasterScreen extends StatefulWidget {
@@ -22,10 +25,7 @@ class _ServiceTypeMasterScreenState extends State<ServiceTypeMasterScreen> {
     _future = _repo.listServiceTypes(activeOnly: false);
   }
 
-  String _money(Object? raw) {
-    final n = (raw as num?)?.toInt() ?? 0;
-    return 'Rp ${n.toString().replaceAllMapped(RegExp(r'(?<=\\d)(?=(\\d{3})+(?!\\d))'), (_) => '.')}';
-  }
+  String _money(Object? raw) => formatRupiah(raw);
 
   Future<void> _edit([Map<String, Object?>? row]) async {
     final result = await Navigator.of(context).push<Map<String, Object?>>(
@@ -45,7 +45,7 @@ class _ServiceTypeMasterScreenState extends State<ServiceTypeMasterScreen> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Gagal menyimpan: $e')),
+          SnackBar(content: Text('Gagal menyimpan: ${friendlyError(e)}')),
         );
       }
     }
@@ -59,7 +59,7 @@ class _ServiceTypeMasterScreenState extends State<ServiceTypeMasterScreen> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Gagal mengubah status: $e')),
+          SnackBar(content: Text('Gagal mengubah status: ${friendlyError(e)}')),
         );
       }
     }
@@ -133,7 +133,7 @@ class _ServiceEditorState extends State<_ServiceEditor> {
   }
 
   void _save() {
-    final value = int.tryParse(_price.text.replaceAll('.', '').replaceAll(',', '').trim());
+    final value = parseRupiah(_price.text);
     if (_name.text.trim().isEmpty) {
       setState(() => _error = 'Nama pekerjaan wajib diisi.');
       return;
