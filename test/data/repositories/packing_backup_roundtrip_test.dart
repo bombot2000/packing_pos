@@ -204,6 +204,47 @@ void main() {
     expect(firstIds.toSet().intersection(secondIds.toSet()), isEmpty);
   });
 
+  test('receipt history escapes backslash together with SQL wildcard characters', () async {
+    await repository.saveReceipt(
+      [draft(description: r'Barang 100\\%_siap', price: 10000)],
+      customerName: 'Pelanggan backslash',
+    );
+    await repository.saveReceipt(
+      [draft(description: 'Barang 100XXsiap', price: 10000)],
+      customerName: 'Pelanggan pembanding',
+    );
+
+    final result = await repository.searchReceipts(query: r'100\\%_');
+    expect(result['total'], 1);
+    expect((result['rows'] as List).single['customer_name'], 'Pelanggan backslash');
+  });
+
+  test('receipt history rejects invalid pagination and date ranges', () async {
+    await expectLater(
+      repository.searchReceipts(limit: 0),
+      throwsArgumentError,
+    );
+    await expectLater(
+      repository.searchReceipts(limit: 101),
+      throwsArgumentError,
+    );
+    await expectLater(
+      repository.searchReceipts(offset: -1),
+      throwsArgumentError,
+    );
+    await expectLater(
+      repository.searchReceipts(status: 'unknown'),
+      throwsArgumentError,
+    );
+    await expectLater(
+      repository.searchReceipts(
+        startDate: DateTime(2026, 6, 2),
+        endDate: DateTime(2026, 6, 1),
+      ),
+      throwsArgumentError,
+    );
+  });
+
   test('export and restore round-trip keeps multi-job receipt and settlement', () async {
     await repository.saveServiceType(name: 'Packing ekspor backup', defaultPrice: 15000);
     await repository.saveCustomer(
