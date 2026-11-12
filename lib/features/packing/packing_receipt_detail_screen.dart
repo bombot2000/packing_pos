@@ -160,9 +160,15 @@ class _PackingReceiptDetailScreenState extends State<PackingReceiptDetailScreen>
         ]),
       )));
     if (!mounted) return;
-    if (action == 'print') await _printReceipt();
-    else if (action == 'share') await _shareReceipt();
-    else if (action == 'new') await Navigator.of(context).pushReplacement(MaterialPageRoute(builder: (_) => const PackingCalculatorScreen()));
+    if (action == 'print') {
+      await _printReceipt();
+    } else if (action == 'share') {
+      await _shareReceipt();
+    } else if (action == 'new') {
+      await Navigator.of(context).pushReplacement(
+        MaterialPageRoute(builder: (_) => const PackingCalculatorScreen()),
+      );
+    }
   }
 
   Widget _methodChips() {
@@ -279,7 +285,7 @@ class _PackingReceiptDetailScreenState extends State<PackingReceiptDetailScreen>
           return Card(child: ListTile(
             leading: CircleAvatar(child: Text('${i + 1}')),
             title: Text((job['item_description'] as String).isEmpty ? 'Pekerjaan' : job['item_description'] as String),
-            subtitle: Text('Qty ${job['quantity'] ?? 1} • Ukuran: ${job['length_cm']} × ${job['width_cm']} × ${job['height_cm']} cm • Harga satuan ${_money(job['unit_price'] ?? job['selling_price'])}'),
+            subtitle: Text('${job['quantity'] ?? 1} koli x ${_money(job['unit_price'] ?? job['selling_price'])}${dimensionsLabel(job['length_cm'], job['width_cm'], job['height_cm']) == null ? '' : '\\nUkuran: ${dimensionsLabel(job['length_cm'], job['width_cm'], job['height_cm'])}'}'),
             trailing: Text(_money(job['selling_price']), style: const TextStyle(fontWeight: FontWeight.bold)),
           ));
         }),
@@ -324,6 +330,13 @@ class _PackingReceiptDetailScreenState extends State<PackingReceiptDetailScreen>
                 }(),
               ),
             ),
+            Builder(builder: (context) {
+              final amount = _parse(_amount.text);
+              if (amount == null || amount <= 0) return const SizedBox.shrink();
+              return Wrap(spacing: 6, children: _cashSuggestions(amount).map((value) =>
+                ActionChip(label: Text(_money(value)), onPressed: () => setState(() => _received.text = groupThousands(value)),
+              )).toList());
+            }),
           ],
           const SizedBox(height: 8),
           TextField(controller: _note, decoration: const InputDecoration(labelText: 'Catatan pembayaran (opsional)')),
