@@ -11,6 +11,10 @@ class PackingReceiptPrinter {
   static const printerMacKey = 'packing_pos_printer_mac';
   static const paperWidthKey = 'packing_pos_printer_paper_width';
 
+  // Replace characters unsupported by common ESC/POS code pages.
+  static String printable(Object? raw) =>
+      (raw?.toString() ?? '').replaceAll('•', '-');
+
   static Future<List<BluetoothInfo>> pairedDevices() =>
       PrintBluetoothThermal.pairedBluetooths;
 
@@ -206,10 +210,6 @@ class PackingReceiptPrinter {
       final n = (raw as num?)?.toInt() ?? 0;
       return 'Rp ${n.toString().replaceAllMapped(RegExp(r'(?<=\d)(?=(\d{3})+(?!\d))'), (_) => '.')}';
     }
-    // Replace characters unsupported by common ESC/POS code pages.
-    String printable(Object? raw) =>
-        (raw?.toString() ?? '').replaceAll('•', '-');
-
     bytes.addAll(generator.reset());
     bytes.addAll(generator.text(identity['business_name'] ?? 'Packing POS', styles: const PosStyles(align: PosAlign.center, bold: true, height: PosTextSize.size2, width: PosTextSize.size2), linesAfter: 1));
     final businessAddress = identity['business_address'] ?? '';
