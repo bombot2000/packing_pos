@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../core/format/friendly_error.dart';
 
 import '../../data/repositories/packing_transaction_repository.dart';
 
@@ -102,7 +103,7 @@ class _PackingCustomerMasterScreenState
       } catch (error) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Gagal menyimpan pelanggan: $error')),
+            SnackBar(content: Text('Gagal menyimpan pelanggan: ${friendlyError(error)}')),
           );
         }
       }
@@ -141,7 +142,7 @@ class _PackingCustomerMasterScreenState
     } catch (error) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Gagal menonaktifkan pelanggan: $error')),
+          SnackBar(content: Text('Gagal menonaktifkan pelanggan: ${friendlyError(error)}')),
         );
       }
     }
