@@ -95,7 +95,9 @@ void main() {
       backup['cash_sessions'] = [
         {'id': 1, 'date_key': '2026-11-09', 'opening_balance': 1000, 'expected_balance': -5000, 'counted_balance': 0, 'difference': 5000, 'status': 'closed', 'note': '', 'created_at': '2026-11-09T00:00:00.000Z', 'closed_at': '2026-11-09T10:00:00.000Z'},
       ];
-      backup['cash_expenses'] = <Map<String, Object?>>[];
+      backup['cash_expenses'] = [
+        {'id': 1, 'session_id': 1, 'amount': 6000, 'category': 'Operasional', 'note': 'Pengeluaran kas', 'created_at': '2026-11-09T09:00:00.000Z'},
+      ];
       expect(PackingBackupValidator.validate(backup)['cash_sessions'], hasLength(1));
 
       backup['cash_sessions']![0]['difference'] = 4999;
