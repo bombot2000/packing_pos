@@ -44,11 +44,13 @@ class _PackingCashClosingScreenState extends State<PackingCashClosingScreen> {
           ? null
           : await _repository.cashSessionSummary((session['id'] as num).toInt());
       final history = await _repository.listCashSessions(limit: 30);
-      if (mounted) setState(() {
-        _summary = summary;
-        _history = history;
-        _error = null;
-      });
+      if (mounted) {
+        setState(() {
+          _summary = summary;
+          _history = history;
+          _error = null;
+        });
+      }
     } catch (error) {
       if (mounted) setState(() => _error = error.toString());
     }
