@@ -612,15 +612,15 @@ void main() {
     expect(payments, hasLength(3));
     expect(
       payments.map((payment) => payment['amount']).toList(),
-      [15000, 25000, 60000],
+      [60000, 25000, 15000],
     );
     expect(
       payments.map((payment) => payment['payment_method']).toList(),
-      ['cash', 'transfer', 'qris'],
+      ['qris', 'transfer', 'cash'],
     );
     expect(
       payments.map((payment) => payment['note']).toList(),
-      ['DP awal', 'DP kedua', 'Pelunasan'],
+      ['Pelunasan', 'DP kedua', 'DP awal'],
     );
     final restoredJobs = await repository.jobsForReceipt(restoredId);
     expect(restoredJobs, hasLength(1));
