@@ -275,8 +275,37 @@ class PackingReceiptPrinter {
       linesAfter: 1,
     ));
 
-    // Payment history remains available in the app; the printed receipt
-    // contains only the paid amount, balance, and status summary above.
+    // Print every staged payment in chronological order. The repository
+    // returns newest-first, so use a copy and reverse it without mutating
+    // the caller's payment list.
+    if (payments.isNotEmpty) {
+      bytes.addAll(generator.hr(ch: '-'));
+      bytes.addAll(generator.text(
+        'RIWAYAT PEMBAYARAN',
+        styles: const PosStyles(bold: true),
+      ));
+      for (final payment in payments.reversed) {
+        final paymentDate = DateTime.tryParse(
+          payment['created_at']?.toString() ?? '',
+        );
+        final dateLabel = paymentDate == null
+            ? '-'
+            : DateFormat('dd/MM/yy HH:mm').format(paymentDate.toLocal());
+        final method = payment['payment_method']?.toString().trim();
+        bytes.addAll(generator.text(
+          '$dateLabel • ${method == null || method.isEmpty ? 'Lainnya' : method.toUpperCase()}',
+        ));
+        bytes.addAll(generator.text(
+          '  ${money(payment['amount'])}',
+          styles: const PosStyles(bold: true),
+        ));
+        final paymentNote = payment['note']?.toString().trim() ?? '';
+        if (paymentNote.isNotEmpty) {
+          bytes.addAll(generator.text('  Catatan: $paymentNote'));
+        }
+      }
+    }
+
     final note = receipt['note']?.toString() ?? '';
     if (note.trim().isNotEmpty) bytes.addAll(generator.text('Catatan: $note'));
     bytes.addAll(generator.hr());
