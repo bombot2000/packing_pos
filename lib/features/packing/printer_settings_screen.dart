@@ -1,6 +1,7 @@
 import 'package:esc_pos_utils_plus/esc_pos_utils_plus.dart';
 import 'package:device_info_plus/device_info_plus.dart';
 import 'package:flutter/material.dart';
+import '../../core/format/friendly_error.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:print_bluetooth_thermal/print_bluetooth_thermal.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -62,7 +63,7 @@ class _PrinterSettingsScreenState extends State<PrinterSettingsScreen> {
         }
       });
     } catch (error) {
-      if (mounted) setState(() => _error = error.toString());
+      if (mounted) setState(() => _error = friendlyError(error));
     } finally {
       if (mounted) setState(() => _loading = false);
     }
@@ -87,7 +88,7 @@ class _PrinterSettingsScreenState extends State<PrinterSettingsScreen> {
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Printer berhasil terhubung dan disimpan.')));
       }
     } catch (error) {
-      if (mounted) setState(() => _error = error.toString());
+      if (mounted) setState(() => _error = friendlyError(error));
     } finally {
       if (mounted) setState(() => _loading = false);
     }
@@ -98,7 +99,7 @@ class _PrinterSettingsScreenState extends State<PrinterSettingsScreen> {
       await PackingReceiptPrinter.disconnect();
       if (mounted) setState(() => _connected = false);
     } catch (error) {
-      if (mounted) setState(() => _error = error.toString());
+      if (mounted) setState(() => _error = friendlyError(error));
     }
   }
 
@@ -123,7 +124,7 @@ class _PrinterSettingsScreenState extends State<PrinterSettingsScreen> {
       if (!ok) throw StateError('Printer tidak menerima data tes.');
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Tes cetak berhasil dikirim.')));
     } catch (error) {
-      if (mounted) setState(() => _error = error.toString());
+      if (mounted) setState(() => _error = friendlyError(error));
     }
   }
 
