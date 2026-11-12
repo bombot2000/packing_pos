@@ -373,7 +373,7 @@ class PackingBackupValidator {
           expenses += _positiveInt(expense['amount'], 'Nominal pengeluaran kas');
         }
       }
-      final expected = _positiveInt(row['opening_balance'], 'Saldo awal kas') +
+      final expected = _nonNegativeInt(row['opening_balance'], 'Saldo awal kas') +
           cashIn - expenses;
       if (_signedInt(row['expected_balance'], 'Saldo kas seharusnya') != expected) {
         throw FormatException('Saldo kas seharusnya pada sesi $sessionId tidak cocok dengan transaksi dan pengeluaran.');
