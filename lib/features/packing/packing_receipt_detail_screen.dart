@@ -285,7 +285,7 @@ class _PackingReceiptDetailScreenState extends State<PackingReceiptDetailScreen>
           return Card(child: ListTile(
             leading: CircleAvatar(child: Text('${i + 1}')),
             title: Text((job['item_description'] as String).isEmpty ? 'Pekerjaan' : job['item_description'] as String),
-            subtitle: Text('${job['quantity'] ?? 1} koli x ${_money(job['unit_price'] ?? job['selling_price'])}${dimensionsLabel(job['length_cm'], job['width_cm'], job['height_cm']) == null ? '' : '\\nUkuran: ${dimensionsLabel(job['length_cm'], job['width_cm'], job['height_cm'])}'}'),
+            subtitle: Text('${job['quantity'] ?? 1} koli x ${_money(job['unit_price'] ?? job['selling_price'])}${dimensionsLabel(job['length_cm'], job['width_cm'], job['height_cm']) == null ? '' : '\nUkuran: ${dimensionsLabel(job['length_cm'], job['width_cm'], job['height_cm'])}'}'),
             trailing: Text(_money(job['selling_price']), style: const TextStyle(fontWeight: FontWeight.bold)),
           ));
         }),
