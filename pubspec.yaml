@@ -30,3 +30,4 @@ flutter:
   uses-material-design: true
   assets:
     - assets/packing_pos_logo.png
+    - assets/packing_pos_logo_line.png

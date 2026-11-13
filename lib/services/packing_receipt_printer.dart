@@ -41,7 +41,7 @@ class PackingReceiptPrinter {
   static Future<List<int>> _logoBytes(Generator generator, int targetWidth, SharedPreferences prefs) async {
     if (prefs.getBool(printLogoKey) == false) return const [];
     try {
-      final logoData = await rootBundle.load('assets/packing_pos_logo.png');
+      final logoData = await rootBundle.load('assets/packing_pos_logo_line.png');
       final logo = img.decodeImage(logoData.buffer.asUint8List());
       if (logo == null) return const [];
       final scaledLogo = img.copyResize(
