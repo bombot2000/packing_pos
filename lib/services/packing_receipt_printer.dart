@@ -74,7 +74,9 @@ class PackingReceiptPrinter {
     final logoData = await rootBundle.load('assets/packing_pos_logo.png');
     final logo = img.decodeImage(logoData.buffer.asUint8List());
     if (logo != null) {
-      bytes.addAll(generator.image(logo, align: PosAlign.center));
+      final targetWidth = paperWidth == 80 ? 220 : 160;
+      final scaledLogo = img.copyResize(logo, width: targetWidth);
+      bytes.addAll(generator.image(scaledLogo, align: PosAlign.center));
       bytes.addAll(generator.feed(1));
     }
     bytes.addAll(generator.text(
@@ -82,8 +84,6 @@ class PackingReceiptPrinter {
       styles: const PosStyles(
         align: PosAlign.center,
         bold: true,
-        height: PosTextSize.size2,
-        width: PosTextSize.size2,
       ),
       linesAfter: 1,
     ));
@@ -225,7 +225,9 @@ class PackingReceiptPrinter {
     final logoData = await rootBundle.load('assets/packing_pos_logo.png');
     final logo = img.decodeImage(logoData.buffer.asUint8List());
     if (logo != null) {
-      bytes.addAll(generator.image(logo, align: PosAlign.center));
+      final targetWidth = paper == PaperSize.mm80 ? 220 : 160;
+      final scaledLogo = img.copyResize(logo, width: targetWidth);
+      bytes.addAll(generator.image(scaledLogo, align: PosAlign.center));
       bytes.addAll(generator.feed(1));
     }
     bytes.addAll(generator.text(identity['business_name'] ?? 'Packing POS', styles: const PosStyles(align: PosAlign.center, bold: true, height: PosTextSize.size2, width: PosTextSize.size2), linesAfter: 1));
