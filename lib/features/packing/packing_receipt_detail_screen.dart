@@ -100,7 +100,7 @@ class _PackingReceiptDetailScreenState extends State<PackingReceiptDetailScreen>
       builder: (ctx) => StatefulBuilder(builder: (ctx, setLocal) => AlertDialog(
         title: const Text('Catat pengembalian dana'),
         content: SingleChildScrollView(child: Column(mainAxisSize: MainAxisSize.min, children: [
-          Text('Pembayaran sumber ' + _money(sourceAmount) + ' • Sudah dikembalikan ' + _money(alreadyRefunded)),
+          Text('Pembayaran sumber ${_money(sourceAmount)} • Sudah dikembalikan ${_money(alreadyRefunded)}'),
           const Text('Pembayaran asli tetap tersimpan. Refund tunai mengurangi saldo kas pada tanggal refund.'),
           const SizedBox(height: 12),
           TextField(
@@ -110,12 +110,12 @@ class _PackingReceiptDetailScreenState extends State<PackingReceiptDetailScreen>
             decoration: InputDecoration(
               labelText: 'Nominal refund',
               prefixText: 'Rp ',
-              helperText: 'Maksimal ' + _money(refundable),
+              helperText: 'Maksimal ${_money(refundable)}',
             ),
           ),
           const SizedBox(height: 8),
           DropdownButtonFormField<String>(
-            value: method,
+            initialValue: method,
             decoration: const InputDecoration(labelText: 'Metode pengembalian'),
             items: const [
               DropdownMenuItem(value: 'cash', child: Text('Tunai')),
