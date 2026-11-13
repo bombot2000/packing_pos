@@ -17,8 +17,44 @@ class PackingReceiptPrinter {
   static const paperWidthKey = 'packing_pos_printer_paper_width';
 
   // Replace characters unsupported by common ESC/POS code pages.
-  static String printable(Object? raw) =>
-      (raw?.toString() ?? '').replaceAll('•', '-');
+  static String printable(Object? raw) {
+    var text = raw?.toString() ?? '';
+    const replacements = <String, String>{
+      '•': '-',
+      '‘': "'",
+      '’': "'",
+      '“': '"',
+      '”': '"',
+      '–': '-',
+      '—': '-',
+      '…': '...',
+      '×': 'x',
+    };
+    replacements.forEach((from, to) => text = text.replaceAll(from, to));
+    // Emoji and other supplementary-plane characters cannot be printed.
+    return text.replaceAll(RegExp('[\\u{10000}-\\u{10FFFF}]', unicode: true), '');
+  }
+
+  /// Builds the centered logo bytes. Returns an empty list when the logo
+  /// cannot be loaded so a logo problem never blocks printing the receipt.
+  static Future<List<int>> _logoBytes(Generator generator, int targetWidth) async {
+    try {
+      final logoData = await rootBundle.load('assets/packing_pos_logo.png');
+      final logo = img.decodeImage(logoData.buffer.asUint8List());
+      if (logo == null) return const [];
+      final scaledLogo = img.copyResize(
+        logo,
+        width: targetWidth,
+        interpolation: img.Interpolation.average,
+      );
+      return [
+        ...generator.image(scaledLogo, align: PosAlign.center),
+        ...generator.feed(1),
+      ];
+    } catch (_) {
+      return const [];
+    }
+  }
 
   static Future<List<BluetoothInfo>> pairedDevices() =>
       PrintBluetoothThermal.pairedBluetooths;
@@ -71,14 +107,7 @@ class PackingReceiptPrinter {
     final isManualService = snapshot?['mode'] == 'manual_service_charge';
 
     bytes.addAll(generator.reset());
-    final logoData = await rootBundle.load('assets/packing_pos_logo.png');
-    final logo = img.decodeImage(logoData.buffer.asUint8List());
-    if (logo != null) {
-      final targetWidth = paperWidth == 80 ? 220 : 160;
-      final scaledLogo = img.copyResize(logo, width: targetWidth);
-      bytes.addAll(generator.image(scaledLogo, align: PosAlign.center));
-      bytes.addAll(generator.feed(1));
-    }
+    bytes.addAll(await _logoBytes(generator, paperWidth == 80 ? 220 : 160));
     bytes.addAll(generator.text(
       identity['business_name'] ?? 'Packing POS',
       styles: const PosStyles(
@@ -89,8 +118,8 @@ class PackingReceiptPrinter {
     ));
     final businessAddress = identity['business_address'] ?? '';
     final businessPhone = identity['business_phone'] ?? '';
-    if (businessAddress.isNotEmpty) bytes.addAll(generator.text(businessAddress, styles: const PosStyles(align: PosAlign.center)));
-    if (businessPhone.isNotEmpty) bytes.addAll(generator.text('Telp. $businessPhone', styles: const PosStyles(align: PosAlign.center)));
+    if (businessAddress.isNotEmpty) bytes.addAll(generator.text(printable(businessAddress), styles: const PosStyles(align: PosAlign.center)));
+    if (businessPhone.isNotEmpty) bytes.addAll(generator.text('Telp. ${printable(businessPhone)}', styles: const PosStyles(align: PosAlign.center)));
     bytes.addAll(generator.text(
       transaction['receipt_no']?.toString() ?? '',
       styles: const PosStyles(align: PosAlign.center, bold: true),
@@ -222,15 +251,8 @@ class PackingReceiptPrinter {
       return 'Rp ${n.toString().replaceAllMapped(RegExp(r'(?<=\d)(?=(\d{3})+(?!\d))'), (_) => '.')}';
     }
     bytes.addAll(generator.reset());
-    final logoData = await rootBundle.load('assets/packing_pos_logo.png');
-    final logo = img.decodeImage(logoData.buffer.asUint8List());
-    if (logo != null) {
-      final targetWidth = paper == PaperSize.mm80 ? 220 : 160;
-      final scaledLogo = img.copyResize(logo, width: targetWidth);
-      bytes.addAll(generator.image(scaledLogo, align: PosAlign.center));
-      bytes.addAll(generator.feed(1));
-    }
-    bytes.addAll(generator.text(identity['business_name'] ?? 'Packing POS', styles: const PosStyles(align: PosAlign.center, bold: true, height: PosTextSize.size2, width: PosTextSize.size2), linesAfter: 1));
+    bytes.addAll(await _logoBytes(generator, paper == PaperSize.mm80 ? 220 : 160));
+    bytes.addAll(generator.text(printable(identity['business_name'] ?? 'Packing POS'), styles: const PosStyles(align: PosAlign.center, bold: true, height: PosTextSize.size2, width: PosTextSize.size2), linesAfter: 1));
     final businessAddress = identity['business_address'] ?? '';
     final businessPhone = identity['business_phone'] ?? '';
     if (businessAddress.isNotEmpty) bytes.addAll(generator.text(businessAddress, styles: const PosStyles(align: PosAlign.center)));
@@ -239,7 +261,7 @@ class PackingReceiptPrinter {
     bytes.addAll(generator.hr());
     final created = DateTime.tryParse(receipt['created_at']?.toString() ?? '');
     if (created != null) bytes.addAll(generator.text('Tanggal: ${DateFormat('dd/MM/yyyy HH:mm').format(created.toLocal())}'));
-    bytes.addAll(generator.text('Pelanggan: ${receipt['customer_name'] ?? '-'}'));
+    bytes.addAll(generator.text('Pelanggan: ${printable(receipt['customer_name'] ?? '-')}'));
     bytes.addAll(generator.hr());
     for (var i = 0; i < jobs.length; i++) {
       final job = jobs[i];
@@ -263,7 +285,7 @@ class PackingReceiptPrinter {
         final cancellationReason =
             job['cancellation_reason']?.toString().trim() ?? '';
         if (cancellationReason.isNotEmpty) {
-          bytes.addAll(generator.text('  Alasan pembatalan: $cancellationReason'));
+          bytes.addAll(generator.text('  Alasan pembatalan: ${printable(cancellationReason)}'));
         }
       }
       if (i != jobs.length - 1) bytes.addAll(generator.hr(ch: '-'));
@@ -331,7 +353,7 @@ class PackingReceiptPrinter {
     }
 
     final note = receipt['note']?.toString() ?? '';
-    if (note.trim().isNotEmpty) bytes.addAll(generator.text('Catatan: $note'));
+    if (note.trim().isNotEmpty) bytes.addAll(generator.text('Catatan: ${printable(note)}'));
     bytes.addAll(generator.hr());
     bytes.addAll(generator.text(
       receiptStatus == 'cancelled' ? 'ARSIP NOTA DIBATALKAN' : 'Terima kasih',
