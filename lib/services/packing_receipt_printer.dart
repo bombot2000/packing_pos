@@ -16,6 +16,16 @@ class PackingReceiptPrinter {
   static const printerMacKey = 'packing_pos_printer_mac';
   static const paperWidthKey = 'packing_pos_printer_paper_width';
   static const printLogoKey = 'packing_pos_print_logo';
+  static const textWeightKey = 'packing_pos_text_weight';
+  static const defaultTextWeight = 1;
+
+  static List<int> _textWeightCommands(int weight) => [
+    // ESC M selects Font B for the lightest setting and Font A otherwise.
+    0x1B, 0x4D, weight == 0 ? 1 : 0,
+    // ESC E emphasis; ESC G double-strike for heavier output.
+    0x1B, 0x45, weight >= 2 ? 1 : 0,
+    0x1B, 0x47, weight >= 3 ? 1 : 0,
+  ];
 
   // Replace characters unsupported by common ESC/POS code pages.
   static String printable(Object? raw) {
@@ -69,8 +79,10 @@ class PackingReceiptPrinter {
     final prefs = await SharedPreferences.getInstance();
     final identity = await PackingIdentityRepository().getSettings();
     final generator = Generator(paperWidth == 80 ? PaperSize.mm80 : PaperSize.mm58, await CapabilityProfile.load());
+    final weight = (prefs.getInt(textWeightKey) ?? defaultTextWeight).clamp(0, 4);
     return [
       ...generator.reset(),
+      ..._textWeightCommands(weight),
       ...await _logoBytes(generator, paperWidth == 80 ? 220 : 160, prefs),
       ...generator.text(printable(identity['business_name'] ?? 'Packing POS'), styles: const PosStyles(align: PosAlign.center, bold: true)),
       ...generator.text('TES CETAK', styles: const PosStyles(align: PosAlign.center)),
@@ -111,6 +123,7 @@ class PackingReceiptPrinter {
     final paper = paperWidth == 80 ? PaperSize.mm80 : PaperSize.mm58;
     final profile = await CapabilityProfile.load();
     final generator = Generator(paper, profile);
+    final weight = (preferences.getInt(textWeightKey) ?? defaultTextWeight).clamp(0, 4);
     final bytes = <int>[];
 
     String money(Object? raw) {
@@ -133,6 +146,7 @@ class PackingReceiptPrinter {
     final isManualService = snapshot?['mode'] == 'manual_service_charge';
 
     bytes.addAll(generator.reset());
+    bytes.addAll(_textWeightCommands(weight));
     bytes.addAll(await _logoBytes(generator, paperWidth == 80 ? 220 : 160, preferences));
     bytes.addAll(generator.text(
       identity['business_name'] ?? 'Packing POS',
@@ -271,6 +285,7 @@ class PackingReceiptPrinter {
     final identity = await PackingIdentityRepository().getSettings();
     final paper = (prefs.getInt(paperWidthKey) ?? 58) == 80 ? PaperSize.mm80 : PaperSize.mm58;
     final generator = Generator(paper, await CapabilityProfile.load());
+    final weight = (prefs.getInt(textWeightKey) ?? defaultTextWeight).clamp(0, 4);
     final cols = paper == PaperSize.mm80 ? 48 : 32;
     final bytes = <int>[];
     String money(Object? raw) {
@@ -278,6 +293,7 @@ class PackingReceiptPrinter {
       return 'Rp ${n.toString().replaceAllMapped(RegExp(r'(?<=\d)(?=(\d{3})+(?!\d))'), (_) => '.')}';
     }
     bytes.addAll(generator.reset());
+    bytes.addAll(_textWeightCommands(weight));
     bytes.addAll(await _logoBytes(generator, paper == PaperSize.mm80 ? 220 : 160, prefs));
     final businessName = printable(identity['business_name'] ?? 'Packing POS');
     final nameFitsDoubleWidth = businessName.length <= cols ~/ 2;
