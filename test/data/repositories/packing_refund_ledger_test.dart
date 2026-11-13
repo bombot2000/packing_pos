@@ -229,4 +229,39 @@ void main() {
   });
 
 
+  test('pembayaran bersamaan tidak membuat total pembayaran melebihi nota', () async {
+    final receiptId = await createReceipt();
+
+    final results = await Future.wait([
+      repository.addReceiptPayment(
+        receiptId: receiptId,
+        amount: 70000,
+        paymentMethod: 'transfer',
+        note: 'Pembayaran bersamaan pertama',
+      ).then((_) => true, onError: (_) => false),
+      repository.addReceiptPayment(
+        receiptId: receiptId,
+        amount: 70000,
+        paymentMethod: 'transfer',
+        note: 'Pembayaran bersamaan kedua',
+      ).then((_) => true, onError: (_) => false),
+    ]);
+
+    expect(results.where((success) => success), hasLength(1));
+    final payments = await repository.receiptPaymentsFor(receiptId);
+    expect(payments, hasLength(1));
+    expect(
+      payments.fold<int>(
+        0,
+        (sum, row) => sum + (row['amount'] as num).toInt(),
+      ),
+      70000,
+    );
+    final receipt = (await repository.findReceiptById(receiptId))!;
+    expect(receipt['paid_amount'], 70000);
+    expect(receipt['status'], 'open');
+  });
+
+
+
 }
