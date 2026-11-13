@@ -51,7 +51,8 @@ class PackingReceiptPrinter {
       );
       return [
         ...generator.image(scaledLogo, align: PosAlign.center),
-        ...generator.feed(1),
+        // ESC J n feeds a precise 12-dot gap (about 1.5 mm at 203 dpi).
+        0x1B, 0x4A, 12,
       ];
     } catch (_) {
       return const [];
@@ -280,9 +281,20 @@ class PackingReceiptPrinter {
     bytes.addAll(await _logoBytes(generator, paper == PaperSize.mm80 ? 220 : 160, prefs));
     final businessName = printable(identity['business_name'] ?? 'Packing POS');
     final nameFitsDoubleWidth = businessName.length <= cols ~/ 2;
-    bytes.addAll(generator.text(businessName, styles: PosStyles(align: PosAlign.center, bold: true, height: PosTextSize.size2, width: nameFitsDoubleWidth ? PosTextSize.size2 : PosTextSize.size1), linesAfter: 1));
     final businessAddress = identity['business_address'] ?? '';
     final businessPhone = identity['business_phone'] ?? '';
+    final hasContact = businessAddress.isNotEmpty || businessPhone.isNotEmpty;
+    bytes.addAll(generator.text(
+      businessName,
+      styles: PosStyles(
+        align: PosAlign.center,
+        bold: true,
+        height: PosTextSize.size2,
+        width: nameFitsDoubleWidth ? PosTextSize.size2 : PosTextSize.size1,
+      ),
+      // Avoid an empty line before address/phone; keep one only without contact details.
+      linesAfter: hasContact ? 0 : 1,
+    ));
     if (businessAddress.isNotEmpty) bytes.addAll(generator.text(printable(businessAddress), styles: const PosStyles(align: PosAlign.center)));
     if (businessPhone.isNotEmpty) bytes.addAll(generator.text('Telp. ${printable(businessPhone)}', styles: const PosStyles(align: PosAlign.center)));
     bytes.addAll(generator.text(receipt['receipt_no']?.toString() ?? '-', styles: const PosStyles(align: PosAlign.center, bold: true)));
