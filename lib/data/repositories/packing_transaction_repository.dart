@@ -789,9 +789,14 @@ class PackingTransactionRepository {
       );
       final ledgerPaid = (receiptLedger.first['total'] as num).toInt();
       final legacyPaid = (legacyLedger.first['total'] as num).toInt();
-      if (legacyPaid > 0 || ledgerPaid != paid) {
+      final refundLedger = await txn.rawQuery(
+        'SELECT COALESCE(SUM(amount), 0) AS total FROM payment_refunds WHERE receipt_id = ?',
+        [receiptId],
+      );
+      final refunded = (refundLedger.first['total'] as num).toInt();
+      if (legacyPaid > 0 || ledgerPaid - refunded != paid) {
         throw StateError(
-          'Riwayat pembayaran nota tidak sinkron. Pembayaran baru ditahan agar saldo tidak keliru.',
+          'Riwayat pembayaran dan refund nota tidak sinkron. Pembayaran baru ditahan agar saldo tidak keliru.',
         );
       }
       final remaining = total - paid;
