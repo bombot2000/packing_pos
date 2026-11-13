@@ -1037,7 +1037,7 @@ class PackingTransactionRepository {
       SELECT
         COALESCE((SELECT SUM(rp.amount)
           FROM receipt_payments rp INNER JOIN packing_receipts pr ON pr.id = rp.receipt_id
-          WHERE pr.status != 'cancelled' AND LOWER(TRIM(rp.payment_method)) = 'cash'
+          WHERE LOWER(TRIM(rp.payment_method)) = 'cash'
             AND rp.created_at >= ? AND rp.created_at < ?), 0)
         + COALESCE((SELECT SUM(tp.amount)
           FROM transaction_payments tp
@@ -1078,7 +1078,7 @@ class PackingTransactionRepository {
         SELECT
           COALESCE((SELECT SUM(rp.amount) FROM receipt_payments rp
             INNER JOIN packing_receipts pr ON pr.id = rp.receipt_id
-            WHERE pr.status != 'cancelled' AND LOWER(TRIM(rp.payment_method)) = 'cash'
+            WHERE LOWER(TRIM(rp.payment_method)) = 'cash'
               AND rp.created_at >= ? AND rp.created_at < ?), 0)
           + COALESCE((SELECT SUM(tp.amount) FROM transaction_payments tp
             INNER JOIN packing_transactions pt ON pt.id = tp.transaction_id
@@ -1137,9 +1137,9 @@ class PackingTransactionRepository {
         COALESCE(SUM(labor_cost), 0) AS labor_cost_total,
         COALESCE(SUM(overhead_cost), 0) AS overhead_cost_total,
         (SELECT COALESCE(SUM(total_amount), 0) FROM packing_receipts WHERE status != 'cancelled'$dateFilter) - COALESCE(SUM(material_cost + labor_cost + overhead_cost), 0) AS gross_profit,
-        (SELECT COALESCE(SUM(receipt_payments.amount), 0) FROM receipt_payments INNER JOIN packing_receipts ON packing_receipts.id = receipt_payments.receipt_id WHERE packing_receipts.status != 'cancelled'$paymentDateFilter) AS paid_total,
-        (SELECT COALESCE(SUM(receipt_payments.amount), 0) FROM receipt_payments INNER JOIN packing_receipts ON packing_receipts.id = receipt_payments.receipt_id WHERE packing_receipts.status != 'cancelled' AND LOWER(TRIM(receipt_payments.payment_method)) = 'cash'$paymentDateFilter) AS cash_received_total,
-        (SELECT COALESCE(SUM(receipt_payments.amount), 0) FROM receipt_payments INNER JOIN packing_receipts ON packing_receipts.id = receipt_payments.receipt_id WHERE packing_receipts.status != 'cancelled' AND LOWER(TRIM(receipt_payments.payment_method)) != 'cash'$paymentDateFilter) AS non_cash_received_total,
+        (SELECT COALESCE(SUM(receipt_payments.amount), 0) FROM receipt_payments INNER JOIN packing_receipts ON packing_receipts.id = receipt_payments.receipt_id WHERE 1 = 1$paymentDateFilter) AS paid_total,
+        (SELECT COALESCE(SUM(receipt_payments.amount), 0) FROM receipt_payments INNER JOIN packing_receipts ON packing_receipts.id = receipt_payments.receipt_id WHERE LOWER(TRIM(receipt_payments.payment_method)) = 'cash'$paymentDateFilter) AS cash_received_total,
+        (SELECT COALESCE(SUM(receipt_payments.amount), 0) FROM receipt_payments INNER JOIN packing_receipts ON packing_receipts.id = receipt_payments.receipt_id WHERE LOWER(TRIM(receipt_payments.payment_method)) != 'cash'$paymentDateFilter) AS non_cash_received_total,
         (SELECT COALESCE(SUM(total_amount - paid_amount), 0) FROM packing_receipts WHERE status != 'cancelled'$dateFilter) AS receivable_total,
         (SELECT COUNT(*) FROM packing_receipts WHERE status = 'completed'$dateFilter) AS completed_count,
         (SELECT COUNT(*) FROM packing_receipts WHERE status = 'open'$dateFilter) AS open_count,
