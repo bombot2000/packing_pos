@@ -1,5 +1,8 @@
 import 'dart:convert';
 
+import 'package:flutter/services.dart' show rootBundle;
+import 'package:image/image.dart' as img;
+
 import 'package:esc_pos_utils_plus/esc_pos_utils_plus.dart';
 import 'package:intl/intl.dart';
 import 'package:print_bluetooth_thermal/print_bluetooth_thermal.dart';
@@ -68,6 +71,12 @@ class PackingReceiptPrinter {
     final isManualService = snapshot?['mode'] == 'manual_service_charge';
 
     bytes.addAll(generator.reset());
+    final logoData = await rootBundle.load('assets/packing_pos_logo.png');
+    final logo = img.decodeImage(logoData.buffer.asUint8List());
+    if (logo != null) {
+      bytes.addAll(generator.image(logo, align: PosAlign.center));
+      bytes.addAll(generator.feed(1));
+    }
     bytes.addAll(generator.text(
       identity['business_name'] ?? 'Packing POS',
       styles: const PosStyles(
@@ -213,6 +222,12 @@ class PackingReceiptPrinter {
       return 'Rp ${n.toString().replaceAllMapped(RegExp(r'(?<=\d)(?=(\d{3})+(?!\d))'), (_) => '.')}';
     }
     bytes.addAll(generator.reset());
+    final logoData = await rootBundle.load('assets/packing_pos_logo.png');
+    final logo = img.decodeImage(logoData.buffer.asUint8List());
+    if (logo != null) {
+      bytes.addAll(generator.image(logo, align: PosAlign.center));
+      bytes.addAll(generator.feed(1));
+    }
     bytes.addAll(generator.text(identity['business_name'] ?? 'Packing POS', styles: const PosStyles(align: PosAlign.center, bold: true, height: PosTextSize.size2, width: PosTextSize.size2), linesAfter: 1));
     final businessAddress = identity['business_address'] ?? '';
     final businessPhone = identity['business_phone'] ?? '';
