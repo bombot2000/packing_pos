@@ -197,4 +197,36 @@ void main() {
   });
 
 
+
+  test('refund tunai ditolak setelah sesi kas hari itu ditutup', () async {
+    final sessionId = await repository.startCashSession(
+      date: DateTime.now(),
+      openingBalance: 10000,
+    );
+    final receiptId = await createReceipt();
+    await repository.addReceiptPayment(
+      receiptId: receiptId,
+      amount: 50000,
+      paymentMethod: 'cash',
+    );
+    final source = (await repository.receiptPaymentsFor(receiptId)).single;
+    await repository.closeCashSession(
+      sessionId: sessionId,
+      countedBalance: 60000,
+    );
+
+    await expectLater(
+      repository.addReceiptRefund(
+        receiptId: receiptId,
+        receiptPaymentId: (source['id'] as num).toInt(),
+        amount: 10000,
+        refundMethod: 'cash',
+        reason: 'Refund setelah kas ditutup',
+      ),
+      throwsStateError,
+    );
+    expect(await repository.receiptRefundsFor(receiptId), isEmpty);
+  });
+
+
 }
