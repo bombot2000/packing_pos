@@ -404,7 +404,6 @@ class PackingBackupValidator {
         final receiptId = _positiveInt(payment['receipt_id'], 'ID nota pembayaran');
         final receipt = headerMap[receiptId];
         if (receipt != null &&
-            receipt['status'] != 'cancelled' &&
             payment['payment_method'].toString().trim().toLowerCase() == 'cash' &&
             inSessionDate(payment['created_at'])) {
           cashIn += _positiveInt(payment['amount'], 'Nominal pembayaran nota');
