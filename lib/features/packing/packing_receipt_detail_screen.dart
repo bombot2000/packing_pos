@@ -128,7 +128,7 @@ class _PackingReceiptDetailScreenState extends State<PackingReceiptDetailScreen>
     b.writeln('TOTAL: ${_money(total)}');
     b.writeln('Dibayar: ${_money(paid)}');
     if (total - paid > 0) b.writeln('Sisa: ${_money(total - paid)}');
-    b.writeln('Status: ${r['status'] == 'completed' ? 'LUNAS' : r['status'] == 'cancelled' ? 'DIBATALKAN' : paid > 0 ? 'DIBAYAR SEBAGIAN' : 'BELUM DIBAYAR'}');
+    b.writeln('Status: ${r['status'] == 'cancelled' ? 'DIBATALKAN' : total > 0 && paid >= total ? 'LUNAS' : paid > 0 ? 'DIBAYAR SEBAGIAN' : 'BELUM DIBAYAR'}');
     b.writeln(); b.write('Terima kasih');
     return b.toString();
   }
