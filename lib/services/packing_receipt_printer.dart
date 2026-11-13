@@ -368,7 +368,9 @@ class PackingReceiptPrinter {
             ? 'LUNAS'
             : paid > 0
                 ? 'DIBAYAR SEBAGIAN'
-                : 'BELUM DIBAYAR';
+                : refunds.isNotEmpty
+                    ? 'REFUND TERCATAT'
+                    : 'BELUM DIBAYAR';
     bytes.addAll(generator.text(
       'STATUS: $statusLabel',
       styles: const PosStyles(
