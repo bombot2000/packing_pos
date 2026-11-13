@@ -533,13 +533,6 @@ class PackingTransactionRepository {
       final receipt = rows.first;
       if (receipt['status'] == 'cancelled') throw StateError('Nota sudah dibatalkan.');
       final paidAmount = (receipt['paid_amount'] as num).toInt();
-      final receiptPayments = await txn.query(
-        'receipt_payments',
-        columns: ['id'],
-        where: 'receipt_id = ?',
-        whereArgs: [receiptId],
-        limit: 1,
-      );
       final legacyPayments = await txn.rawQuery(
         'SELECT tp.id FROM transaction_payments tp '
         'INNER JOIN packing_transactions pt ON pt.id = tp.transaction_id '
