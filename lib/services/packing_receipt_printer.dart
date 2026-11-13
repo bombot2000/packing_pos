@@ -15,6 +15,7 @@ import '../data/repositories/packing_identity_repository.dart';
 class PackingReceiptPrinter {
   static const printerMacKey = 'packing_pos_printer_mac';
   static const paperWidthKey = 'packing_pos_printer_paper_width';
+  static const printLogoKey = 'packing_pos_print_logo';
 
   // Replace characters unsupported by common ESC/POS code pages.
   static String printable(Object? raw) {
@@ -37,7 +38,8 @@ class PackingReceiptPrinter {
 
   /// Builds the centered logo bytes. Returns an empty list when the logo
   /// cannot be loaded so a logo problem never blocks printing the receipt.
-  static Future<List<int>> _logoBytes(Generator generator, int targetWidth) async {
+  static Future<List<int>> _logoBytes(Generator generator, int targetWidth, SharedPreferences prefs) async {
+    if (prefs.getBool(printLogoKey) == false) return const [];
     try {
       final logoData = await rootBundle.load('assets/packing_pos_logo.png');
       final logo = img.decodeImage(logoData.buffer.asUint8List());
@@ -54,6 +56,29 @@ class PackingReceiptPrinter {
     } catch (_) {
       return const [];
     }
+  }
+
+  static List<int> _pair(Generator generator, int cols, String left, String right, {PosStyles styles = const PosStyles()}) {
+    final space = cols - left.length - right.length;
+    if (space >= 1) return generator.text('$left${' ' * space}$right', styles: styles);
+    return [...generator.text(left, styles: styles), ...generator.text(right.padLeft(cols), styles: styles)];
+  }
+
+  static Future<List<int>> testPageBytes(int paperWidth) async {
+    final prefs = await SharedPreferences.getInstance();
+    final identity = await PackingIdentityRepository().getSettings();
+    final generator = Generator(paperWidth == 80 ? PaperSize.mm80 : PaperSize.mm58, await CapabilityProfile.load());
+    return [
+      ...generator.reset(),
+      ...await _logoBytes(generator, paperWidth == 80 ? 220 : 160, prefs),
+      ...generator.text(printable(identity['business_name'] ?? 'Packing POS'), styles: const PosStyles(align: PosAlign.center, bold: true)),
+      ...generator.text('TES CETAK', styles: const PosStyles(align: PosAlign.center)),
+      ...generator.hr(),
+      ...generator.text('Kertas $paperWidth mm'),
+      ...generator.text('Logo: ${prefs.getBool(printLogoKey) == false ? 'nonaktif' : 'aktif'}'),
+      ...generator.text('Bluetooth OK'),
+      ...generator.feed(3),
+    ];
   }
 
   static Future<List<BluetoothInfo>> pairedDevices() =>
@@ -107,7 +132,7 @@ class PackingReceiptPrinter {
     final isManualService = snapshot?['mode'] == 'manual_service_charge';
 
     bytes.addAll(generator.reset());
-    bytes.addAll(await _logoBytes(generator, paperWidth == 80 ? 220 : 160));
+    bytes.addAll(await _logoBytes(generator, paperWidth == 80 ? 220 : 160, preferences));
     bytes.addAll(generator.text(
       identity['business_name'] ?? 'Packing POS',
       styles: const PosStyles(
@@ -214,7 +239,7 @@ class PackingReceiptPrinter {
     ));
     final total = (transaction['selling_price'] as num?)?.toInt() ?? 0;
     final paid = (transaction['paid_amount'] as num?)?.toInt() ?? 0;
-    bytes.addAll(generator.text('Sisa: ${money(total - paid)}'));
+    bytes.addAll(_pair(generator, cols, 'Sisa', money(total - paid)));
     bytes.addAll(generator.hr());
     bytes.addAll(generator.text(
       'Terima kasih',
@@ -245,18 +270,21 @@ class PackingReceiptPrinter {
     final identity = await PackingIdentityRepository().getSettings();
     final paper = (prefs.getInt(paperWidthKey) ?? 58) == 80 ? PaperSize.mm80 : PaperSize.mm58;
     final generator = Generator(paper, await CapabilityProfile.load());
+    final cols = paper == PaperSize.mm80 ? 48 : 32;
     final bytes = <int>[];
     String money(Object? raw) {
       final n = (raw as num?)?.toInt() ?? 0;
       return 'Rp ${n.toString().replaceAllMapped(RegExp(r'(?<=\d)(?=(\d{3})+(?!\d))'), (_) => '.')}';
     }
     bytes.addAll(generator.reset());
-    bytes.addAll(await _logoBytes(generator, paper == PaperSize.mm80 ? 220 : 160));
-    bytes.addAll(generator.text(printable(identity['business_name'] ?? 'Packing POS'), styles: const PosStyles(align: PosAlign.center, bold: true, height: PosTextSize.size2, width: PosTextSize.size2), linesAfter: 1));
+    bytes.addAll(await _logoBytes(generator, paper == PaperSize.mm80 ? 220 : 160, prefs));
+    final businessName = printable(identity['business_name'] ?? 'Packing POS');
+    final nameFitsDoubleWidth = businessName.length <= cols ~/ 2;
+    bytes.addAll(generator.text(businessName, styles: PosStyles(align: PosAlign.center, bold: true, height: PosTextSize.size2, width: nameFitsDoubleWidth ? PosTextSize.size2 : PosTextSize.size1), linesAfter: 1));
     final businessAddress = identity['business_address'] ?? '';
     final businessPhone = identity['business_phone'] ?? '';
-    if (businessAddress.isNotEmpty) bytes.addAll(generator.text(businessAddress, styles: const PosStyles(align: PosAlign.center)));
-    if (businessPhone.isNotEmpty) bytes.addAll(generator.text('Telp. $businessPhone', styles: const PosStyles(align: PosAlign.center)));
+    if (businessAddress.isNotEmpty) bytes.addAll(generator.text(printable(businessAddress), styles: const PosStyles(align: PosAlign.center)));
+    if (businessPhone.isNotEmpty) bytes.addAll(generator.text('Telp. ${printable(businessPhone)}', styles: const PosStyles(align: PosAlign.center)));
     bytes.addAll(generator.text(receipt['receipt_no']?.toString() ?? '-', styles: const PosStyles(align: PosAlign.center, bold: true)));
     bytes.addAll(generator.hr());
     final created = DateTime.tryParse(receipt['created_at']?.toString() ?? '');
@@ -276,7 +304,7 @@ class PackingReceiptPrinter {
       final quantity = (job['quantity'] as num?)?.toInt() ?? 1;
       final unitPrice = job['unit_price'] ?? job['selling_price'];
       bytes.addAll(generator.text('  Qty: $quantity x ${money(unitPrice)}'));
-      bytes.addAll(generator.text('  Subtotal pekerjaan: ${money(job['selling_price'])}'));
+      bytes.addAll(_pair(generator, cols, '  Subtotal pekerjaan', money(job['selling_price'])));
       final jobNote = job['note']?.toString().trim() ?? '';
       if (jobNote.isNotEmpty) {
         bytes.addAll(generator.text('  Catatan pekerjaan: ${printable(jobNote)}'));
@@ -295,11 +323,11 @@ class PackingReceiptPrinter {
     final paid = (receipt['paid_amount'] as num?)?.toInt() ?? 0;
     final discount = (receipt['discount_amount'] as num?)?.toInt() ?? 0;
     if (discount > 0) {
-      bytes.addAll(generator.text('Subtotal: ${money(total + discount)}'));
-      bytes.addAll(generator.text('Diskon nota: -${money(discount)}'));
+      bytes.addAll(_pair(generator, cols, 'Subtotal', money(total + discount)));
+      bytes.addAll(_pair(generator, cols, 'Diskon nota', '-${money(discount)}'));
     }
-    bytes.addAll(generator.text('TOTAL NOTA: ${money(total)}', styles: const PosStyles(bold: true, height: PosTextSize.size2)));
-    bytes.addAll(generator.text('Dibayar: ${money(paid)}'));
+    bytes.addAll(_pair(generator, cols, 'TOTAL NOTA', money(total), styles: const PosStyles(bold: true, height: PosTextSize.size2)));
+    bytes.addAll(_pair(generator, cols, 'Dibayar', money(paid)));
     bytes.addAll(generator.text('Sisa: ${money(total - paid)}'));
 
     final receiptStatus = receipt['status']?.toString() ?? 'open';
