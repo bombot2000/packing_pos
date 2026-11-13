@@ -44,7 +44,8 @@ void main() {
     test('omits unrecorded dimensions', () {
       expect(dimensionsLabel(0, 0, 0), isNull);
       expect(dimensionsLabel(null, null, null), isNull);
-      expect(dimensionsLabel(120, 80, 60), '120.0 × 80.0 × 60.0 cm');
+      expect(dimensionsLabel(120, 80, 60), '120 × 80 × 60 cm');
+      expect(dimensionsLabel(12.5, 20, 0), '12.5 × 20 × - cm');
     });
   });
 }
