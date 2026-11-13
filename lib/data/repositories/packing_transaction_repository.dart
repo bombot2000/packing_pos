@@ -533,20 +533,23 @@ class PackingTransactionRepository {
       final receipt = rows.first;
       if (receipt['status'] == 'cancelled') throw StateError('Nota sudah dibatalkan.');
       final paidAmount = (receipt['paid_amount'] as num).toInt();
-      final receiptPayments = await txn.query(
-        'receipt_payments',
-        columns: ['id'],
-        where: 'receipt_id = ?',
-        whereArgs: [receiptId],
-        limit: 1,
-      );
       final legacyPayments = await txn.rawQuery(
         'SELECT tp.id FROM transaction_payments tp '
         'INNER JOIN packing_transactions pt ON pt.id = tp.transaction_id '
         'WHERE pt.receipt_id = ? LIMIT 1',
         [receiptId],
       );
-      if (paidAmount > 0 || receiptPayments.isNotEmpty || legacyPayments.isNotEmpty) {
+      final grossRows = await txn.rawQuery(
+        'SELECT COALESCE(SUM(amount), 0) AS total FROM receipt_payments WHERE receipt_id = ?',
+        [receiptId],
+      );
+      final refundRows = await txn.rawQuery(
+        'SELECT COALESCE(SUM(amount), 0) AS total FROM payment_refunds WHERE receipt_id = ?',
+        [receiptId],
+      );
+      final grossPaid = (grossRows.first['total'] as num).toInt();
+      final refunded = (refundRows.first['total'] as num).toInt();
+      if (paidAmount > 0 || grossPaid != refunded || legacyPayments.isNotEmpty) {
         throw StateError(
           'Nota sudah memiliki pembayaran. Catat pengembalian dana melalui prosedur refund sebelum pembatalan.',
         );
@@ -567,6 +570,125 @@ class PackingTransactionRepository {
   Future<List<Map<String, Object?>>> receiptPaymentsFor(int receiptId) async {
     final db = await _database.database;
     return db.query('receipt_payments', where: 'receipt_id = ?', whereArgs: [receiptId], orderBy: 'id DESC');
+  }
+
+
+  Future<List<Map<String, Object?>>> receiptRefundsFor(int receiptId) async {
+    final db = await _database.database;
+    return db.query(
+      'payment_refunds',
+      where: 'receipt_id = ?',
+      whereArgs: [receiptId],
+      orderBy: 'created_at DESC, id DESC',
+    );
+  }
+
+  /// Refunds a specific payment source without mutating the original payment row.
+  /// The net paid balance is recalculated in the same SQLite transaction.
+  Future<void> addReceiptRefund({
+    required int receiptId,
+    required int receiptPaymentId,
+    required int amount,
+    required String refundMethod,
+    required String reason,
+    String note = '',
+  }) async {
+    if (amount <= 0) throw ArgumentError('Nominal refund harus lebih dari nol.');
+    final method = refundMethod.trim().toLowerCase();
+    if (!['cash', 'transfer', 'qris', 'other'].contains(method)) {
+      throw ArgumentError('Metode pengembalian dana tidak valid.');
+    }
+    final cleanReason = reason.trim();
+    if (cleanReason.isEmpty) throw ArgumentError('Alasan refund wajib diisi.');
+    final db = await _database.database;
+    final now = DateTime.now().toUtc().toIso8601String();
+    await db.transaction((txn) async {
+      final receipts = await txn.query(
+        'packing_receipts',
+        where: 'id = ?',
+        whereArgs: [receiptId],
+        limit: 1,
+      );
+      if (receipts.isEmpty) throw StateError('Nota tidak ditemukan.');
+      final receipt = receipts.first;
+      if (receipt['status'] == 'cancelled') {
+        throw StateError('Nota yang dibatalkan tidak dapat direfund lagi.');
+      }
+      final paymentRows = await txn.query(
+        'receipt_payments',
+        where: 'id = ? AND receipt_id = ?',
+        whereArgs: [receiptPaymentId, receiptId],
+        limit: 1,
+      );
+      if (paymentRows.isEmpty) {
+        throw StateError('Pembayaran sumber tidak ditemukan pada nota ini.');
+      }
+      final sourceAmount = (paymentRows.first['amount'] as num).toInt();
+      final previousRefunds = await txn.rawQuery(
+        'SELECT COALESCE(SUM(amount), 0) AS total FROM payment_refunds WHERE receipt_payment_id = ?',
+        [receiptPaymentId],
+      );
+      final grossRows = await txn.rawQuery(
+        'SELECT COALESCE(SUM(amount), 0) AS total FROM receipt_payments WHERE receipt_id = ?',
+        [receiptId],
+      );
+      final refundRows = await txn.rawQuery(
+        'SELECT COALESCE(SUM(amount), 0) AS total FROM payment_refunds WHERE receipt_id = ?',
+        [receiptId],
+      );
+      final grossPaid = (grossRows.first['total'] as num).toInt();
+      final refundedBefore = (refundRows.first['total'] as num).toInt();
+      final netBefore = grossPaid - refundedBefore;
+      if (netBefore != (receipt['paid_amount'] as num).toInt()) {
+        throw StateError('Saldo pembayaran nota tidak sinkron. Refund ditahan agar riwayat tidak rusak.');
+      }
+      final refundable = sourceAmount - (previousRefunds.first['total'] as num).toInt();
+      if (refundable <= 0) {
+        throw StateError('Pembayaran sumber sudah dikembalikan seluruhnya.');
+      }
+      if (amount > refundable) {
+        throw ArgumentError('Refund melebihi sisa pembayaran sumber ($refundable).');
+      }
+      if (method == 'cash') {
+        final sessions = await txn.query(
+          'cash_sessions',
+          columns: ['status'],
+          where: 'date_key = ?',
+          whereArgs: [_cashDateKey(DateTime.now())],
+          limit: 1,
+        );
+        if (sessions.isNotEmpty && sessions.first['status'] == 'closed') {
+          throw StateError('Kas hari ini sudah ditutup; refund tunai baru tidak dapat dicatat.');
+        }
+      }
+      await txn.insert('payment_refunds', {
+        'receipt_id': receiptId,
+        'receipt_payment_id': receiptPaymentId,
+        'amount': amount,
+        'refund_method': method,
+        'reason': cleanReason,
+        'note': note.trim(),
+        'created_at': now,
+      });
+      final netPaid = netBefore - amount;
+      if (netPaid < 0) throw StateError('Total refund melebihi pembayaran nota.');
+      final total = (receipt['total_amount'] as num).toInt();
+      final isSettled = netPaid >= total;
+      await txn.update('packing_receipts', {
+        'paid_amount': netPaid,
+        'status': isSettled ? 'completed' : 'open',
+        'updated_at': now,
+      }, where: 'id = ?', whereArgs: [receiptId]);
+      await txn.update(
+        'packing_transactions',
+        {
+          'status': isSettled ? 'completed' : 'open',
+          'updated_at': now,
+        },
+        where: 'receipt_id = ? AND status != ?',
+        whereArgs: [receiptId, 'cancelled'],
+      );
+    });
   }
 
   /// Records one full settlement for the entire receipt, never per job.
@@ -599,7 +721,12 @@ class PackingTransactionRepository {
       );
       final ledgerPaid = (receiptLedger.first['total'] as num).toInt();
       final legacyPaid = (legacyLedger.first['total'] as num).toInt();
-      if (legacyPaid > 0 || ledgerPaid != paid) {
+      final refundLedger = await txn.rawQuery(
+        'SELECT COALESCE(SUM(amount), 0) AS total FROM payment_refunds WHERE receipt_id = ?',
+        [receiptId],
+      );
+      final refunded = (refundLedger.first['total'] as num).toInt();
+      if (legacyPaid > 0 || ledgerPaid - refunded != paid) {
         throw StateError(
           'Riwayat pembayaran nota tidak sinkron. Pembayaran baru ditahan agar tidak terjadi pencatatan ganda.',
         );
@@ -662,9 +789,14 @@ class PackingTransactionRepository {
       );
       final ledgerPaid = (receiptLedger.first['total'] as num).toInt();
       final legacyPaid = (legacyLedger.first['total'] as num).toInt();
-      if (legacyPaid > 0 || ledgerPaid != paid) {
+      final refundLedger = await txn.rawQuery(
+        'SELECT COALESCE(SUM(amount), 0) AS total FROM payment_refunds WHERE receipt_id = ?',
+        [receiptId],
+      );
+      final refunded = (refundLedger.first['total'] as num).toInt();
+      if (legacyPaid > 0 || ledgerPaid - refunded != paid) {
         throw StateError(
-          'Riwayat pembayaran nota tidak sinkron. Pembayaran baru ditahan agar saldo tidak keliru.',
+          'Riwayat pembayaran dan refund nota tidak sinkron. Pembayaran baru ditahan agar saldo tidak keliru.',
         );
       }
       final remaining = total - paid;
@@ -903,7 +1035,7 @@ class PackingTransactionRepository {
       SELECT
         COALESCE((SELECT SUM(rp.amount)
           FROM receipt_payments rp INNER JOIN packing_receipts pr ON pr.id = rp.receipt_id
-          WHERE pr.status != 'cancelled' AND LOWER(TRIM(rp.payment_method)) = 'cash'
+          WHERE LOWER(TRIM(rp.payment_method)) = 'cash'
             AND rp.created_at >= ? AND rp.created_at < ?), 0)
         + COALESCE((SELECT SUM(tp.amount)
           FROM transaction_payments tp
@@ -912,14 +1044,19 @@ class PackingTransactionRepository {
             AND LOWER(TRIM(tp.payment_method)) = 'cash'
             AND tp.created_at >= ? AND tp.created_at < ?), 0) AS total
     ''', [start, end, start, end]);
+    final refunds = await db.rawQuery(
+      "SELECT COALESCE(SUM(amount), 0) AS total FROM payment_refunds WHERE LOWER(TRIM(refund_method)) = 'cash' AND created_at >= ? AND created_at < ?",
+      [start, end],
+    );
     final expenses = await db.rawQuery('SELECT COALESCE(SUM(amount), 0) AS total FROM cash_expenses WHERE session_id = ?', [sessionId]);
     final expenseRows = await db.query('cash_expenses', where: 'session_id = ?', whereArgs: [sessionId], orderBy: 'id DESC');
     final opening = (session['opening_balance'] as num).toInt();
     final cashIn = (payments.first['total'] as num).toInt();
+    final cashRefunded = (refunds.first['total'] as num).toInt();
     final expenseTotal = (expenses.first['total'] as num).toInt();
-    final expected = opening + cashIn - expenseTotal;
+    final expected = opening + cashIn - cashRefunded - expenseTotal;
     return {
-      'session': session, 'cash_received': cashIn, 'expense_total': expenseTotal,
+      'session': session, 'cash_received': cashIn, 'cash_refunded': cashRefunded, 'expense_total': expenseTotal,
       'expected_balance': expected, 'expenses': expenseRows,
     };
   }
@@ -939,7 +1076,7 @@ class PackingTransactionRepository {
         SELECT
           COALESCE((SELECT SUM(rp.amount) FROM receipt_payments rp
             INNER JOIN packing_receipts pr ON pr.id = rp.receipt_id
-            WHERE pr.status != 'cancelled' AND LOWER(TRIM(rp.payment_method)) = 'cash'
+            WHERE LOWER(TRIM(rp.payment_method)) = 'cash'
               AND rp.created_at >= ? AND rp.created_at < ?), 0)
           + COALESCE((SELECT SUM(tp.amount) FROM transaction_payments tp
             INNER JOIN packing_transactions pt ON pt.id = tp.transaction_id
@@ -947,9 +1084,14 @@ class PackingTransactionRepository {
               AND LOWER(TRIM(tp.payment_method)) = 'cash'
               AND tp.created_at >= ? AND tp.created_at < ?), 0) AS total
       ''', [start, end, start, end]);
+      final refunds = await txn.rawQuery(
+        "SELECT COALESCE(SUM(amount), 0) AS total FROM payment_refunds WHERE LOWER(TRIM(refund_method)) = 'cash' AND created_at >= ? AND created_at < ?",
+        [start, end],
+      );
       final expenses = await txn.rawQuery('SELECT COALESCE(SUM(amount), 0) AS total FROM cash_expenses WHERE session_id = ?', [sessionId]);
       final expected = (session['opening_balance'] as num).toInt()
           + (payments.first['total'] as num).toInt()
+          - (refunds.first['total'] as num).toInt()
           - (expenses.first['total'] as num).toInt();
       await txn.update('cash_sessions', {
         'expected_balance': expected, 'counted_balance': countedBalance,
@@ -978,6 +1120,7 @@ class PackingTransactionRepository {
     }
     final dateFilter = conditions.isEmpty ? '' : ' AND ${conditions.join(' AND ')}';
     final paymentDateFilter = dateFilter.replaceAll('created_at', 'receipt_payments.created_at');
+    final refundDateFilter = dateFilter.replaceAll('created_at', 'payment_refunds.created_at');
     final materialDateConditions = <String>[];
     if (startDate != null) materialDateConditions.add('packing_transactions.created_at >= ?');
     if (endDate != null) materialDateConditions.add('packing_transactions.created_at < ?');
@@ -992,9 +1135,9 @@ class PackingTransactionRepository {
         COALESCE(SUM(labor_cost), 0) AS labor_cost_total,
         COALESCE(SUM(overhead_cost), 0) AS overhead_cost_total,
         (SELECT COALESCE(SUM(total_amount), 0) FROM packing_receipts WHERE status != 'cancelled'$dateFilter) - COALESCE(SUM(material_cost + labor_cost + overhead_cost), 0) AS gross_profit,
-        (SELECT COALESCE(SUM(receipt_payments.amount), 0) FROM receipt_payments INNER JOIN packing_receipts ON packing_receipts.id = receipt_payments.receipt_id WHERE packing_receipts.status != 'cancelled'$paymentDateFilter) AS paid_total,
-        (SELECT COALESCE(SUM(receipt_payments.amount), 0) FROM receipt_payments INNER JOIN packing_receipts ON packing_receipts.id = receipt_payments.receipt_id WHERE packing_receipts.status != 'cancelled' AND LOWER(TRIM(receipt_payments.payment_method)) = 'cash'$paymentDateFilter) AS cash_received_total,
-        (SELECT COALESCE(SUM(receipt_payments.amount), 0) FROM receipt_payments INNER JOIN packing_receipts ON packing_receipts.id = receipt_payments.receipt_id WHERE packing_receipts.status != 'cancelled' AND LOWER(TRIM(receipt_payments.payment_method)) != 'cash'$paymentDateFilter) AS non_cash_received_total,
+        (SELECT COALESCE(SUM(receipt_payments.amount), 0) FROM receipt_payments INNER JOIN packing_receipts ON packing_receipts.id = receipt_payments.receipt_id WHERE 1 = 1$paymentDateFilter) AS paid_total,
+        (SELECT COALESCE(SUM(receipt_payments.amount), 0) FROM receipt_payments INNER JOIN packing_receipts ON packing_receipts.id = receipt_payments.receipt_id WHERE LOWER(TRIM(receipt_payments.payment_method)) = 'cash'$paymentDateFilter) AS cash_received_total,
+        (SELECT COALESCE(SUM(receipt_payments.amount), 0) FROM receipt_payments INNER JOIN packing_receipts ON packing_receipts.id = receipt_payments.receipt_id WHERE LOWER(TRIM(receipt_payments.payment_method)) != 'cash'$paymentDateFilter) AS non_cash_received_total,
         (SELECT COALESCE(SUM(total_amount - paid_amount), 0) FROM packing_receipts WHERE status != 'cancelled'$dateFilter) AS receivable_total,
         (SELECT COUNT(*) FROM packing_receipts WHERE status = 'completed'$dateFilter) AS completed_count,
         (SELECT COUNT(*) FROM packing_receipts WHERE status = 'open'$dateFilter) AS open_count,
@@ -1012,6 +1155,23 @@ class PackingTransactionRepository {
       GROUP BY material_name_snapshot, unit_snapshot
       ORDER BY cost DESC, name COLLATE NOCASE
     ''', args);
+    final refundRows = await db.rawQuery('''
+      SELECT COALESCE(SUM(amount), 0) AS total,
+        COALESCE(SUM(CASE WHEN LOWER(TRIM(refund_method)) = 'cash' THEN amount ELSE 0 END), 0) AS cash_total
+      FROM payment_refunds WHERE 1 = 1$refundDateFilter
+    ''', args);
+    final summary = Map<String, Object?>.from(totals.first);
+    final refundTotal = (refundRows.first['total'] as num).toInt();
+    final cashRefundTotal = (refundRows.first['cash_total'] as num).toInt();
+    final paidTotal = (summary['paid_total'] as num).toInt();
+    final cashReceived = (summary['cash_received_total'] as num).toInt();
+    final nonCashReceived = (summary['non_cash_received_total'] as num).toInt();
+    summary['refund_total'] = refundTotal;
+    summary['cash_refunded_total'] = cashRefundTotal;
+    summary['non_cash_refunded_total'] = refundTotal - cashRefundTotal;
+    summary['paid_total'] = paidTotal - refundTotal;
+    summary['cash_received_total'] = cashReceived - cashRefundTotal;
+    summary['non_cash_received_total'] = nonCashReceived - (refundTotal - cashRefundTotal);
     final paymentMethods = await db.rawQuery('''
       SELECT receipt_payments.payment_method AS payment_method,
         COALESCE(SUM(receipt_payments.amount), 0) AS amount,
@@ -1024,7 +1184,7 @@ class PackingTransactionRepository {
       ORDER BY amount DESC, payment_method ASC
     ''', args);
     return {
-      'totals': totals.first,
+      'totals': summary,
       'materials': materials,
       'payment_methods': paymentMethods,
     };
@@ -1040,11 +1200,12 @@ class PackingTransactionRepository {
           txn.query(table, orderBy: 'id');
       return {
         'format': 'packing_pos_backup',
-        'version': 7,
+        'version': 8,
         'createdAt': DateTime.now().toUtc().toIso8601String(),
         'packing_transactions': await rows('packing_transactions'),
         'packing_receipts': await rows('packing_receipts'),
         'receipt_payments': await rows('receipt_payments'),
+        'payment_refunds': await rows('payment_refunds'),
         'transaction_materials': await rows('transaction_materials'),
         'transaction_payments': await rows('transaction_payments'),
         'materials': await rows('materials'),
@@ -1066,6 +1227,7 @@ class PackingTransactionRepository {
     await db.transaction((txn) async {
       await txn.delete('cash_expenses');
       await txn.delete('cash_sessions');
+      await txn.delete('payment_refunds');
       await txn.delete('receipt_payments');
       await txn.delete('transaction_payments');
       await txn.delete('transaction_materials');
@@ -1090,6 +1252,7 @@ class PackingTransactionRepository {
         await txn.insert('packing_transactions', row);
       }
       for (final row in data['receipt_payments']!) { await txn.insert('receipt_payments', row); }
+      for (final row in data['payment_refunds'] ?? const <Map<String, Object?>>[]) { await txn.insert('payment_refunds', row); }
       for (final row in data['transaction_materials']!) {
         await txn.insert('transaction_materials', row);
       }

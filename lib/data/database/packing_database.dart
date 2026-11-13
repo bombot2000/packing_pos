@@ -14,7 +14,7 @@ class PackingDatabase {
     return instance;
   }
   static final PackingDatabase instance = PackingDatabase._();
-  static const int schemaVersion = 7;
+  static const int schemaVersion = 8;
   Database? _database;
 
   Future<Database> get database async {
@@ -75,6 +75,7 @@ class PackingDatabase {
     await _createReceiptTables(db);
     await _createCustomers(db);
     await _createCashTables(db);
+    await _createRefundTables(db);
     await db.execute('CREATE TABLE app_settings (key TEXT PRIMARY KEY, value TEXT NOT NULL, updated_at TEXT NOT NULL)');
     await _createIndexes(db);
   }
@@ -113,6 +114,27 @@ class PackingDatabase {
     await db.execute('CREATE INDEX IF NOT EXISTS idx_customers_active_name ON customers(is_active, name)');
   }
 
+
+  Future<void> _createRefundTables(Database db) async {
+    await db.execute('''
+      CREATE TABLE payment_refunds (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        receipt_id INTEGER NOT NULL,
+        receipt_payment_id INTEGER NOT NULL,
+        amount INTEGER NOT NULL CHECK(amount > 0),
+        refund_method TEXT NOT NULL DEFAULT 'cash',
+        reason TEXT NOT NULL,
+        note TEXT NOT NULL DEFAULT '',
+        created_at TEXT NOT NULL,
+        FOREIGN KEY(receipt_id) REFERENCES packing_receipts(id) ON DELETE RESTRICT,
+        FOREIGN KEY(receipt_payment_id) REFERENCES receipt_payments(id) ON DELETE RESTRICT
+      )
+    ''');
+    await db.execute('CREATE INDEX IF NOT EXISTS idx_payment_refunds_receipt ON payment_refunds(receipt_id)');
+    await db.execute('CREATE INDEX IF NOT EXISTS idx_payment_refunds_payment ON payment_refunds(receipt_payment_id)');
+    await db.execute('CREATE INDEX IF NOT EXISTS idx_payment_refunds_created ON payment_refunds(created_at)');
+  }
+
   Future<void> _createIndexes(Database db) async {
     await db.execute('CREATE INDEX IF NOT EXISTS idx_transactions_created ON packing_transactions(created_at)');
     await db.execute('CREATE INDEX IF NOT EXISTS idx_transactions_receipt ON packing_transactions(receipt_id)');
@@ -144,6 +166,7 @@ class PackingDatabase {
     }
     if (oldVersion < 6) await _createCustomers(db);
     if (oldVersion < 7) await _createCashTables(db);
+    if (oldVersion < 8) await _createRefundTables(db);
   }
 
   Future<bool> _hasColumn(Database db, String table, String column) async {

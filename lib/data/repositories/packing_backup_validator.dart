@@ -17,6 +17,7 @@ class PackingBackupValidator {
     'app_settings',
     'cash_sessions',
     'cash_expenses',
+    'payment_refunds',
   ];
 
   static Map<String, List<Map<String, Object?>>> validate(
@@ -24,13 +25,13 @@ class PackingBackupValidator {
   ) {
     final version = backup['version'];
     if (backup['format'] != 'packing_pos_backup' ||
-        (version != 1 && version != 2 && version != 3 && version != 4 && version != 5 && version != 6 && version != 7)) {
+        (version != 1 && version != 2 && version != 3 && version != 4 && version != 5 && version != 6 && version != 7 && version != 8)) {
       throw const FormatException('Format atau versi backup tidak didukung.');
     }
 
     final data = <String, List<Map<String, Object?>>>{};
     for (final table in tables) {
-      if ((table == 'service_types' && version < 3 && backup[table] == null) || (version < 4 && ['packing_receipts', 'receipt_payments'].contains(table)) || (table == 'customers' && version < 6) || (['cash_sessions', 'cash_expenses'].contains(table) && version < 7)) continue;
+      if ((table == 'service_types' && version < 3 && backup[table] == null) || (version < 4 && ['packing_receipts', 'receipt_payments'].contains(table)) || (table == 'customers' && version < 6) || (['cash_sessions', 'cash_expenses'].contains(table) && version < 7) || (table == 'payment_refunds' && version < 8)) continue;
       final raw = backup[table];
       if (raw is! List) {
         throw FormatException('Data tabel $table tidak ditemukan pada backup.');
@@ -198,7 +199,7 @@ class PackingBackupValidator {
     }
     for (final e in headerMap.entries) {
       final paid = _int(e.value['paid_amount'], 'Pembayaran nota');
-      if (version >= 4 ? (paidSums[e.key] ?? 0) != paid : ((paidSums[e.key] ?? 0) != 0 && paidSums[e.key] != paid)) throw const FormatException('Riwayat pembayaran nota tidak cocok.');
+      if (version < 8 && (version >= 4 ? (paidSums[e.key] ?? 0) != paid : ((paidSums[e.key] ?? 0) != 0 && paidSums[e.key] != paid))) throw const FormatException('Riwayat pembayaran nota tidak cocok.');
       final total = _int(e.value['total_amount'], 'Total nota');
       if (e.value['status'] == 'completed' && paid != total) {
         throw const FormatException('Status lunas tidak cocok.');
@@ -207,6 +208,58 @@ class PackingBackupValidator {
         throw const FormatException('Status nota terbuka tidak cocok dengan jumlah pembayaran.');
       }
     }
+
+    final refundIds = <int>{};
+    final refundTotalsByPayment = <int, int>{};
+    final receiptPaymentMap = <int, Map<String, Object?>>{
+      for (final row in data['receipt_payments']!)
+        _int(row['id'], 'ID pembayaran nota'): row,
+    };
+    for (final row in data['payment_refunds'] ?? const <Map<String, Object?>>[]) {
+      final id = _positiveInt(row['id'], 'ID refund');
+      if (!refundIds.add(id)) throw const FormatException('ID refund duplikat.');
+      final receiptId = _positiveInt(row['receipt_id'], 'ID nota refund');
+      if (!headerMap.containsKey(receiptId)) {
+        throw const FormatException('Refund merujuk nota yang tidak ada.');
+      }
+      final paymentId = _positiveInt(row['receipt_payment_id'], 'ID pembayaran sumber refund');
+      final payment = receiptPaymentMap[paymentId];
+      if (payment == null || _int(payment['receipt_id'], 'ID nota pembayaran') != receiptId) {
+        throw const FormatException('Refund merujuk pembayaran yang tidak cocok dengan nota.');
+      }
+      final amount = _positiveInt(row['amount'], 'Nominal refund');
+      final method = _text(row['refund_method'], 'Metode refund').toLowerCase();
+      if (!['cash', 'transfer', 'qris', 'other'].contains(method)) {
+        throw const FormatException('Metode refund tidak dikenal.');
+      }
+      _text(row['reason'], 'Alasan refund');
+      _string(row['note'], 'Catatan refund');
+      _text(row['created_at'], 'Tanggal refund');
+      refundTotalsByPayment[paymentId] = (refundTotalsByPayment[paymentId] ?? 0) + amount;
+      if (refundTotalsByPayment[paymentId]! > _int(payment['amount'], 'Nominal pembayaran sumber')) {
+        throw const FormatException('Total refund melebihi pembayaran sumber.');
+      }
+    }
+    if (version >= 8) {
+      for (final entry in headerMap.entries) {
+        final grossPaid = paidSums[entry.key] ?? 0;
+        final refunded = (data['payment_refunds'] ?? const <Map<String, Object?>>[])
+            .where((row) => _int(row['receipt_id'], 'ID nota refund') == entry.key)
+            .fold<int>(0, (sum, row) => sum + _int(row['amount'], 'Nominal refund'));
+        final netPaid = grossPaid - refunded;
+        if (netPaid < 0 || netPaid != _int(entry.value['paid_amount'], 'Pembayaran bersih nota')) {
+          throw const FormatException('Saldo pembayaran bersih nota tidak cocok dengan riwayat refund.');
+        }
+        final total = _int(entry.value['total_amount'], 'Total nota');
+        if (entry.value['status'] == 'completed' && netPaid != total) {
+          throw const FormatException('Status lunas tidak cocok setelah refund.');
+        }
+        if (entry.value['status'] == 'open' && total > 0 && netPaid >= total) {
+          throw const FormatException('Status terbuka tidak cocok setelah refund.');
+        }
+      }
+    }
+
     final materialIds = <int>{};
     for (final row in data['materials']!) {
       final id = _positiveInt(row['id'], 'ID master bahan');
@@ -351,7 +404,6 @@ class PackingBackupValidator {
         final receiptId = _positiveInt(payment['receipt_id'], 'ID nota pembayaran');
         final receipt = headerMap[receiptId];
         if (receipt != null &&
-            receipt['status'] != 'cancelled' &&
             payment['payment_method'].toString().trim().toLowerCase() == 'cash' &&
             inSessionDate(payment['created_at'])) {
           cashIn += _positiveInt(payment['amount'], 'Nominal pembayaran nota');
@@ -367,6 +419,14 @@ class PackingBackupValidator {
           cashIn += _positiveInt(payment['amount'], 'Nominal pembayaran');
         }
       }
+
+      var cashRefunded = 0;
+      for (final refund in data['payment_refunds'] ?? const <Map<String, Object?>>[]) {
+        if (refund['refund_method'].toString().trim().toLowerCase() == 'cash' &&
+            inSessionDate(refund['created_at'])) {
+          cashRefunded += _positiveInt(refund['amount'], 'Nominal refund kas');
+        }
+      }
       var expenses = 0;
       for (final expense in data['cash_expenses']!) {
         if (_positiveInt(expense['session_id'], 'ID sesi pengeluaran kas') == sessionId) {
@@ -374,7 +434,7 @@ class PackingBackupValidator {
         }
       }
       final expected = _nonNegativeInt(row['opening_balance'], 'Saldo awal kas') +
-          cashIn - expenses;
+          cashIn - cashRefunded - expenses;
       if (_signedInt(row['expected_balance'], 'Saldo kas seharusnya') != expected) {
         throw FormatException('Saldo kas seharusnya pada sesi $sessionId tidak cocok dengan transaksi dan pengeluaran.');
       }

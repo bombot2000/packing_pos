@@ -29,6 +29,7 @@ class _PackingReceiptDetailScreenState extends State<PackingReceiptDetailScreen>
   Map<String, Object?>? _receipt;
   List<Map<String, Object?>> _jobs = [];
   List<Map<String, Object?>> _payments = [];
+  List<Map<String, Object?>> _refunds = [];
   String? _error;
   Map<String, String> _identity = PackingIdentityRepository.defaults;
 
@@ -44,12 +45,14 @@ class _PackingReceiptDetailScreenState extends State<PackingReceiptDetailScreen>
       if (receipt == null) throw StateError('Nota tidak ditemukan.');
       final jobs = await _repo.jobsForReceipt(widget.receiptId);
       final payments = await _repo.receiptPaymentsFor(widget.receiptId);
+      final refunds = await _repo.receiptRefundsFor(widget.receiptId);
       if (!mounted) return;
       setState(() {
         _identity = identity;
         _receipt = receipt;
         _jobs = jobs;
         _payments = payments;
+        _refunds = refunds;
         _error = null;
         final remaining = (receipt['total_amount'] as num).toInt() - (receipt['paid_amount'] as num).toInt();
         _amount.text = remaining > 0 ? groupThousands(remaining) : '';
@@ -78,6 +81,105 @@ class _PackingReceiptDetailScreenState extends State<PackingReceiptDetailScreen>
     if (changed == true) await _load();
   }
 
+
+  Future<void> _refundPayment(Map<String, Object?> payment) async {
+    if (_busy || _receipt == null || _receipt!['status'] == 'cancelled') return;
+    final paymentId = (payment['id'] as num).toInt();
+    final sourceAmount = (payment['amount'] as num).toInt();
+    final alreadyRefunded = _refunds
+        .where((row) => (row['receipt_payment_id'] as num).toInt() == paymentId)
+        .fold<int>(0, (sum, row) => sum + (row['amount'] as num).toInt());
+    final refundable = sourceAmount - alreadyRefunded;
+    if (refundable <= 0) return;
+    final amount = TextEditingController(text: groupThousands(refundable));
+    final reason = TextEditingController();
+    final note = TextEditingController();
+    var method = 'cash';
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(builder: (ctx, setLocal) => AlertDialog(
+        title: const Text('Catat pengembalian dana'),
+        content: SingleChildScrollView(child: Column(mainAxisSize: MainAxisSize.min, children: [
+          Text('Pembayaran sumber ' + _money(sourceAmount) + ' • Sudah dikembalikan ' + _money(alreadyRefunded)),
+          const Text('Pembayaran asli tetap tersimpan. Refund tunai mengurangi saldo kas pada tanggal refund.'),
+          const SizedBox(height: 12),
+          TextField(
+            controller: amount,
+            keyboardType: TextInputType.number,
+            inputFormatters: [RupiahInputFormatter()],
+            decoration: InputDecoration(
+              labelText: 'Nominal refund',
+              prefixText: 'Rp ',
+              helperText: 'Maksimal ' + _money(refundable),
+            ),
+          ),
+          const SizedBox(height: 8),
+          DropdownButtonFormField<String>(
+            value: method,
+            decoration: const InputDecoration(labelText: 'Metode pengembalian'),
+            items: const [
+              DropdownMenuItem(value: 'cash', child: Text('Tunai')),
+              DropdownMenuItem(value: 'transfer', child: Text('Transfer')),
+              DropdownMenuItem(value: 'qris', child: Text('QRIS')),
+              DropdownMenuItem(value: 'other', child: Text('Lainnya')),
+            ],
+            onChanged: (value) => setLocal(() => method = value ?? 'cash'),
+          ),
+          const SizedBox(height: 8),
+          TextField(
+            controller: reason,
+            onChanged: (_) => setLocal(() {}),
+            decoration: const InputDecoration(labelText: 'Alasan refund *'),
+          ),
+          const SizedBox(height: 8),
+          TextField(
+            controller: note,
+            decoration: const InputDecoration(labelText: 'Catatan tambahan (opsional)'),
+          ),
+        ])),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Kembali')),
+          FilledButton(
+            onPressed: reason.text.trim().isEmpty ? null : () => Navigator.pop(ctx, true),
+            child: const Text('Simpan refund'),
+          ),
+        ],
+      )),
+    );
+    final refundAmount = _parse(amount.text);
+    final refundReason = reason.text.trim();
+    final refundNote = note.text.trim();
+    amount.dispose();
+    reason.dispose();
+    note.dispose();
+    if (confirmed != true) return;
+    if (refundAmount == null || refundAmount <= 0 || refundAmount > refundable) {
+      setState(() => _error = 'Nominal refund tidak valid atau melebihi sisa pembayaran sumber.');
+      return;
+    }
+    setState(() { _busy = true; _error = null; });
+    try {
+      await _repo.addReceiptRefund(
+        receiptId: widget.receiptId,
+        receiptPaymentId: paymentId,
+        amount: refundAmount,
+        refundMethod: method,
+        reason: refundReason,
+        note: refundNote,
+      );
+      await _load();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Refund berhasil dicatat.')),
+        );
+      }
+    } catch (e) {
+      if (mounted) setState(() => _error = friendlyError(e));
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
   Future<void> _printReceipt() async {
     if (_receipt == null || _busy) return;
     setState(() => _busy = true);
@@ -92,6 +194,7 @@ class _PackingReceiptDetailScreenState extends State<PackingReceiptDetailScreen>
         jobs: _jobs,
         materialsByJob: materials,
         payments: _payments,
+        refunds: _refunds,
       );
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -344,10 +447,29 @@ class _PackingReceiptDetailScreenState extends State<PackingReceiptDetailScreen>
         Text('Riwayat pembayaran', style: Theme.of(context).textTheme.titleMedium),
         Card(child: Column(children: _payments.isEmpty
           ? [const ListTile(title: Text('Belum ada pembayaran'))]
-          : _payments.map((p) => ListTile(
-              title: Text(_money(p['amount'])),
-              subtitle: Text('${p['payment_method']} • ${_date(p['created_at'])}${(p['note'] ?? '').toString().isEmpty ? '' : '\n${p['note']}'}'),
-            )).toList())),
+          : _payments.map((p) {
+              final paymentId = (p['id'] as num).toInt();
+              final sourceAmount = (p['amount'] as num).toInt();
+              final refunded = _refunds.where((row) => (row['receipt_payment_id'] as num).toInt() == paymentId)
+                  .fold<int>(0, (sum, row) => sum + (row['amount'] as num).toInt());
+              final refundable = sourceAmount - refunded;
+              return ListTile(
+                title: Text(_money(sourceAmount)),
+                subtitle: Text('${p['payment_method']} • ${_date(p['created_at'])}${(p['note'] ?? '').toString().isEmpty ? '' : '\n${p['note']}'}${refunded > 0 ? '\nRefund: ${_money(refunded)}' : ''}'),
+                trailing: status != 'cancelled' && refundable > 0
+                    ? TextButton(onPressed: _busy ? null : () => _refundPayment(p), child: const Text('Refund'))
+                    : null,
+              );
+            }).toList())),
+        if (_refunds.isNotEmpty) ...[
+          const SizedBox(height: 8),
+          Text('Riwayat refund', style: Theme.of(context).textTheme.titleMedium),
+          Card(child: Column(children: _refunds.map((refund) => ListTile(
+            leading: const Icon(Icons.undo),
+            title: Text('- ${_money(refund['amount'])}'),
+            subtitle: Text('${refund['refund_method']} • ${_date(refund['created_at'])}\n${refund['reason']}${(refund['note'] ?? '').toString().isEmpty ? '' : '\n${refund['note']}'}'),
+          )).toList())),
+        ],
         if (_error != null) Padding(padding: const EdgeInsets.symmetric(vertical: 8), child: Text(_error!, style: TextStyle(color: Theme.of(context).colorScheme.error))),
       ]),
       bottomNavigationBar: SafeArea(

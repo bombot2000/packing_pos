@@ -318,7 +318,7 @@ void main() {
     await repository.closeCashSession(sessionId: cashSessionId, countedBalance: 122000, note: 'Kas dihitung dan ditutup');
 
     final backup = await repository.exportBackup();
-    expect(backup['version'], 7);
+    expect(backup['version'], 8);
     expect(backup['customers'], hasLength(1));
     expect(backup['cash_sessions'], hasLength(1));
     expect(backup['cash_expenses'], hasLength(1));

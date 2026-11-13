@@ -275,6 +275,7 @@ class PackingReceiptPrinter {
     required List<Map<String, Object?>> jobs,
     required Map<int, List<Map<String, Object?>>> materialsByJob,
     required List<Map<String, Object?>> payments,
+    List<Map<String, Object?>> refunds = const [],
   }) async {
     final prefs = await SharedPreferences.getInstance();
     final mac = prefs.getString(printerMacKey);
@@ -367,7 +368,9 @@ class PackingReceiptPrinter {
             ? 'LUNAS'
             : paid > 0
                 ? 'DIBAYAR SEBAGIAN'
-                : 'BELUM DIBAYAR';
+                : refunds.isNotEmpty
+                    ? 'REFUND TERCATAT'
+                    : 'BELUM DIBAYAR';
     bytes.addAll(generator.text(
       'STATUS: $statusLabel',
       styles: const PosStyles(
@@ -406,6 +409,40 @@ class PackingReceiptPrinter {
           bytes.addAll(generator.text('  Catatan: ${printable(paymentNote)}'));
         }
       }
+    }
+
+
+    if (refunds.isNotEmpty) {
+      bytes.addAll(generator.hr(ch: '-'));
+      bytes.addAll(generator.text(
+        'RIWAYAT REFUND',
+        styles: const PosStyles(bold: true),
+      ));
+      for (final refund in refunds.reversed) {
+        final refundDate = DateTime.tryParse(
+          refund['created_at']?.toString() ?? '',
+        );
+        final dateLabel = refundDate == null
+            ? '-'
+            : DateFormat('dd/MM/yy HH:mm').format(refundDate.toLocal());
+        final method = refund['refund_method']?.toString().trim();
+        bytes.addAll(generator.text(
+          '$dateLabel - ${method == null || method.isEmpty ? 'Lainnya' : method.toUpperCase()}',
+        ));
+        bytes.addAll(generator.text(
+          '  -${money(refund['amount'])}',
+          styles: const PosStyles(bold: true),
+        ));
+        final reason = refund['reason']?.toString().trim() ?? '';
+        if (reason.isNotEmpty) bytes.addAll(generator.text('  Alasan: ${printable(reason)}'));
+        final refundNote = refund['note']?.toString().trim() ?? '';
+        if (refundNote.isNotEmpty) bytes.addAll(generator.text('  Catatan: ${printable(refundNote)}'));
+      }
+      final refundTotal = refunds.fold<int>(
+        0,
+        (sum, row) => sum + ((row['amount'] as num?)?.toInt() ?? 0),
+      );
+      bytes.addAll(_pair(generator, cols, 'TOTAL REFUND', '-${money(refundTotal)}'));
     }
 
     final note = receipt['note']?.toString() ?? '';

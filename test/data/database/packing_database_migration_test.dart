@@ -5,7 +5,7 @@ import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 void main() {
   setUpAll(sqfliteFfiInit);
 
-  test('upgrade dari v3 ke v7 tidak menggandakan kolom dan menjaga data', () async {
+  test('upgrade dari v3 ke v8 tidak menggandakan kolom dan menjaga data', () async {
     final db = await databaseFactoryFfi.openDatabase(inMemoryDatabasePath);
     await db.execute('''
       CREATE TABLE packing_transactions (
@@ -76,6 +76,35 @@ void main() {
     expect(await db.query('receipt_payments'), hasLength(1));
     expect(await db.query('customers'), isEmpty);
     expect(await db.query('cash_sessions'), isEmpty);
+    expect(await db.query('payment_refunds'), isEmpty);
     await db.close();
   });
+
+  test('upgrade dari v7 ke v8 menambah tabel refund tanpa menghapus data lama', () async {
+    final db = await databaseFactoryFfi.openDatabase(inMemoryDatabasePath);
+    await PackingDatabase.createForTesting(db);
+    await db.insert('materials', {
+      'name': 'Kayu lama',
+      'unit': 'batang',
+      'current_unit_price': 12000,
+      'is_active': 1,
+      'created_at': '2026-11-13T00:00:00.000Z',
+      'updated_at': '2026-11-13T00:00:00.000Z',
+    });
+
+    await db.execute('DROP TABLE payment_refunds');
+    await PackingDatabase.instance.upgradeForTesting(db, 7, 8);
+
+    final tables = await db.rawQuery(
+      "SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'payment_refunds'",
+    );
+    expect(tables, hasLength(1));
+    final materials = await db.query('materials');
+    expect(materials, hasLength(1));
+    expect(materials.single['name'], 'Kayu lama');
+    expect(await db.query('payment_refunds'), isEmpty);
+    await db.close();
+  });
+
+
 }
