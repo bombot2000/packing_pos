@@ -569,6 +569,125 @@ class PackingTransactionRepository {
     return db.query('receipt_payments', where: 'receipt_id = ?', whereArgs: [receiptId], orderBy: 'id DESC');
   }
 
+
+  Future<List<Map<String, Object?>>> receiptRefundsFor(int receiptId) async {
+    final db = await _database.database;
+    return db.query(
+      'payment_refunds',
+      where: 'receipt_id = ?',
+      whereArgs: [receiptId],
+      orderBy: 'created_at DESC, id DESC',
+    );
+  }
+
+  /// Refunds a specific payment source without mutating the original payment row.
+  /// The net paid balance is recalculated in the same SQLite transaction.
+  Future<void> addReceiptRefund({
+    required int receiptId,
+    required int receiptPaymentId,
+    required int amount,
+    required String refundMethod,
+    required String reason,
+    String note = '',
+  }) async {
+    if (amount <= 0) throw ArgumentError('Nominal refund harus lebih dari nol.');
+    final method = refundMethod.trim().toLowerCase();
+    if (!['cash', 'transfer', 'qris', 'other'].contains(method)) {
+      throw ArgumentError('Metode pengembalian dana tidak valid.');
+    }
+    final cleanReason = reason.trim();
+    if (cleanReason.isEmpty) throw ArgumentError('Alasan refund wajib diisi.');
+    final db = await _database.database;
+    final now = DateTime.now().toUtc().toIso8601String();
+    await db.transaction((txn) async {
+      final receipts = await txn.query(
+        'packing_receipts',
+        where: 'id = ?',
+        whereArgs: [receiptId],
+        limit: 1,
+      );
+      if (receipts.isEmpty) throw StateError('Nota tidak ditemukan.');
+      final receipt = receipts.first;
+      if (receipt['status'] == 'cancelled') {
+        throw StateError('Nota yang dibatalkan tidak dapat direfund lagi.');
+      }
+      final paymentRows = await txn.query(
+        'receipt_payments',
+        where: 'id = ? AND receipt_id = ?',
+        whereArgs: [receiptPaymentId, receiptId],
+        limit: 1,
+      );
+      if (paymentRows.isEmpty) {
+        throw StateError('Pembayaran sumber tidak ditemukan pada nota ini.');
+      }
+      final sourceAmount = (paymentRows.first['amount'] as num).toInt();
+      final previousRefunds = await txn.rawQuery(
+        'SELECT COALESCE(SUM(amount), 0) AS total FROM payment_refunds WHERE receipt_payment_id = ?',
+        [receiptPaymentId],
+      );
+      final grossRows = await txn.rawQuery(
+        'SELECT COALESCE(SUM(amount), 0) AS total FROM receipt_payments WHERE receipt_id = ?',
+        [receiptId],
+      );
+      final refundRows = await txn.rawQuery(
+        'SELECT COALESCE(SUM(amount), 0) AS total FROM payment_refunds WHERE receipt_id = ?',
+        [receiptId],
+      );
+      final grossPaid = (grossRows.first['total'] as num).toInt();
+      final refundedBefore = (refundRows.first['total'] as num).toInt();
+      final netBefore = grossPaid - refundedBefore;
+      if (netBefore != (receipt['paid_amount'] as num).toInt()) {
+        throw StateError('Saldo pembayaran nota tidak sinkron. Refund ditahan agar riwayat tidak rusak.');
+      }
+      final refundable = sourceAmount - (previousRefunds.first['total'] as num).toInt();
+      if (refundable <= 0) {
+        throw StateError('Pembayaran sumber sudah dikembalikan seluruhnya.');
+      }
+      if (amount > refundable) {
+        throw ArgumentError('Refund melebihi sisa pembayaran sumber ($refundable).');
+      }
+      if (method == 'cash') {
+        final sessions = await txn.query(
+          'cash_sessions',
+          columns: ['status'],
+          where: 'date_key = ?',
+          whereArgs: [_cashDateKey(DateTime.now())],
+          limit: 1,
+        );
+        if (sessions.isNotEmpty && sessions.first['status'] == 'closed') {
+          throw StateError('Kas hari ini sudah ditutup; refund tunai baru tidak dapat dicatat.');
+        }
+      }
+      await txn.insert('payment_refunds', {
+        'receipt_id': receiptId,
+        'receipt_payment_id': receiptPaymentId,
+        'amount': amount,
+        'refund_method': method,
+        'reason': cleanReason,
+        'note': note.trim(),
+        'created_at': now,
+      });
+      final netPaid = netBefore - amount;
+      if (netPaid < 0) throw StateError('Total refund melebihi pembayaran nota.');
+      final total = (receipt['total_amount'] as num).toInt();
+      final isSettled = netPaid >= total;
+      await txn.update('packing_receipts', {
+        'paid_amount': netPaid,
+        'status': isSettled ? 'completed' : 'open',
+        'updated_at': now,
+      }, where: 'id = ?', whereArgs: [receiptId]);
+      await txn.update(
+        'packing_transactions',
+        {
+          'status': isSettled ? 'completed' : 'open',
+          'updated_at': now,
+        },
+        where: 'receipt_id = ? AND status != ?',
+        whereArgs: [receiptId, 'cancelled'],
+      );
+    });
+  }
+
   /// Records one full settlement for the entire receipt, never per job.
   Future<void> settleReceipt({
     required int receiptId,
@@ -599,7 +718,12 @@ class PackingTransactionRepository {
       );
       final ledgerPaid = (receiptLedger.first['total'] as num).toInt();
       final legacyPaid = (legacyLedger.first['total'] as num).toInt();
-      if (legacyPaid > 0 || ledgerPaid != paid) {
+      final refundLedger = await txn.rawQuery(
+        'SELECT COALESCE(SUM(amount), 0) AS total FROM payment_refunds WHERE receipt_id = ?',
+        [receiptId],
+      );
+      final refunded = (refundLedger.first['total'] as num).toInt();
+      if (legacyPaid > 0 || ledgerPaid - refunded != paid) {
         throw StateError(
           'Riwayat pembayaran nota tidak sinkron. Pembayaran baru ditahan agar tidak terjadi pencatatan ganda.',
         );
@@ -1040,11 +1164,12 @@ class PackingTransactionRepository {
           txn.query(table, orderBy: 'id');
       return {
         'format': 'packing_pos_backup',
-        'version': 7,
+        'version': 8,
         'createdAt': DateTime.now().toUtc().toIso8601String(),
         'packing_transactions': await rows('packing_transactions'),
         'packing_receipts': await rows('packing_receipts'),
         'receipt_payments': await rows('receipt_payments'),
+        'payment_refunds': await rows('payment_refunds'),
         'transaction_materials': await rows('transaction_materials'),
         'transaction_payments': await rows('transaction_payments'),
         'materials': await rows('materials'),
@@ -1066,6 +1191,7 @@ class PackingTransactionRepository {
     await db.transaction((txn) async {
       await txn.delete('cash_expenses');
       await txn.delete('cash_sessions');
+      await txn.delete('payment_refunds');
       await txn.delete('receipt_payments');
       await txn.delete('transaction_payments');
       await txn.delete('transaction_materials');
@@ -1090,6 +1216,7 @@ class PackingTransactionRepository {
         await txn.insert('packing_transactions', row);
       }
       for (final row in data['receipt_payments']!) { await txn.insert('receipt_payments', row); }
+      for (final row in data['payment_refunds'] ?? const <Map<String, Object?>>[]) { await txn.insert('payment_refunds', row); }
       for (final row in data['transaction_materials']!) {
         await txn.insert('transaction_materials', row);
       }
