@@ -28,6 +28,51 @@ Map<String, dynamic> validBackup({int version = 2}) => {
   'app_settings': <Map<String, Object?>>[],
 };
 
+
+Map<String, dynamic> validReceiptBackup({required int version}) {
+  final backup = validBackup(version: version);
+  backup['packing_transactions']![0]['receipt_id'] = 1;
+  backup['packing_transactions']![0]['quantity'] = 1;
+  backup['packing_transactions']![0]['unit_price'] = 20000;
+  backup['service_types'] = <Map<String, Object?>>[];
+  backup['packing_receipts'] = [
+    {
+      'id': 1,
+      'receipt_no': 'RCP-LEGACY-1',
+      'customer_name': 'Pelanggan lama',
+      'total_amount': 20000,
+      'discount_amount': 0,
+      'paid_amount': 5000,
+      'status': 'open',
+      'note': 'DP lama',
+      'created_at': '2026-11-09T00:00:00.000Z',
+      'updated_at': '2026-11-09T00:00:00.000Z',
+    },
+  ];
+  backup['receipt_payments'] = [
+    {
+      'id': 1,
+      'receipt_id': 1,
+      'amount': 2000,
+      'payment_method': 'cash',
+      'note': 'DP',
+      'created_at': '2026-11-09T01:00:00.000Z',
+    },
+    {
+      'id': 2,
+      'receipt_id': 1,
+      'amount': 3000,
+      'payment_method': 'transfer',
+      'note': 'Pembayaran bertahap',
+      'created_at': '2026-11-09T02:00:00.000Z',
+    },
+  ];
+  if (version >= 6) {
+    backup['customers'] = <Map<String, Object?>>[];
+  }
+  return backup;
+}
+
 void main() {
   group('PackingBackupValidator', () {
     test('accepts a valid current backup', () {
@@ -421,5 +466,34 @@ void main() {
         throwsFormatException,
       );
     });
+
+    test('accepts version 5 backup without customer and cash tables', () {
+      final data = PackingBackupValidator.validate(
+        validReceiptBackup(version: 5),
+      );
+
+      expect(data['packing_receipts'], hasLength(1));
+      expect(data['receipt_payments'], hasLength(2));
+      expect(
+        data['receipt_payments']!.map((row) => row['amount']),
+        [2000, 3000],
+      );
+      expect(data.containsKey('customers'), isFalse);
+      expect(data.containsKey('cash_sessions'), isFalse);
+      expect(data.containsKey('cash_expenses'), isFalse);
+    });
+
+    test('accepts version 6 backup with customers but without cash tables', () {
+      final data = PackingBackupValidator.validate(
+        validReceiptBackup(version: 6),
+      );
+
+      expect(data['packing_receipts'], hasLength(1));
+      expect(data['receipt_payments'], hasLength(2));
+      expect(data['customers'], isEmpty);
+      expect(data.containsKey('cash_sessions'), isFalse);
+      expect(data.containsKey('cash_expenses'), isFalse);
+    });
+
   });
 }
