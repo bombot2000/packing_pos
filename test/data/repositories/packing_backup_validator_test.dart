@@ -73,6 +73,39 @@ Map<String, dynamic> validReceiptBackup({required int version}) {
   return backup;
 }
 
+
+Map<String, dynamic> validRefundBackup() {
+  final backup = validReceiptBackup(version: 7);
+  backup['cash_sessions'] = <Map<String, Object?>>[];
+  backup['cash_expenses'] = <Map<String, Object?>>[];
+  backup['packing_receipts']![0]['paid_amount'] = 3000;
+  backup['receipt_payments']![0]['amount'] = 5000;
+  backup['receipt_payments'] = [
+    {
+      'id': 1,
+      'receipt_id': 1,
+      'amount': 5000,
+      'payment_method': 'cash',
+      'note': 'Pembayaran awal',
+      'created_at': '2026-11-09T01:00:00.000Z',
+    },
+  ];
+  backup['payment_refunds'] = [
+    {
+      'id': 1,
+      'receipt_id': 1,
+      'receipt_payment_id': 1,
+      'amount': 2000,
+      'refund_method': 'cash',
+      'reason': 'Koreksi pekerjaan',
+      'note': '',
+      'created_at': '2026-11-09T02:00:00.000Z',
+    },
+  ];
+  backup['version'] = 8;
+  return backup;
+}
+
 void main() {
   group('PackingBackupValidator', () {
     test('accepts a valid current backup', () {
@@ -493,6 +526,40 @@ void main() {
       expect(data['customers'], isEmpty);
       expect(data.containsKey('cash_sessions'), isFalse);
       expect(data.containsKey('cash_expenses'), isFalse);
+    });
+
+
+    test('accepts v8 refund ledger and validates net paid balance', () {
+      final data = PackingBackupValidator.validate(validRefundBackup());
+      expect(data['payment_refunds'], hasLength(1));
+      expect(data['packing_receipts']!.single['paid_amount'], 3000);
+    });
+
+    test('rejects refund exceeding its source payment', () {
+      final backup = validRefundBackup();
+      backup['payment_refunds']![0]['amount'] = 5001;
+      expect(
+        () => PackingBackupValidator.validate(backup),
+        throwsFormatException,
+      );
+    });
+
+    test('rejects refund linked to a payment from another receipt', () {
+      final backup = validRefundBackup();
+      backup['payment_refunds']![0]['receipt_payment_id'] = 999;
+      expect(
+        () => PackingBackupValidator.validate(backup),
+        throwsFormatException,
+      );
+    });
+
+    test('rejects v8 receipt whose net paid amount ignores its refund', () {
+      final backup = validRefundBackup();
+      backup['packing_receipts']![0]['paid_amount'] = 5000;
+      expect(
+        () => PackingBackupValidator.validate(backup),
+        throwsFormatException,
+      );
     });
 
   });
