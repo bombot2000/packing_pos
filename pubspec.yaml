@@ -18,6 +18,7 @@ dependencies:
   share_plus: ^10.1.4
   print_bluetooth_thermal: ^1.2.5
   esc_pos_utils_plus: ^2.0.4
+  image: ^4.3.0
   permission_handler: ^11.3.1
   device_info_plus: ^11.2.0
 dev_dependencies:
@@ -27,3 +28,5 @@ dev_dependencies:
   flutter_lints: ^3.0.2
 flutter:
   uses-material-design: true
+  assets:
+    - assets/packing_pos_logo.png
