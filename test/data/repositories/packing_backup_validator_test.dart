@@ -562,5 +562,35 @@ void main() {
       );
     });
 
+
+    test('closed cash session subtracts cash refunds on the refund date', () {
+      final backup = validRefundBackup();
+      backup['cash_sessions'] = [
+        {
+          'id': 1,
+          'date_key': '2026-11-09',
+          'opening_balance': 10000,
+          'expected_balance': 13000,
+          'counted_balance': 13000,
+          'difference': 0,
+          'status': 'closed',
+          'note': '',
+          'created_at': '2026-11-09T00:00:00.000Z',
+          'closed_at': '2026-11-09T23:00:00.000Z',
+        },
+      ];
+      expect(
+        () => PackingBackupValidator.validate(backup),
+        returnsNormally,
+      );
+
+      backup['cash_sessions']![0]['expected_balance'] = 15000;
+      backup['cash_sessions']![0]['counted_balance'] = 15000;
+      expect(
+        () => PackingBackupValidator.validate(backup),
+        throwsFormatException,
+      );
+    });
+
   });
 }
