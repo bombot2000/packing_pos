@@ -156,4 +156,36 @@ void main() {
   });
 
 
+
+  test('pembayaran berikutnya dapat dicatat setelah refund sebagian', () async {
+    final receiptId = await createReceipt();
+    await repository.addReceiptPayment(
+      receiptId: receiptId,
+      amount: 60000,
+      paymentMethod: 'cash',
+    );
+    final source = (await repository.receiptPaymentsFor(receiptId)).single;
+    await repository.addReceiptRefund(
+      receiptId: receiptId,
+      receiptPaymentId: (source['id'] as num).toInt(),
+      amount: 10000,
+      refundMethod: 'transfer',
+      reason: 'Penyesuaian pembayaran',
+    );
+
+    await repository.addReceiptPayment(
+      receiptId: receiptId,
+      amount: 50000,
+      paymentMethod: 'transfer',
+      note: 'Pembayaran setelah refund',
+    );
+
+    final receipt = (await repository.findReceiptById(receiptId))!;
+    expect(receipt['paid_amount'], 100000);
+    expect(receipt['status'], 'completed');
+    expect(await repository.receiptPaymentsFor(receiptId), hasLength(2));
+    expect(await repository.receiptRefundsFor(receiptId), hasLength(1));
+  });
+
+
 }
