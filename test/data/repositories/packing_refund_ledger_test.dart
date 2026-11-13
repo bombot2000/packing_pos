@@ -116,4 +116,44 @@ void main() {
     expect(totals['paid_total'], 40000);
     expect(totals['cash_received_total'], 40000);
   });
+
+  test('pembatalan setelah refund penuh tetap menjaga rekonsiliasi kas historis', () async {
+    final sessionId = await repository.startCashSession(
+      date: DateTime.now(),
+      openingBalance: 10000,
+    );
+    final receiptId = await createReceipt();
+    await repository.addReceiptPayment(
+      receiptId: receiptId,
+      amount: 50000,
+      paymentMethod: 'cash',
+    );
+    final source = (await repository.receiptPaymentsFor(receiptId)).single;
+    await repository.addReceiptRefund(
+      receiptId: receiptId,
+      receiptPaymentId: (source['id'] as num).toInt(),
+      amount: 50000,
+      refundMethod: 'cash',
+      reason: 'Nota dibatalkan setelah refund penuh',
+    );
+
+    expect((await repository.findReceiptById(receiptId))!['paid_amount'], 0);
+    await repository.cancelReceipt(
+      receiptId: receiptId,
+      reason: 'Refund penuh telah diselesaikan',
+    );
+
+    final cash = await repository.cashSessionSummary(sessionId);
+    expect(cash['cash_received'], 50000);
+    expect(cash['cash_refunded'], 50000);
+    expect(cash['expected_balance'], 10000);
+
+    final report = await repository.reportSummary();
+    final totals = Map<String, Object?>.from(report['totals'] as Map);
+    expect(totals['paid_total'], 0);
+    expect(totals['cash_received_total'], 0);
+    expect(totals['refund_total'], 50000);
+  });
+
+
 }
