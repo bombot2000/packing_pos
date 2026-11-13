@@ -239,7 +239,7 @@ class PackingReceiptPrinter {
     ));
     final total = (transaction['selling_price'] as num?)?.toInt() ?? 0;
     final paid = (transaction['paid_amount'] as num?)?.toInt() ?? 0;
-    bytes.addAll(_pair(generator, cols, 'Sisa', money(total - paid)));
+    bytes.addAll(generator.text('Sisa: ${money(total - paid)}'));
     bytes.addAll(generator.hr());
     bytes.addAll(generator.text(
       'Terima kasih',
