@@ -148,6 +148,15 @@ void main() {
     expect(cash['cash_refunded'], 50000);
     expect(cash['expected_balance'], 10000);
 
+    await repository.closeCashSession(
+      sessionId: sessionId,
+      countedBalance: 10000,
+    );
+    final closedCash = await repository.cashSessionSummary(sessionId);
+    final closedSession = Map<String, Object?>.from(closedCash['session'] as Map);
+    expect(closedSession['expected_balance'], 10000);
+    expect(closedSession['difference'], 0);
+
     final report = await repository.reportSummary();
     final totals = Map<String, Object?>.from(report['totals'] as Map);
     expect(totals['paid_total'], 0);
