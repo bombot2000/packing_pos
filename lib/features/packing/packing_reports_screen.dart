@@ -123,6 +123,8 @@ class _PackingReportsScreenState extends State<PackingReportsScreen> {
                 if (((totals['overhead_cost_total'] as num?) ?? 0) > 0)
                   _metric('Biaya tambahan', _money(totals['overhead_cost_total']), Icons.more_horiz),
                 _metric('Pembayaran diterima', _money(totals['paid_total']), Icons.payments_outlined),
+                if (((totals['refund_total'] as num?) ?? 0) > 0)
+                  _metric('Total refund', _money(totals['refund_total']), Icons.undo),
                 _metric('Uang masuk tunai', _money(totals['cash_received_total']), Icons.point_of_sale),
                 _metric('Uang masuk non-tunai', _money(totals['non_cash_received_total']), Icons.account_balance_outlined),
                 _metric('Piutang tersisa', _money(totals['receivable_total']), Icons.account_balance_wallet_outlined),
