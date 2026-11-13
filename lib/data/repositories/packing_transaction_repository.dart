@@ -546,7 +546,17 @@ class PackingTransactionRepository {
         'WHERE pt.receipt_id = ? LIMIT 1',
         [receiptId],
       );
-      if (paidAmount > 0 || receiptPayments.isNotEmpty || legacyPayments.isNotEmpty) {
+      final grossRows = await txn.rawQuery(
+        'SELECT COALESCE(SUM(amount), 0) AS total FROM receipt_payments WHERE receipt_id = ?',
+        [receiptId],
+      );
+      final refundRows = await txn.rawQuery(
+        'SELECT COALESCE(SUM(amount), 0) AS total FROM payment_refunds WHERE receipt_id = ?',
+        [receiptId],
+      );
+      final grossPaid = (grossRows.first['total'] as num).toInt();
+      final refunded = (refundRows.first['total'] as num).toInt();
+      if (paidAmount > 0 || grossPaid != refunded || legacyPayments.isNotEmpty) {
         throw StateError(
           'Nota sudah memiliki pembayaran. Catat pengembalian dana melalui prosedur refund sebelum pembatalan.',
         );
@@ -1036,14 +1046,19 @@ class PackingTransactionRepository {
             AND LOWER(TRIM(tp.payment_method)) = 'cash'
             AND tp.created_at >= ? AND tp.created_at < ?), 0) AS total
     ''', [start, end, start, end]);
+    final refunds = await db.rawQuery(
+      "SELECT COALESCE(SUM(amount), 0) AS total FROM payment_refunds WHERE LOWER(TRIM(refund_method)) = 'cash' AND created_at >= ? AND created_at < ?",
+      [start, end],
+    );
     final expenses = await db.rawQuery('SELECT COALESCE(SUM(amount), 0) AS total FROM cash_expenses WHERE session_id = ?', [sessionId]);
     final expenseRows = await db.query('cash_expenses', where: 'session_id = ?', whereArgs: [sessionId], orderBy: 'id DESC');
     final opening = (session['opening_balance'] as num).toInt();
     final cashIn = (payments.first['total'] as num).toInt();
+    final cashRefunded = (refunds.first['total'] as num).toInt();
     final expenseTotal = (expenses.first['total'] as num).toInt();
-    final expected = opening + cashIn - expenseTotal;
+    final expected = opening + cashIn - cashRefunded - expenseTotal;
     return {
-      'session': session, 'cash_received': cashIn, 'expense_total': expenseTotal,
+      'session': session, 'cash_received': cashIn, 'cash_refunded': cashRefunded, 'expense_total': expenseTotal,
       'expected_balance': expected, 'expenses': expenseRows,
     };
   }
@@ -1071,9 +1086,14 @@ class PackingTransactionRepository {
               AND LOWER(TRIM(tp.payment_method)) = 'cash'
               AND tp.created_at >= ? AND tp.created_at < ?), 0) AS total
       ''', [start, end, start, end]);
+      final refunds = await txn.rawQuery(
+        "SELECT COALESCE(SUM(amount), 0) AS total FROM payment_refunds WHERE LOWER(TRIM(refund_method)) = 'cash' AND created_at >= ? AND created_at < ?",
+        [start, end],
+      );
       final expenses = await txn.rawQuery('SELECT COALESCE(SUM(amount), 0) AS total FROM cash_expenses WHERE session_id = ?', [sessionId]);
       final expected = (session['opening_balance'] as num).toInt()
           + (payments.first['total'] as num).toInt()
+          - (refunds.first['total'] as num).toInt()
           - (expenses.first['total'] as num).toInt();
       await txn.update('cash_sessions', {
         'expected_balance': expected, 'counted_balance': countedBalance,
@@ -1102,6 +1122,7 @@ class PackingTransactionRepository {
     }
     final dateFilter = conditions.isEmpty ? '' : ' AND ${conditions.join(' AND ')}';
     final paymentDateFilter = dateFilter.replaceAll('created_at', 'receipt_payments.created_at');
+    final refundDateFilter = dateFilter.replaceAll('created_at', 'payment_refunds.created_at');
     final materialDateConditions = <String>[];
     if (startDate != null) materialDateConditions.add('packing_transactions.created_at >= ?');
     if (endDate != null) materialDateConditions.add('packing_transactions.created_at < ?');
@@ -1136,6 +1157,23 @@ class PackingTransactionRepository {
       GROUP BY material_name_snapshot, unit_snapshot
       ORDER BY cost DESC, name COLLATE NOCASE
     ''', args);
+    final refundRows = await db.rawQuery('''
+      SELECT COALESCE(SUM(amount), 0) AS total,
+        COALESCE(SUM(CASE WHEN LOWER(TRIM(refund_method)) = 'cash' THEN amount ELSE 0 END), 0) AS cash_total
+      FROM payment_refunds WHERE 1 = 1$refundDateFilter
+    ''', args);
+    final summary = Map<String, Object?>.from(totals.first);
+    final refundTotal = (refundRows.first['total'] as num).toInt();
+    final cashRefundTotal = (refundRows.first['cash_total'] as num).toInt();
+    final paidTotal = (summary['paid_total'] as num).toInt();
+    final cashReceived = (summary['cash_received_total'] as num).toInt();
+    final nonCashReceived = (summary['non_cash_received_total'] as num).toInt();
+    summary['refund_total'] = refundTotal;
+    summary['cash_refunded_total'] = cashRefundTotal;
+    summary['non_cash_refunded_total'] = refundTotal - cashRefundTotal;
+    summary['paid_total'] = paidTotal - refundTotal;
+    summary['cash_received_total'] = cashReceived - cashRefundTotal;
+    summary['non_cash_received_total'] = nonCashReceived - (refundTotal - cashRefundTotal);
     final paymentMethods = await db.rawQuery('''
       SELECT receipt_payments.payment_method AS payment_method,
         COALESCE(SUM(receipt_payments.amount), 0) AS amount,
@@ -1148,7 +1186,7 @@ class PackingTransactionRepository {
       ORDER BY amount DESC, payment_method ASC
     ''', args);
     return {
-      'totals': totals.first,
+      'totals': summary,
       'materials': materials,
       'payment_methods': paymentMethods,
     };
