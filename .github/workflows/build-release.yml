@@ -1,0 +1,148 @@
+name: Build Packing POS APK
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: 'Tag rilis (kosong = packing-pos-<run number>)'
+        required: false
+        type: string
+  push:
+    branches:
+      - feature/packing-calculation-engine
+      - feature/refund-ledger-v8-20261114
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: packing-pos-ci
+  cancel-in-progress: true
+
+jobs:
+  validate-and-build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+
+      - name: Set up Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.47.7'
+          channel: stable
+          cache: true
+
+      - name: Verify Java 17 toolchain
+        run: |
+          java -version
+          JAVA_MAJOR=$(java -version 2>&1 | sed -n '1s/.*version "\([0-9]*\).*/\1/p')
+          if [ "$JAVA_MAJOR" != "17" ]; then
+            echo "Expected Java 17, found Java ${JAVA_MAJOR:-unknown}."
+            exit 1
+          fi
+
+      - name: Generate Android platform files when absent
+        run: |
+          if [ ! -d android ]; then
+            flutter create . --platforms=android --org com.packingpos --project-name packing_pos
+          fi
+
+      - name: Set app compile SDK required by current plugins
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          candidates = [
+              Path("android/app/build.gradle"),
+              Path("android/app/build.gradle.kts"),
+          ]
+          found = False
+          for path in candidates:
+              if not path.exists():
+                  continue
+              text = path.read_text()
+              updated = text.replace("compileSdk = flutter.compileSdkVersion", "compileSdk = 36")
+              updated = updated.replace("compileSdkVersion flutter.compileSdkVersion", "compileSdkVersion 36")
+              updated = updated.replace("compileSdk flutter.compileSdkVersion", "compileSdk 36")
+              if updated != text:
+                  path.write_text(updated)
+                  found = True
+                  print(f"Set compileSdk 36 in {path}")
+              elif "compileSdk = 36" in text or "compileSdkVersion 36" in text or "compileSdk 36" in text:
+                  found = True
+                  print(f"{path} already targets compileSdk 36")
+          if not found:
+              raise SystemExit("Could not locate an Android app Gradle compileSdk setting to update.")
+          PY
+
+      - name: Use smaller Gradle binary distribution
+        run: |
+          if [ -f android/gradle/wrapper/gradle-wrapper.properties ]; then
+            sed -i 's/-all.zip/-bin.zip/' android/gradle/wrapper/gradle-wrapper.properties
+            sed -i 's#services.gradle.org#downloads.gradle.org#' android/gradle/wrapper/gradle-wrapper.properties
+          fi
+
+      - name: Pre-download Gradle distribution with retries
+        run: |
+          PROPERTIES="android/gradle/wrapper/gradle-wrapper.properties"
+          VERSION=$(grep '^distributionUrl=' "$PROPERTIES" | sed -E 's/.*gradle-([0-9.]+)-bin.zip.*/\1/')
+          ZIP="$RUNNER_TEMP/gradle-${VERSION}-bin.zip"
+          curl -fL --retry 10 --retry-all-errors --retry-delay 10 \
+            "https://downloads.gradle.org/distributions/gradle-${VERSION}-bin.zip" \
+            -o "$ZIP"
+          sed -i "s|^distributionUrl=.*|distributionUrl=file\\://$ZIP|" "$PROPERTIES"
+          grep '^distributionUrl=' "$PROPERTIES"
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Align Android plugin compile SDKs
+        run: python3 tool/align_plugin_compile_sdk.py
+
+      - name: Analyze Dart code
+        run: flutter analyze --no-fatal-infos
+
+      - name: Run tests
+        run: flutter test --reporter expanded
+
+      - name: Build debug APK to validate Android plugins
+        run: |
+          for attempt in 1 2 3; do
+            flutter build apk --debug && exit 0
+            echo "Build debug gagal pada percobaan $attempt; mencoba ulang..."
+            sleep 15
+          done
+          exit 1
+
+      - name: Prepare debug APK for GitHub Release
+        if: startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch' || github.ref == 'refs/heads/feature/packing-calculation-engine'
+        run: |
+          cp build/app/outputs/flutter-apk/app-debug.apk packing-pos-debug.apk
+          sha256sum packing-pos-debug.apk
+
+      - name: Publish debug APK to GitHub Release
+        if: startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch' || github.ref == 'refs/heads/feature/packing-calculation-engine'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          INPUT_RELEASE_TAG: ${{ inputs.release_tag }}
+        run: |
+          if [ "${GITHUB_REF_TYPE}" = "tag" ]; then
+            TAG="${GITHUB_REF_NAME}"
+          elif [ -n "${INPUT_RELEASE_TAG}" ]; then
+            TAG="${INPUT_RELEASE_TAG}"
+          else
+            TAG="packing-pos-debug-${GITHUB_RUN_NUMBER}"
+          fi
+          gh release view "$TAG" >/dev/null 2>&1 || gh release create "$TAG" \
+            --target "${GITHUB_SHA}" \
+            --title "Packing POS Debug $TAG" \
+            --notes "APK debug untuk pengujian. APK ini otomatis ditandatangani dengan debug keystore sementara milik GitHub Actions, bukan keystore permanen. Sertifikat dapat berbeda antar-build sehingga mungkin tidak dapat memasang sebagai pembaruan di atas aplikasi yang sudah terpasang. Jangan hapus aplikasi lama jika data lokal belum dicadangkan."
+          gh release upload "$TAG" packing-pos-debug.apk --clobber

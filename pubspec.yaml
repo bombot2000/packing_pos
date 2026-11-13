@@ -1,0 +1,33 @@
+name: packing_pos
+description: Offline point-of-sale app for packing services.
+publish_to: "none"
+version: 0.1.0+1
+environment:
+  sdk: ">=3.3.0 <4.0.0"
+  flutter: ">=3.19.0"
+dependencies:
+  flutter:
+    sdk: flutter
+  cupertino_icons: ^1.0.8
+  intl: ^0.19.0
+  path: ^1.9.0
+  sqflite: ^2.3.3+1
+  shared_preferences: ^2.2.3
+  file_picker: ^8.1.7
+  path_provider: ^2.1.5
+  share_plus: ^10.1.4
+  print_bluetooth_thermal: ^1.2.5
+  esc_pos_utils_plus: ^2.0.4
+  image: ^4.3.0
+  permission_handler: ^11.3.1
+  device_info_plus: ^11.2.0
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  sqflite_common_ffi: ^2.3.4+4
+  flutter_lints: ^3.0.2
+flutter:
+  uses-material-design: true
+  assets:
+    - assets/packing_pos_logo.png
+    - assets/packing_pos_logo_line.png
