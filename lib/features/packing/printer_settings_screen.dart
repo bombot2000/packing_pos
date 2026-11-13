@@ -1,4 +1,3 @@
-import 'package:esc_pos_utils_plus/esc_pos_utils_plus.dart';
 import 'package:device_info_plus/device_info_plus.dart';
 import 'package:flutter/material.dart';
 import '../../core/format/friendly_error.dart';
@@ -19,6 +18,7 @@ class _PrinterSettingsScreenState extends State<PrinterSettingsScreen> {
   List<BluetoothInfo> _devices = [];
   String? _selectedMac;
   int _paperWidth = 58;
+  bool _printLogo = true;
   bool _loading = false;
   bool _connected = false;
   String? _error;
@@ -35,6 +35,7 @@ class _PrinterSettingsScreenState extends State<PrinterSettingsScreen> {
     setState(() {
       _selectedMac = prefs.getString(PackingReceiptPrinter.printerMacKey);
       _paperWidth = prefs.getInt(PackingReceiptPrinter.paperWidthKey) ?? 58;
+      _printLogo = prefs.getBool(PackingReceiptPrinter.printLogoKey) ?? true;
     });
     await _refreshDevices();
   }
@@ -75,6 +76,12 @@ class _PrinterSettingsScreenState extends State<PrinterSettingsScreen> {
     if (mounted) setState(() => _paperWidth = width);
   }
 
+  Future<void> _savePrintLogo(bool value) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(PackingReceiptPrinter.printLogoKey, value);
+    if (mounted) setState(() => _printLogo = value);
+  }
+
   Future<void> _connect() async {
     if (_selectedMac == null) return;
     setState(() { _loading = true; _error = null; });
@@ -110,16 +117,7 @@ class _PrinterSettingsScreenState extends State<PrinterSettingsScreen> {
         final ok = await PackingReceiptPrinter.connect(_selectedMac!);
         if (!ok) throw StateError('Koneksi printer gagal.');
       }
-      final bytes = <int>[];
-      final profile = await CapabilityProfile.load();
-      final generator = Generator(_paperWidth == 80 ? PaperSize.mm80 : PaperSize.mm58, profile);
-      bytes.addAll(generator.reset());
-      bytes.addAll(generator.text('PACKING POS', styles: const PosStyles(align: PosAlign.center, bold: true)));
-      bytes.addAll(generator.text('TES CETAK', styles: const PosStyles(align: PosAlign.center)));
-      bytes.addAll(generator.hr());
-      bytes.addAll(generator.text('Kertas $_paperWidth mm'));
-      bytes.addAll(generator.text('Bluetooth OK'));
-      bytes.addAll(generator.feed(3));
+      final bytes = await PackingReceiptPrinter.testPageBytes(_paperWidth);
       final ok = await PrintBluetoothThermal.writeBytes(bytes);
       if (!ok) throw StateError('Printer tidak menerima data tes.');
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Tes cetak berhasil dikirim.')));
@@ -144,7 +142,8 @@ class _PrinterSettingsScreenState extends State<PrinterSettingsScreen> {
         selected: {_paperWidth},
         onSelectionChanged: (value) => _savePaper(value.first),
       ),
-      const SizedBox(height: 16),
+      SwitchListTile(contentPadding: EdgeInsets.zero, title: const Text('Cetak logo pada nota'), subtitle: const Text('Matikan untuk mempercepat cetak dan menghemat kertas.'), value: _printLogo, onChanged: _savePrintLogo),
+      const SizedBox(height: 8),
       OutlinedButton.icon(
         onPressed: _loading ? null : _refreshDevices,
         icon: const Icon(Icons.refresh),
