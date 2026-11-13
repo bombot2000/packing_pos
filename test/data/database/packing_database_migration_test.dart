@@ -5,7 +5,7 @@ import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 void main() {
   setUpAll(sqfliteFfiInit);
 
-  test('upgrade dari v3 ke v7 tidak menggandakan kolom dan menjaga data', () async {
+  test('upgrade dari v3 ke v8 tidak menggandakan kolom dan menjaga data', () async {
     final db = await databaseFactoryFfi.openDatabase(inMemoryDatabasePath);
     await db.execute('''
       CREATE TABLE packing_transactions (
@@ -76,6 +76,7 @@ void main() {
     expect(await db.query('receipt_payments'), hasLength(1));
     expect(await db.query('customers'), isEmpty);
     expect(await db.query('cash_sessions'), isEmpty);
+    expect(await db.query('payment_refunds'), isEmpty);
     await db.close();
   });
 
