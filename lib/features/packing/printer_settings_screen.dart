@@ -19,6 +19,7 @@ class _PrinterSettingsScreenState extends State<PrinterSettingsScreen> {
   String? _selectedMac;
   int _paperWidth = 58;
   bool _printLogo = true;
+  int _textWeight = 1;
   bool _loading = false;
   bool _connected = false;
   String? _error;
@@ -36,6 +37,7 @@ class _PrinterSettingsScreenState extends State<PrinterSettingsScreen> {
       _selectedMac = prefs.getString(PackingReceiptPrinter.printerMacKey);
       _paperWidth = prefs.getInt(PackingReceiptPrinter.paperWidthKey) ?? 58;
       _printLogo = prefs.getBool(PackingReceiptPrinter.printLogoKey) ?? true;
+      _textWeight = (prefs.getInt(PackingReceiptPrinter.textWeightKey) ?? 1).clamp(0, 4);
     });
     await _refreshDevices();
   }
@@ -74,6 +76,12 @@ class _PrinterSettingsScreenState extends State<PrinterSettingsScreen> {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setInt(PackingReceiptPrinter.paperWidthKey, width);
     if (mounted) setState(() => _paperWidth = width);
+  }
+
+  Future<void> _saveTextWeight(int value) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setInt(PackingReceiptPrinter.textWeightKey, value);
+    if (mounted) setState(() => _textWeight = value);
   }
 
   Future<void> _savePrintLogo(bool value) async {
@@ -143,6 +151,23 @@ class _PrinterSettingsScreenState extends State<PrinterSettingsScreen> {
         onSelectionChanged: (value) => _savePaper(value.first),
       ),
       SwitchListTile(contentPadding: EdgeInsets.zero, title: const Text('Cetak logo pada nota'), subtitle: const Text('Matikan untuk mempercepat cetak dan menghemat kertas.'), value: _printLogo, onChanged: _savePrintLogo),
+      const SizedBox(height: 12),
+      const Text('Ketebalan tulisan struk', style: TextStyle(fontWeight: FontWeight.w600)),
+      const SizedBox(height: 6),
+      DropdownButtonFormField<int>(
+        initialValue: _textWeight,
+        decoration: const InputDecoration(border: OutlineInputBorder(), labelText: 'Pilih ketebalan'),
+        items: const [
+          DropdownMenuItem(value: 0, child: Text('1 · Tipis')),
+          DropdownMenuItem(value: 1, child: Text('2 · Normal')),
+          DropdownMenuItem(value: 2, child: Text('3 · Sedang')),
+          DropdownMenuItem(value: 3, child: Text('4 · Tebal')),
+          DropdownMenuItem(value: 4, child: Text('5 · Sangat tebal')),
+        ],
+        onChanged: (value) { if (value != null) _saveTextWeight(value); },
+      ),
+      const SizedBox(height: 4),
+      const Text('Hasil dapat berbeda menurut tipe printer thermal.', style: TextStyle(fontSize: 12)),
       const SizedBox(height: 8),
       OutlinedButton.icon(
         onPressed: _loading ? null : _refreshDevices,
