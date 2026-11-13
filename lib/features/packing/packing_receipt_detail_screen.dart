@@ -194,6 +194,7 @@ class _PackingReceiptDetailScreenState extends State<PackingReceiptDetailScreen>
         jobs: _jobs,
         materialsByJob: materials,
         payments: _payments,
+        refunds: _refunds,
       );
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
