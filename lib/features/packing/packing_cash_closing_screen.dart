@@ -136,6 +136,8 @@ class _PackingCashClosingScreenState extends State<PackingCashClosingScreen> {
             const SizedBox(height: 12),
             _line('Saldo awal', _money(session['opening_balance'])),
             _line('Penerimaan tunai', _money(summary['cash_received'])),
+            if (((summary['cash_refunded'] as num?) ?? 0) > 0)
+              _line('Pengembalian dana tunai', _money(summary['cash_refunded'])),
             _line('Pengeluaran tunai', _money(summary['expense_total'])),
             const Divider(),
             _line('Saldo seharusnya', _money(status == 'closed' ? session['expected_balance'] : summary['expected_balance']), bold: true),
