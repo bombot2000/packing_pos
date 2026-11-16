@@ -96,6 +96,24 @@ class _PackingCostEstimatorScreenState extends State<PackingCostEstimatorScreen>
   );
 
   PackingCostResult? get _result {
+    final integerInputs = [
+      _quantity, _nailsPerKg, _fasteners,
+      _topSlats, _bottomSlats, _frontSlats, _backSlats,
+      _leftSlats, _rightSlats,
+    ];
+    final decimalInputs = [
+      _length, _width, _height, _wood, _stickLength,
+      _screw, _nail, _labor, _electricity, _overhead, _margin,
+      if (_includeBoard) _boardSheets,
+      if (_includeBoard) _boardPrice,
+    ];
+    // Never turn malformed text into a zero-cost estimate. The parser used
+    // for display remains forgiving, but calculation requires valid inputs.
+    if (integerInputs.any((c) => !_hasValidNumber(c, integer: true)) ||
+        decimalInputs.any((c) => !_hasValidNumber(c))) {
+      return null;
+    }
+
     final p = _number(_length), l = _number(_width), t = _number(_height);
     final qty = _integer(_quantity);
     if (p <= 0 || l <= 0 || t <= 0 || qty <= 0) return null;
