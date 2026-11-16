@@ -113,6 +113,23 @@ void main() {
     ), throwsArgumentError);
   });
 
+  test('saved reusable rates reset order-specific board values', () {
+    const rates = PackingRates(
+      woodPerLonjor: 5200,
+      boardSheetsPerPackage: 3,
+      boardPricePerSheet: 25000,
+      marginPercent: 28,
+    );
+
+    final saved = rates.toSettingsJson();
+    final restored = PackingRates.fromJson(saved);
+
+    expect(restored.woodPerLonjor, 5200);
+    expect(restored.marginPercent, 28);
+    expect(restored.boardSheetsPerPackage, 0);
+    expect(restored.boardPricePerSheet, 0);
+  });
+
   test('legacy saved axes are normalized to valid face dimensions', () {
     final restored = PackingRates.fromJson({
       'topSlatAxis': 'height',
