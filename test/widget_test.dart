@@ -35,8 +35,18 @@ void main() {
     // repeating animations, and a focused text field also blinks its caret.
     await tester.pump(const Duration(milliseconds: 500));
 
-    await tester.tap(find.text('Transaksi packing baru'));
-    await tester.pump(const Duration(milliseconds: 500));
+    final newTransactionButton = find.byType(FilledButton);
+    expect(newTransactionButton, findsOneWidget);
+    await tester.ensureVisible(newTransactionButton);
+    await tester.tap(newTransactionButton);
+
+    // Wait for the pushed route to finish building without waiting for
+    // unrelated repeating animations on the destination screen.
+    final destinationTitle = find.text('Buat nota packing');
+    for (var i = 0; i < 10 && destinationTitle.evaluate().isEmpty; i++) {
+      await tester.pump(const Duration(milliseconds: 100));
+    }
+    expect(destinationTitle, findsOneWidget);
 
     final customerField = find.byWidgetPredicate(
       (widget) => widget is TextField &&
