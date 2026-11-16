@@ -39,7 +39,9 @@ void main() {
     final customerField = find.widgetWithText(TextField, 'Nama pelanggan');
     expect(customerField, findsOneWidget);
     await tester.enterText(customerField, 'Pelanggan Uji');
-    await tester.pumpAndSettle();
+    // A focused TextField keeps its caret blink animation active, so avoid
+    // pumpAndSettle while the field is focused.
+    await tester.pump(const Duration(milliseconds: 100));
 
     await tester.binding.handlePopRoute();
     await tester.pumpAndSettle();
