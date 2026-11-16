@@ -59,6 +59,14 @@ class PackingRates {
     'boardPricePerSheet': boardPricePerSheet, 'marginPercent': marginPercent,
   };
 
+  /// Persists reusable tariffs only. Board quantity and price belong to
+  /// an individual order and must start fresh for each estimate.
+  Map<String, Object?> toSettingsJson() => {
+    ...toJson(),
+    'boardSheetsPerPackage': 0,
+    'boardPricePerSheet': 0,
+  };
+
   factory PackingRates.fromJson(Map<String, dynamic> json) {
     SlatCutAxis readAxis(
       String key,
