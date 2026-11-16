@@ -127,8 +127,13 @@ class PackingCostResult {
       rates.woodStickLengthCm, rates.woodLengthMultiplier,
       rates.woodWidthMultiplier, rates.woodHeightMultiplier, rates.screwPerPiece,
       rates.nailPerGram, rates.laborPerPackage, rates.electricityPerPackage,
-      rates.overheadPerPackage, rates.boardSheetsPerPackage,
-      rates.boardPricePerSheet, rates.marginPercent];
+      rates.overheadPerPackage, rates.marginPercent];
+    // Board inputs are order-specific and must not invalidate an estimate
+    // when the optional board is disabled.
+    if (includeBoard) {
+      values.add(rates.boardSheetsPerPackage);
+      values.add(rates.boardPricePerSheet);
+    }
     final slatCounts = [rates.topSlats, rates.bottomSlats, rates.frontSlats,
       rates.backSlats, rates.leftSlats, rates.rightSlats];
     bool axisAllowed(SlatCutAxis axis, List<SlatCutAxis> allowed) =>

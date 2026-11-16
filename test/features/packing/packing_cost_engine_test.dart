@@ -70,6 +70,31 @@ void main() {
     expect(result.boardCost, 24000);
   });
 
+  test('unused invalid board inputs do not affect estimates when board is off', () {
+    final result = PackingCostResult.calculate(
+      lengthCm: 54, widthCm: 43, heightCm: 45,
+      rates: const PackingRates(
+        boardSheetsPerPackage: -2,
+        boardPricePerSheet: -12000,
+      ),
+      includeBoard: false,
+    );
+    expect(result.boardQuantity, 0);
+    expect(result.boardCost, 0);
+    expect(result.totalCost, greaterThan(0));
+  });
+
+  test('invalid board inputs are rejected when optional board is enabled', () {
+    expect(
+      () => PackingCostResult.calculate(
+        lengthCm: 54, widthCm: 43, heightCm: 45,
+        rates: const PackingRates(boardSheetsPerPackage: -1),
+        includeBoard: true,
+      ),
+      throwsArgumentError,
+    );
+  });
+
   test('rejects invalid dimensions, negative slats and invalid margin', () {
     expect(() => PackingCostResult.calculate(
       lengthCm: 0, widthCm: 43, heightCm: 45,
