@@ -118,7 +118,17 @@ class PackingCostResult {
       rates.boardPricePerSheet, rates.marginPercent];
     final slatCounts = [rates.topSlats, rates.bottomSlats, rates.frontSlats,
       rates.backSlats, rates.leftSlats, rates.rightSlats];
-    if (values.any((v) => !v.isFinite || v < 0) ||
+    bool axisAllowed(SlatCutAxis axis, List<SlatCutAxis> allowed) =>
+        allowed.contains(axis);
+    final validFaceAxes =
+        axisAllowed(rates.topSlatAxis, const [SlatCutAxis.length, SlatCutAxis.width]) &&
+        axisAllowed(rates.bottomSlatAxis, const [SlatCutAxis.length, SlatCutAxis.width]) &&
+        axisAllowed(rates.frontSlatAxis, const [SlatCutAxis.length, SlatCutAxis.height]) &&
+        axisAllowed(rates.backSlatAxis, const [SlatCutAxis.length, SlatCutAxis.height]) &&
+        axisAllowed(rates.leftSlatAxis, const [SlatCutAxis.width, SlatCutAxis.height]) &&
+        axisAllowed(rates.rightSlatAxis, const [SlatCutAxis.width, SlatCutAxis.height]);
+    if (!validFaceAxes ||
+        values.any((v) => !v.isFinite || v < 0) ||
         slatCounts.any((v) => v < 0) ||
         lengthCm <= 0 || widthCm <= 0 || heightCm <= 0 ||
         packageCount <= 0 || rates.woodStickLengthCm <= 0 ||
