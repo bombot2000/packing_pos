@@ -4,8 +4,8 @@ class PackingRates {
   const PackingRates({
     this.woodPerLonjor = 3500,
     this.woodStickLengthCm = 200,
-    this.woodLengthMultiplier = 8,
-    this.woodWidthMultiplier = 8,
+    this.woodLengthMultiplier = 4,
+    this.woodWidthMultiplier = 4,
     this.woodHeightMultiplier = 4,
     this.screwPerPiece = 320,
     this.nailPerGram = 25,
@@ -40,8 +40,8 @@ class PackingRates {
   factory PackingRates.fromJson(Map<String, dynamic> json) => PackingRates(
     woodPerLonjor: (json['woodPerLonjor'] as num?)?.toDouble() ?? 3500,
     woodStickLengthCm: (json['woodStickLengthCm'] as num?)?.toDouble() ?? 200,
-    woodLengthMultiplier: (json['woodLengthMultiplier'] as num?)?.toDouble() ?? 8,
-    woodWidthMultiplier: (json['woodWidthMultiplier'] as num?)?.toDouble() ?? 8,
+    woodLengthMultiplier: (json['woodLengthMultiplier'] as num?)?.toDouble() ?? 4,
+    woodWidthMultiplier: (json['woodWidthMultiplier'] as num?)?.toDouble() ?? 4,
     woodHeightMultiplier: (json['woodHeightMultiplier'] as num?)?.toDouble() ?? 4,
     screwPerPiece: (json['screwPerPiece'] as num?)?.toDouble() ?? 320,
     nailPerGram: (json['nailPerGram'] as num?)?.toDouble() ?? 25,
