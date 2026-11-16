@@ -380,70 +380,8 @@ class PackingReceiptPrinter {
       linesAfter: 1,
     ));
 
-    // Print every staged payment in chronological order. The repository
-    // returns newest-first, so use a copy and reverse it without mutating
-    // the caller's payment list.
-    if (payments.isNotEmpty) {
-      bytes.addAll(generator.hr(ch: '-'));
-      bytes.addAll(generator.text(
-        'RIWAYAT PEMBAYARAN',
-        styles: const PosStyles(bold: true),
-      ));
-      for (final payment in payments.reversed) {
-        final paymentDate = DateTime.tryParse(
-          payment['created_at']?.toString() ?? '',
-        );
-        final dateLabel = paymentDate == null
-            ? '-'
-            : DateFormat('dd/MM/yy HH:mm').format(paymentDate.toLocal());
-        final method = payment['payment_method']?.toString().trim();
-        bytes.addAll(generator.text(
-          '$dateLabel - ${method == null || method.isEmpty ? 'Lainnya' : method.toUpperCase()}',
-        ));
-        bytes.addAll(generator.text(
-          '  ${money(payment['amount'])}',
-          styles: const PosStyles(bold: true),
-        ));
-        final paymentNote = payment['note']?.toString().trim() ?? '';
-        if (paymentNote.isNotEmpty) {
-          bytes.addAll(generator.text('  Catatan: ${printable(paymentNote)}'));
-        }
-      }
-    }
-
-
-    if (refunds.isNotEmpty) {
-      bytes.addAll(generator.hr(ch: '-'));
-      bytes.addAll(generator.text(
-        'RIWAYAT REFUND',
-        styles: const PosStyles(bold: true),
-      ));
-      for (final refund in refunds.reversed) {
-        final refundDate = DateTime.tryParse(
-          refund['created_at']?.toString() ?? '',
-        );
-        final dateLabel = refundDate == null
-            ? '-'
-            : DateFormat('dd/MM/yy HH:mm').format(refundDate.toLocal());
-        final method = refund['refund_method']?.toString().trim();
-        bytes.addAll(generator.text(
-          '$dateLabel - ${method == null || method.isEmpty ? 'Lainnya' : method.toUpperCase()}',
-        ));
-        bytes.addAll(generator.text(
-          '  -${money(refund['amount'])}',
-          styles: const PosStyles(bold: true),
-        ));
-        final reason = refund['reason']?.toString().trim() ?? '';
-        if (reason.isNotEmpty) bytes.addAll(generator.text('  Alasan: ${printable(reason)}'));
-        final refundNote = refund['note']?.toString().trim() ?? '';
-        if (refundNote.isNotEmpty) bytes.addAll(generator.text('  Catatan: ${printable(refundNote)}'));
-      }
-      final refundTotal = refunds.fold<int>(
-        0,
-        (sum, row) => sum + ((row['amount'] as num?)?.toInt() ?? 0),
-      );
-      bytes.addAll(_pair(generator, cols, 'TOTAL REFUND', '-${money(refundTotal)}'));
-    }
+    // Riwayat pembayaran dan refund sengaja tidak dicetak pada nota pelanggan.
+    // Ringkasan total, dibayar, sisa, dan status di atas tetap ditampilkan.
 
     final note = receipt['note']?.toString() ?? '';
     if (note.trim().isNotEmpty) bytes.addAll(generator.text('Catatan: ${printable(note)}'));
