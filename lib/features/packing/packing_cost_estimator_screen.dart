@@ -31,7 +31,9 @@ class _PackingCostEstimatorScreenState extends State<PackingCostEstimatorScreen>
   final _margin = TextEditingController(text: '25');
   final _boardSheets = TextEditingController(text: '0');
   final _boardPrice = TextEditingController(text: '0');
+  final _gap = TextEditingController(text: '3');
   PackingFastener _fastener = PackingFastener.nails;
+  PackingWoodPattern _woodPattern = PackingWoodPattern.spaced;
   bool _includeBoard = false, _loading = true, _saving = false;
   static final _currency = NumberFormat.currency(locale: 'id_ID', symbol: 'Rp', decimalDigits: 0);
 
@@ -51,6 +53,7 @@ class _PackingCostEstimatorScreenState extends State<PackingCostEstimatorScreen>
   int _integer(TextEditingController c) => int.tryParse(c.text.trim()) ?? 0;
 
   PackingRates get _rates => PackingRates(
+    spacedGapCm: _number(_gap),
     woodPerLonjor: _number(_wood), woodStickLengthCm: _number(_stickLength),
     screwPerPiece: _number(_screw), nailPerGram: _number(_nail),
     nailsPerKg: _integer(_nailsPerKg), fastenersPerPackage: _integer(_fasteners),
@@ -67,6 +70,7 @@ class _PackingCostEstimatorScreenState extends State<PackingCostEstimatorScreen>
       return PackingCostResult.calculate(
         lengthCm: p, widthCm: l, heightCm: t, packageCount: qty,
         fastener: _fastener, rates: _rates, includeBoard: _includeBoard,
+        woodPattern: _woodPattern,
       );
     } on ArgumentError { return null; }
   }
@@ -89,6 +93,7 @@ class _PackingCostEstimatorScreenState extends State<PackingCostEstimatorScreen>
         _margin.text = r.marginPercent.toString();
         _boardSheets.text = r.boardSheetsPerPackage.toString();
         _boardPrice.text = r.boardPricePerSheet.toString();
+        _gap.text = r.spacedGapCm.toString();
       }
     } catch (_) {
       // Invalid preference data falls back to safe defaults; no transaction data is touched.
@@ -100,7 +105,7 @@ class _PackingCostEstimatorScreenState extends State<PackingCostEstimatorScreen>
     final r = _rates;
     if ([r.woodPerLonjor, r.woodStickLengthCm, r.screwPerPiece, r.nailPerGram,
       r.laborPerPackage, r.electricityPerPackage, r.overheadPerPackage,
-      r.marginPercent, r.boardSheetsPerPackage, r.boardPricePerSheet]
+      r.marginPercent, r.boardSheetsPerPackage, r.boardPricePerSheet, r.spacedGapCm]
       .any((v) => !v.isFinite || v < 0) || r.woodStickLengthCm <= 0 ||
       r.nailsPerKg <= 0 || r.fastenersPerPackage < 0 || r.marginPercent >= 100) {
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Periksa tarif. Nilai harus valid dan margin di bawah 100%.')));
@@ -134,7 +139,7 @@ class _PackingCostEstimatorScreenState extends State<PackingCostEstimatorScreen>
   void dispose() {
     for (final c in [_length, _width, _height, _quantity, _wood, _stickLength,
       _screw, _nail, _nailsPerKg, _fasteners, _labor, _electricity, _overhead,
-      _margin, _boardSheets, _boardPrice]) { c.dispose(); }
+      _margin, _boardSheets, _boardPrice, _gap]) { c.dispose(); }
     super.dispose();
   }
 
@@ -164,6 +169,20 @@ class _PackingCostEstimatorScreenState extends State<PackingCostEstimatorScreen>
           const SizedBox(height: 10),
           Card(child: Padding(padding: const EdgeInsets.all(16), child: Column(
             crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text('Pola susunan kayu', style: Theme.of(context).textTheme.titleMedium),
+              const SizedBox(height: 8),
+              SegmentedButton<PackingWoodPattern>(segments: const [
+                ButtonSegment(value: PackingWoodPattern.spaced, label: Text('Renggang')),
+                ButtonSegment(value: PackingWoodPattern.close, label: Text('Rapat')),
+              ], selected: {_woodPattern},
+                onSelectionChanged: (v) => setState(() => _woodPattern = v.first)),
+              if (_woodPattern == PackingWoodPattern.spaced) ...[
+                const SizedBox(height: 8),
+                _field('Celah antar bilah', _gap, suffix: 'cm'),
+                const Text('Nilai awal 3 cm adalah simulasi dan dapat disesuaikan.',
+                  style: TextStyle(fontSize: 12)),
+              ],
+              const SizedBox(height: 14),
               Text('Bahan pengikat', style: Theme.of(context).textTheme.titleMedium),
               const SizedBox(height: 8),
               SegmentedButton<PackingFastener>(
@@ -233,7 +252,10 @@ class _PackingCostEstimatorScreenState extends State<PackingCostEstimatorScreen>
               crossAxisAlignment: CrossAxisAlignment.start, children: [
                 Text('Rincian estimasi', style: Theme.of(context).textTheme.titleMedium),
                 const SizedBox(height: 8),
-                Text('Total panjang rangka: ${result.frameLengthCm.toStringAsFixed(0)} cm'),
+                Text('Rangka dasar: ${result.frameLengthCm.toStringAsFixed(0)} cm'),
+                Text('Jumlah bilah: ${result.slatCountPerPackage} buah/koli'),
+                Text('Panjang bilah tambahan: ${result.slatLengthCm.toStringAsFixed(0)} cm/koli'),
+                Text('Pola: ${_woodPattern == PackingWoodPattern.spaced ? "Renggang" : "Rapat"}'),
                 Text('Kayu: ${result.woodSticksPerPackage} lonjor/koli × ${_integer(_quantity)} koli'),
                 Text(_fastener == PackingFastener.nails
                   ? 'Paku: ${result.fastenerQuantity.toStringAsFixed(1)} gram'
@@ -256,7 +278,7 @@ class _PackingCostEstimatorScreenState extends State<PackingCostEstimatorScreen>
             ),
           )),
           const SizedBox(height: 12),
-          const Text('Rumus rangka dasar: 4 × panjang + 4 × lebar + 4 × tinggi. Papan penutup terpisah dan tidak wajib. Hasil ini merupakan estimasi, bukan nota transaksi.', style: TextStyle(fontSize: 12)),
+          const Text('Rangka dasar: 4P + 4L + 4T. Bilah per bidang: N = ceil((D + G) / (5 + G)); G = 0 untuk pola rapat. Papan penutup terpisah dan tidak wajib. Hasil ini merupakan estimasi, bukan nota transaksi.', style: TextStyle(fontSize: 12)),
         ],
       ),
     );
