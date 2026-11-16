@@ -7,14 +7,14 @@ void main() {
       lengthCm: 110, widthCm: 55, heightCm: 56,
     );
     expect(result.frameLengthCm, 884);
-    expect(result.woodSticksPerPackage, 8);
-    expect(result.slatCountPerPackage, 18);
-    expect(result.slatLengthCm, 1210);
-    expect(result.woodCost, 28000);
+    expect(result.woodSticksPerPackage, 27);
+    expect(result.slatCountPerPackage, 48);
+    expect(result.slatLengthCm, 4400);
+    expect(result.woodCost, 94500);
     expect(result.fastenerQuantity, closeTo(158.1395, 0.001));
     expect(result.fastenerCost, closeTo(3953.488, 0.01));
-    expect(result.totalCost, closeTo(53453.488, 0.01));
-    expect(result.roundedPrice, 72000);
+    expect(result.totalCost, closeTo(109953.488, 0.01));
+    expect(result.roundedPrice, 147000);
     expect(result.boardCost, 0);
   });
 
@@ -27,6 +27,16 @@ void main() {
     expect(result.laborCost, 45000);
     expect(result.electricityCost, 4500);
     expect(result.overheadCost, 15000);
+  });
+
+  test('close timber uses zero gap and retains the same face coverage rule', () {
+    final result = PackingCostResult.calculate(
+      lengthCm: 110, widthCm: 55, heightCm: 56,
+      woodPattern: PackingWoodPattern.close,
+    );
+    expect(result.slatCountPerPackage, 48);
+    expect(result.slatLengthCm, 4400);
+    expect(result.woodSticksPerPackage, 27);
   });
 
   test('screw mode and optional board are calculated separately', () {
