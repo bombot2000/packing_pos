@@ -82,6 +82,10 @@ void main() {
       lengthCm: 54, widthCm: 43, heightCm: 45,
       rates: const PackingRates(marginPercent: 100),
     ), throwsArgumentError);
+    expect(() => PackingCostResult.calculate(
+      lengthCm: 54, widthCm: 43, heightCm: 45,
+      rates: const PackingRates(topSlatAxis: SlatCutAxis.height),
+    ), throwsArgumentError);
   });
 
   test('custom rates and six face slat counts survive JSON round trip', () {
