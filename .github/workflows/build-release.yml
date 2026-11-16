@@ -12,6 +12,7 @@ on:
       - main
   push:
     branches:
+      - main
       - feature/packing-calculation-engine
       - feature/refund-ledger-v8-20261114
       - feature/packing-cost-estimator-20261116
@@ -49,7 +50,7 @@ jobs:
       - name: Verify Java 17 toolchain
         run: |
           java -version
-          JAVA_MAJOR=$(java -version 2>&1 | sed -n '1s/.*version "\([0-9]*\).*/\1/p')
+          JAVA_MAJOR=$(java -version 2>&1 | sed -n '1s/.*version "\\([0-9]*\\).*/\\1/p')
           if [ "$JAVA_MAJOR" != "17" ]; then
             echo "Expected Java 17, found Java ${JAVA_MAJOR:-unknown}."
             exit 1
@@ -98,12 +99,12 @@ jobs:
       - name: Pre-download Gradle distribution with retries
         run: |
           PROPERTIES="android/gradle/wrapper/gradle-wrapper.properties"
-          VERSION=$(grep '^distributionUrl=' "$PROPERTIES" | sed -E 's/.*gradle-([0-9.]+)-bin.zip.*/\1/')
+          VERSION=$(grep '^distributionUrl=' "$PROPERTIES" | sed -E 's/.*gradle-([0-9.]+)-bin.zip.*/\\1/')
           ZIP="$RUNNER_TEMP/gradle-${VERSION}-bin.zip"
-          curl -fL --retry 10 --retry-all-errors --retry-delay 10 \
-            "https://downloads.gradle.org/distributions/gradle-${VERSION}-bin.zip" \
+          curl -fL --retry 10 --retry-all-errors --retry-delay 10 \\
+            "https://downloads.gradle.org/distributions/gradle-${VERSION}-bin.zip" \\
             -o "$ZIP"
-          sed -i "s|^distributionUrl=.*|distributionUrl=file\\://$ZIP|" "$PROPERTIES"
+          sed -i "s|^distributionUrl=.*|distributionUrl=file\\\\://$ZIP|" "$PROPERTIES"
           grep '^distributionUrl=' "$PROPERTIES"
 
       - name: Install dependencies
@@ -128,13 +129,13 @@ jobs:
           exit 1
 
       - name: Prepare debug APK for GitHub Release
-        if: startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch' || github.ref == 'refs/heads/feature/packing-calculation-engine'
+        if: startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch' || github.ref == 'refs/heads/feature/packing-calculation-engine' || github.ref == 'refs/heads/main'
         run: |
           cp build/app/outputs/flutter-apk/app-debug.apk packing-pos-debug.apk
           sha256sum packing-pos-debug.apk
 
       - name: Publish debug APK to GitHub Release
-        if: startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch' || github.ref == 'refs/heads/feature/packing-calculation-engine'
+        if: startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch' || github.ref == 'refs/heads/feature/packing-calculation-engine' || github.ref == 'refs/heads/main'
         env:
           GH_TOKEN: ${{ github.token }}
           INPUT_RELEASE_TAG: ${{ inputs.release_tag }}
@@ -146,8 +147,8 @@ jobs:
           else
             TAG="packing-pos-debug-${GITHUB_RUN_NUMBER}"
           fi
-          gh release view "$TAG" >/dev/null 2>&1 || gh release create "$TAG" \
-            --target "${GITHUB_SHA}" \
-            --title "Packing POS Debug $TAG" \
+          gh release view "$TAG" >/dev/null 2>&1 || gh release create "$TAG" \\
+            --target "${GITHUB_SHA}" \\
+            --title "Packing POS Debug $TAG" \\
             --notes "APK debug untuk pengujian. APK ini otomatis ditandatangani dengan debug keystore sementara milik GitHub Actions, bukan keystore permanen. Sertifikat dapat berbeda antar-build sehingga mungkin tidak dapat memasang sebagai pembaruan di atas aplikasi yang sudah terpasang. Jangan hapus aplikasi lama jika data lokal belum dicadangkan."
           gh release upload "$TAG" packing-pos-debug.apk --clobber
