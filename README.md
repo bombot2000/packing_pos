@@ -18,6 +18,7 @@ Aplikasi mendukung transaksi ongkos jasa packing manual dan halaman estimasi bia
 - APK rilis dipublikasikan ke GitHub Releases, bukan Actions Artifacts.
 - Estimasi biaya packing kayu: kebutuhan rangka, paku/sekrup, upah, listrik, overhead, papan penutup opsional, modal, margin, dan harga jual.
 - Tarif estimasi disimpan lokal pada perangkat; tidak mengubah database atau transaksi lama.
+- Pengaturan arah potong lama yang tidak sesuai bidang dinormalisasi otomatis ke arah potong aman saat dibaca.
 
 ## Database dan keamanan data
 
