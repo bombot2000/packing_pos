@@ -1,4 +1,5 @@
 enum PackingFastener { nails, screws }
+enum PackingWoodPattern { spaced, close }
 
 class PackingRates {
   const PackingRates({
@@ -7,6 +8,8 @@ class PackingRates {
     this.woodLengthMultiplier = 4,
     this.woodWidthMultiplier = 4,
     this.woodHeightMultiplier = 4,
+    this.slatWidthCm = 5,
+    this.spacedGapCm = 3,
     this.screwPerPiece = 320,
     this.nailPerGram = 25,
     this.nailsPerKg = 430,
@@ -21,6 +24,7 @@ class PackingRates {
 
   final double woodPerLonjor, woodStickLengthCm;
   final double woodLengthMultiplier, woodWidthMultiplier, woodHeightMultiplier;
+  final double slatWidthCm, spacedGapCm;
   final double screwPerPiece, nailPerGram;
   final int nailsPerKg, fastenersPerPackage;
   final double laborPerPackage, electricityPerPackage, overheadPerPackage;
@@ -29,7 +33,8 @@ class PackingRates {
   Map<String, Object?> toJson() => {
     'woodPerLonjor': woodPerLonjor, 'woodStickLengthCm': woodStickLengthCm,
     'woodLengthMultiplier': woodLengthMultiplier, 'woodWidthMultiplier': woodWidthMultiplier,
-    'woodHeightMultiplier': woodHeightMultiplier, 'screwPerPiece': screwPerPiece,
+    'woodHeightMultiplier': woodHeightMultiplier, 'slatWidthCm': slatWidthCm,
+    'spacedGapCm': spacedGapCm, 'screwPerPiece': screwPerPiece,
     'nailPerGram': nailPerGram, 'nailsPerKg': nailsPerKg,
     'laborPerPackage': laborPerPackage, 'electricityPerPackage': electricityPerPackage,
     'overheadPerPackage': overheadPerPackage, 'fastenersPerPackage': fastenersPerPackage,
@@ -43,6 +48,8 @@ class PackingRates {
     woodLengthMultiplier: (json['woodLengthMultiplier'] as num?)?.toDouble() ?? 4,
     woodWidthMultiplier: (json['woodWidthMultiplier'] as num?)?.toDouble() ?? 4,
     woodHeightMultiplier: (json['woodHeightMultiplier'] as num?)?.toDouble() ?? 4,
+    slatWidthCm: (json['slatWidthCm'] as num?)?.toDouble() ?? 5,
+    spacedGapCm: (json['spacedGapCm'] as num?)?.toDouble() ?? 3,
     screwPerPiece: (json['screwPerPiece'] as num?)?.toDouble() ?? 320,
     nailPerGram: (json['nailPerGram'] as num?)?.toDouble() ?? 25,
     nailsPerKg: (json['nailsPerKg'] as num?)?.toInt() ?? 430,
@@ -58,13 +65,15 @@ class PackingRates {
 
 class PackingCostResult {
   const PackingCostResult({
-    required this.frameLengthCm, required this.woodSticksPerPackage,
+    required this.frameLengthCm, required this.slatLengthCm,
+    required this.slatCountPerPackage, required this.woodSticksPerPackage,
     required this.woodCost, required this.fastenerQuantity, required this.fastenerUnit,
     required this.fastenerCost, required this.laborCost, required this.electricityCost,
     required this.overheadCost, required this.boardQuantity, required this.boardCost,
     required this.totalCost, required this.suggestedPrice, required this.roundedPrice,
   });
-  final double frameLengthCm, woodCost, fastenerQuantity, fastenerCost;
+  final double frameLengthCm, slatLengthCm, woodCost, fastenerQuantity, fastenerCost;
+  final int slatCountPerPackage;
   final double laborCost, electricityCost, overheadCost, boardQuantity, boardCost;
   final double totalCost, suggestedPrice, roundedPrice;
   final int woodSticksPerPackage;
@@ -74,22 +83,34 @@ class PackingCostResult {
     required double lengthCm, required double widthCm, required double heightCm,
     int packageCount = 1, PackingFastener fastener = PackingFastener.nails,
     PackingRates rates = const PackingRates(), bool includeBoard = false,
+    PackingWoodPattern woodPattern = PackingWoodPattern.spaced,
   }) {
     final values = [lengthCm, widthCm, heightCm, rates.woodPerLonjor,
       rates.woodStickLengthCm, rates.woodLengthMultiplier, rates.woodWidthMultiplier,
-      rates.woodHeightMultiplier, rates.screwPerPiece, rates.nailPerGram,
+      rates.woodHeightMultiplier, rates.slatWidthCm, rates.spacedGapCm,
+      rates.screwPerPiece, rates.nailPerGram,
       rates.laborPerPackage, rates.electricityPerPackage, rates.overheadPerPackage,
       rates.boardSheetsPerPackage, rates.boardPricePerSheet, rates.marginPercent];
     if (values.any((v) => !v.isFinite || v < 0) || lengthCm <= 0 ||
         widthCm <= 0 || heightCm <= 0 || packageCount <= 0 ||
-        rates.woodStickLengthCm <= 0 || rates.nailsPerKg <= 0 ||
+        rates.woodStickLengthCm <= 0 || rates.slatWidthCm <= 0 ||
+        rates.nailsPerKg <= 0 ||
         rates.fastenersPerPackage < 0 || rates.marginPercent < 0 ||
         rates.marginPercent >= 100) {
       throw ArgumentError('Ukuran, tarif, jumlah koli, atau margin tidak valid.');
     }
     final frame = rates.woodLengthMultiplier * lengthCm +
         rates.woodWidthMultiplier * widthCm + rates.woodHeightMultiplier * heightCm;
-    final sticks = (frame / rates.woodStickLengthCm).ceil();
+    final gap = woodPattern == PackingWoodPattern.close ? 0.0 : rates.spacedGapCm;
+    int slatsAcross(double dimension) =>
+        ((dimension + gap) / (rates.slatWidthCm + gap)).ceil();
+    final topBottomCount = slatsAcross(widthCm);
+    final frontBackCount = slatsAcross(heightCm);
+    final leftRightCount = slatsAcross(heightCm);
+    final slatCount = 2 * (topBottomCount + frontBackCount + leftRightCount);
+    final slatLength = 2 * (topBottomCount * lengthCm +
+        frontBackCount * lengthCm + leftRightCount * widthCm);
+    final sticks = ((frame + slatLength) / rates.woodStickLengthCm).ceil();
     final wood = sticks * rates.woodPerLonjor * packageCount;
     final count = rates.fastenersPerPackage * packageCount;
     final fastenerQty = fastener == PackingFastener.nails
@@ -104,7 +125,8 @@ class PackingCostResult {
     final total = wood + fastenerCost + labor + electricity + overhead + board;
     final suggested = total / (1 - rates.marginPercent / 100);
     return PackingCostResult(
-      frameLengthCm: frame, woodSticksPerPackage: sticks, woodCost: wood,
+      frameLengthCm: frame, slatLengthCm: slatLength,
+      slatCountPerPackage: slatCount, woodSticksPerPackage: sticks,
       fastenerQuantity: fastenerQty,
       fastenerUnit: fastener == PackingFastener.nails ? 'gram' : 'buah',
       fastenerCost: fastenerCost, laborCost: labor, electricityCost: electricity,
