@@ -2,6 +2,27 @@ enum PackingFastener { nails, screws }
 
 enum SlatCutAxis { length, width, height }
 
+/// Counts stock lengths for one package using first-fit-decreasing cutting.
+/// Each package gets an independent cutting plan; offcuts are never shared.
+int _countLonjorForPackage(List<double> cuts, double stockLengthCm) {
+  final sortedCuts = [...cuts]..sort((a, b) => b.compareTo(a));
+  final usedLengths = <double>[];
+  for (final cut in sortedCuts) {
+    if (!cut.isFinite || cut <= 0 || cut > stockLengthCm) {
+      throw ArgumentError('Ada potongan kayu yang melebihi panjang satu lonjor.');
+    }
+    final binIndex = usedLengths.indexWhere(
+      (used) => used + cut <= stockLengthCm + 1e-9,
+    );
+    if (binIndex == -1) {
+      usedLengths.add(cut);
+    } else {
+      usedLengths[binIndex] += cut;
+    }
+  }
+  return usedLengths.length;
+}
+
 class PackingRates {
   const PackingRates({
     this.woodPerLonjor = 3500,
@@ -177,7 +198,22 @@ class PackingCostResult {
         rates.backSlats * cutLength(rates.backSlatAxis) +
         rates.leftSlats * cutLength(rates.leftSlatAxis) +
         rates.rightSlats * cutLength(rates.rightSlatAxis);
-    final sticks = ((frame + slatLength) / rates.woodStickLengthCm).ceil();
+    // Build the actual cut list for one package. The frame formula remains
+    // 4P + 4L + 4T; slats follow their individually selected cut axes.
+    final cuts = <double>[
+      ...List<double>.filled(4, lengthCm),
+      ...List<double>.filled(4, widthCm),
+      ...List<double>.filled(4, heightCm),
+      ...List<double>.filled(rates.topSlats, cutLength(rates.topSlatAxis)),
+      ...List<double>.filled(rates.bottomSlats, cutLength(rates.bottomSlatAxis)),
+      ...List<double>.filled(rates.frontSlats, cutLength(rates.frontSlatAxis)),
+      ...List<double>.filled(rates.backSlats, cutLength(rates.backSlatAxis)),
+      ...List<double>.filled(rates.leftSlats, cutLength(rates.leftSlatAxis)),
+      ...List<double>.filled(rates.rightSlats, cutLength(rates.rightSlatAxis)),
+    ];
+    // Deliberately calculate each package separately: offcuts from one koli
+    // cannot reduce the stock requirement of another koli.
+    final sticks = _countLonjorForPackage(cuts, rates.woodStickLengthCm);
     final wood = sticks * rates.woodPerLonjor * packageCount;
     final count = rates.fastenersPerPackage * packageCount;
     final fastenerQty = fastener == PackingFastener.nails
