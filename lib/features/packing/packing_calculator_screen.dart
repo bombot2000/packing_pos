@@ -20,6 +20,7 @@ class PackingCalculatorScreen extends StatefulWidget {
 
 class _PackingCalculatorScreenState extends State<PackingCalculatorScreen> {
   final _customer = TextEditingController();
+  final _customerFocus = FocusNode();
   final _item = TextEditingController();
   final _length = TextEditingController();
   final _width = TextEditingController();
@@ -40,6 +41,7 @@ class _PackingCalculatorScreenState extends State<PackingCalculatorScreen> {
   @override
   void initState() {
     super.initState();
+    _customerFocus.addListener(_onCustomerFocusChanged);
     _loadServices();
     _loadCustomers();
     if (widget.editReceiptId != null) _loadReceiptForEdit();
@@ -123,8 +125,25 @@ class _PackingCalculatorScreenState extends State<PackingCalculatorScreen> {
       if (mounted) setState(() => _error = 'Master pelanggan gagal dimuat: ${friendlyError(e)}');
     }
   }
+  void _onCustomerFocusChanged() {
+    if (mounted) setState(() {});
+  }
+
+  List<String> get _customerSuggestions {
+    final query = _customer.text.trim().toLowerCase();
+    if (query.isEmpty) return const [];
+    return _customers
+        .map((row) => row['name'] as String)
+        .where((name) => name.toLowerCase().contains(query) &&
+            name.toLowerCase() != query)
+        .take(4)
+        .toList();
+  }
+
   @override
   void dispose() {
+    _customerFocus.removeListener(_onCustomerFocusChanged);
+    _customerFocus.dispose();
     _customer.dispose(); _item.dispose(); _length.dispose(); _width.dispose();
     _height.dispose(); _charge.dispose(); _quantity.dispose(); _discount.dispose(); _note.dispose(); _receiptNote.dispose();
     super.dispose();
@@ -302,47 +321,58 @@ class _PackingCalculatorScreenState extends State<PackingCalculatorScreen> {
         ? 'Satu nota dapat berisi banyak pekerjaan. Tambahkan pekerjaan satu per satu, lalu simpan dan lakukan pembayaran untuk total seluruh nota.'
         : 'Edit data nota yang belum dibayar. Hapus pekerjaan yang tidak diperlukan atau tambahkan pekerjaan baru, lalu simpan perubahan.'),
       const SizedBox(height: 16),
-      Row(
+      Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Expanded(
-            child: Autocomplete<String>(
-              initialValue: TextEditingValue(text: _customer.text),
-              optionsBuilder: (value) {
-                final query = value.text.trim().toLowerCase();
-                if (query.isEmpty) return _customers.map((row) => row['name'] as String);
-                return _customers
-                    .map((row) => row['name'] as String)
-                    .where((name) => name.toLowerCase().contains(query));
-              },
-              onSelected: (value) => _customer.text = value,
-              fieldViewBuilder: (context, controller, focusNode, onSubmitted) {
-                if (controller.text != _customer.text && !focusNode.hasFocus) {
-                  controller.text = _customer.text;
-                }
-                return TextField(
-                  controller: controller,
-                  focusNode: focusNode,
-                  onChanged: (value) => _customer.text = value,
+          Row(
+            children: [
+              Expanded(
+                child: TextField(
+                  controller: _customer,
+                  focusNode: _customerFocus,
+                  textInputAction: TextInputAction.next,
+                  onChanged: (_) => setState(() {}),
                   decoration: const InputDecoration(
                     labelText: 'Nama pelanggan',
                     hintText: 'Pilih pelanggan atau ketik nama baru',
                     border: OutlineInputBorder(),
                   ),
-                );
-              },
+                ),
+              ),
+              const SizedBox(width: 8),
+              IconButton(
+                tooltip: 'Kelola master pelanggan',
+                onPressed: () async {
+                  await Navigator.of(context).push(MaterialPageRoute(
+                    builder: (_) => const PackingCustomerMasterScreen(),
+                  ));
+                  if (mounted) await _loadCustomers();
+                },
+                icon: const Icon(Icons.contacts_outlined),
+              ),
+            ],
+          ),
+          if (_customerFocus.hasFocus && _customerSuggestions.isNotEmpty)
+            Card(
+              margin: const EdgeInsets.only(top: 4),
+              clipBehavior: Clip.antiAlias,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: _customerSuggestions.map((name) => ListTile(
+                  dense: true,
+                  leading: const Icon(Icons.person_outline),
+                  title: Text(name),
+                  onTap: () {
+                    _customer.value = TextEditingValue(
+                      text: name,
+                      selection: TextSelection.collapsed(offset: name.length),
+                    );
+                    _customerFocus.unfocus();
+                    setState(() {});
+                  },
+                )).toList(),
+              ),
             ),
-          ),
-          const SizedBox(width: 8),
-          IconButton(
-            tooltip: 'Kelola master pelanggan',
-            onPressed: () async {
-              await Navigator.of(context).push(MaterialPageRoute(
-                builder: (_) => const PackingCustomerMasterScreen(),
-              ));
-              await _loadCustomers();
-            },
-            icon: const Icon(Icons.contacts_outlined),
-          ),
         ],
       ),
       const SizedBox(height: 12),
