@@ -88,6 +88,26 @@ void main() {
     ), throwsArgumentError);
   });
 
+  test('legacy saved axes are normalized to valid face dimensions', () {
+    final restored = PackingRates.fromJson({
+      'topSlatAxis': 'height',
+      'bottomSlatAxis': 'width',
+      'frontSlatAxis': 'width',
+      'backSlatAxis': 'length',
+      'leftSlatAxis': 'length',
+      'rightSlatAxis': 'height',
+    });
+    expect(restored.topSlatAxis, SlatCutAxis.length);
+    expect(restored.bottomSlatAxis, SlatCutAxis.length);
+    expect(restored.frontSlatAxis, SlatCutAxis.length);
+    expect(restored.backSlatAxis, SlatCutAxis.length);
+    expect(restored.leftSlatAxis, SlatCutAxis.width);
+    expect(restored.rightSlatAxis, SlatCutAxis.height);
+    expect(() => PackingCostResult.calculate(
+      lengthCm: 100, widthCm: 50, heightCm: 40, rates: restored,
+    ), returnsNormally);
+  });
+
   test('custom rates and six face slat counts survive JSON round trip', () {
     const rates = PackingRates(
       woodPerLonjor: 5000, woodStickLengthCm: 250,
@@ -97,9 +117,9 @@ void main() {
       boardSheetsPerPackage: 1.5, boardPricePerSheet: 18000,
       marginPercent: 30, topSlats: 2, bottomSlats: 0,
       frontSlats: 3, backSlats: 1, leftSlats: 4, rightSlats: 2,
-      topSlatAxis: SlatCutAxis.width, bottomSlatAxis: SlatCutAxis.height,
-      frontSlatAxis: SlatCutAxis.height, backSlatAxis: SlatCutAxis.width,
-      leftSlatAxis: SlatCutAxis.height, rightSlatAxis: SlatCutAxis.length,
+      topSlatAxis: SlatCutAxis.width, bottomSlatAxis: SlatCutAxis.length,
+      frontSlatAxis: SlatCutAxis.height, backSlatAxis: SlatCutAxis.height,
+      leftSlatAxis: SlatCutAxis.height, rightSlatAxis: SlatCutAxis.width,
     );
     final restored = PackingRates.fromJson(rates.toJson());
     expect(restored.woodPerLonjor, 5000);
@@ -114,10 +134,10 @@ void main() {
     expect(restored.leftSlats, 4);
     expect(restored.rightSlats, 2);
     expect(restored.topSlatAxis, SlatCutAxis.width);
-    expect(restored.bottomSlatAxis, SlatCutAxis.height);
+    expect(restored.bottomSlatAxis, SlatCutAxis.length);
     expect(restored.frontSlatAxis, SlatCutAxis.height);
-    expect(restored.backSlatAxis, SlatCutAxis.width);
+    expect(restored.backSlatAxis, SlatCutAxis.height);
     expect(restored.leftSlatAxis, SlatCutAxis.height);
-    expect(restored.rightSlatAxis, SlatCutAxis.length);
+    expect(restored.rightSlatAxis, SlatCutAxis.width);
   });
 }
