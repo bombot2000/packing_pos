@@ -102,8 +102,6 @@ class _PackingCostEstimatorScreenState extends State<PackingCostEstimatorScreen>
         _electricity.text = r.electricityPerPackage.toString();
         _overhead.text = r.overheadPerPackage.toString();
         _margin.text = r.marginPercent.toString();
-        _boardSheets.text = r.boardSheetsPerPackage.toString();
-        _boardPrice.text = r.boardPricePerSheet.toString();
         _topSlats.text = r.topSlats.toString();
         _bottomSlats.text = r.bottomSlats.toString();
         _frontSlats.text = r.frontSlats.toString();
@@ -124,7 +122,7 @@ class _PackingCostEstimatorScreenState extends State<PackingCostEstimatorScreen>
     final r = _rates;
     if ([r.woodPerLonjor, r.woodStickLengthCm, r.screwPerPiece, r.nailPerGram,
       r.laborPerPackage, r.electricityPerPackage, r.overheadPerPackage,
-      r.marginPercent, r.boardSheetsPerPackage, r.boardPricePerSheet]
+      r.marginPercent]
       .any((v) => !v.isFinite || v < 0) || r.woodStickLengthCm <= 0 ||
       [r.topSlats, r.bottomSlats, r.frontSlats, r.backSlats, r.leftSlats, r.rightSlats]
         .any((v) => v < 0) ||
@@ -135,7 +133,7 @@ class _PackingCostEstimatorScreenState extends State<PackingCostEstimatorScreen>
     setState(() => _saving = true);
     try {
       final prefs = await SharedPreferences.getInstance();
-      final ok = await prefs.setString(_settingsKey, jsonEncode(r.toJson()));
+      final ok = await prefs.setString(_settingsKey, jsonEncode(r.toSettingsJson()));
       if (!ok) throw StateError('Pengaturan tidak dapat disimpan.');
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Tarif estimasi packing tersimpan di perangkat.')));
     } catch (e) {
