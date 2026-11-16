@@ -59,6 +59,27 @@ class _PackingCostEstimatorScreenState extends State<PackingCostEstimatorScreen>
 
   int _integer(TextEditingController c) => int.tryParse(c.text.trim()) ?? 0;
 
+  bool _hasValidNumber(TextEditingController controller, {bool integer = false}) {
+    final raw = controller.text.trim().replaceAll(' ', '');
+    if (raw.isEmpty) return false;
+    if (integer) return int.tryParse(raw) != null;
+
+    final normalized = raw.contains(',')
+        ? raw.replaceAll('.', '').replaceAll(',', '.')
+        : (() {
+            final parts = raw.split('.');
+            final thousands = parts.length > 1 &&
+                parts.first.isNotEmpty &&
+                parts.first.length <= 3 &&
+                parts.skip(1).every(
+                  (part) => part.length == 3 && int.tryParse(part) != null,
+                );
+            return thousands ? raw.replaceAll('.', '') : raw;
+          })();
+    final value = double.tryParse(normalized);
+    return value != null && value.isFinite;
+  }
+
   PackingRates get _rates => PackingRates(
     topSlats: _integer(_topSlats), bottomSlats: _integer(_bottomSlats),
     frontSlats: _integer(_frontSlats), backSlats: _integer(_backSlats),
@@ -119,6 +140,24 @@ class _PackingCostEstimatorScreenState extends State<PackingCostEstimatorScreen>
   }
 
   Future<void> _saveRates() async {
+    final integerInputs = [
+      _nailsPerKg, _fasteners, _topSlats, _bottomSlats,
+      _frontSlats, _backSlats, _leftSlats, _rightSlats,
+    ];
+    final decimalInputs = [
+      _wood, _stickLength, _screw, _nail, _labor,
+      _electricity, _overhead, _margin,
+      if (_includeBoard) _boardSheets,
+      if (_includeBoard) _boardPrice,
+    ];
+    if (integerInputs.any((c) => !_hasValidNumber(c, integer: true)) ||
+        decimalInputs.any((c) => !_hasValidNumber(c))) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+        content: Text('Isi semua tarif dengan angka yang valid. Jumlah bilah dan pengikat harus bilangan bulat.'),
+      ));
+      return;
+    }
+
     final r = _rates;
     if ([r.woodPerLonjor, r.woodStickLengthCm, r.screwPerPiece, r.nailPerGram,
       r.laborPerPackage, r.electricityPerPackage, r.overheadPerPackage,
