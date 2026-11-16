@@ -31,26 +31,21 @@ void main() {
   });
   testWidgets('typing a customer name then navigating back does not crash', (tester) async {
     await tester.pumpWidget(const PackingPosApp());
-    await tester.pumpAndSettle();
+    // Avoid pumpAndSettle throughout this flow: either screen can contain
+    // repeating animations, and a focused text field also blinks its caret.
+    await tester.pump(const Duration(milliseconds: 500));
 
     await tester.tap(find.text('Transaksi packing baru'));
-    await tester.pumpAndSettle();
+    await tester.pump(const Duration(milliseconds: 500));
 
     final customerField = find.widgetWithText(TextField, 'Nama pelanggan');
     expect(customerField, findsOneWidget);
     await tester.enterText(customerField, 'Pelanggan Uji');
-    // A focused TextField keeps its caret blink animation active, so avoid
-    // pumpAndSettle while the field is focused.
     await tester.pump(const Duration(milliseconds: 100));
 
-    // Dismiss the simulated soft keyboard first; otherwise the first system
-    // Back event may only close the keyboard instead of popping the route.
     tester.testTextInput.hide();
     await tester.pump();
     await tester.binding.handlePopRoute();
-
-    // Do not use pumpAndSettle here: the destination screen may contain
-    // repeating animations that prevent the test clock from settling.
     await tester.pump(const Duration(milliseconds: 500));
 
     expect(find.text('Packing POS'), findsOneWidget);
