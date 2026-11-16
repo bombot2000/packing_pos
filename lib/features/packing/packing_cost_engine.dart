@@ -129,7 +129,7 @@ class PackingCostResult {
       slatCountPerPackage: slatCount, woodSticksPerPackage: sticks,
       fastenerQuantity: fastenerQty,
       fastenerUnit: fastener == PackingFastener.nails ? 'gram' : 'buah',
-      fastenerCost: fastenerCost, laborCost: labor, electricityCost: electricity,
+      woodCost: wood, fastenerCost: fastenerCost, laborCost: labor, electricityCost: electricity,
       overheadCost: overhead, boardQuantity: boardQty, boardCost: board,
       totalCost: total, suggestedPrice: suggested,
       roundedPrice: (suggested / 1000).ceil() * 1000.0,
