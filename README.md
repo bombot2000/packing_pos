@@ -4,7 +4,7 @@ Flutter POS khusus jasa packing barang, bukan aplikasi transaksi pengiriman/kuri
 
 ## Fitur
 
-Aplikasi ini mencatat ongkos jasa packing secara manual (bukan mesin hitung bahan kayu).
+Aplikasi mendukung transaksi ongkos jasa packing manual dan halaman estimasi biaya bahan packing kayu yang terpisah.
 
 - Master jenis pekerjaan dengan harga standar yang dapat diubah saat transaksi.
 - Satu nota berisi banyak pekerjaan; ukuran barang hanya informasi.
@@ -16,7 +16,8 @@ Aplikasi ini mencatat ongkos jasa packing secara manual (bukan mesin hitung baha
 - Backup JSON dan restore atomik melalui transaksi SQLite.
 - Printer Bluetooth ESC/POS untuk kertas 58 mm dan 80 mm.
 - APK rilis dipublikasikan ke GitHub Releases, bukan Actions Artifacts.
-- Master bahan masih tersimpan sebagai arsip; tidak dipakai dalam alur transaksi.
+- Estimasi biaya packing kayu: kebutuhan rangka, paku/sekrup, upah, listrik, overhead, papan penutup opsional, modal, margin, dan harga jual.
+- Tarif estimasi disimpan lokal pada perangkat; tidak mengubah database atau transaksi lama.
 
 ## Database dan keamanan data
 
@@ -40,7 +41,7 @@ Ketersediaan fitur potong kertas bergantung pada kemampuan printer. Cetak nyata 
 
 Workflow: `.github/workflows/build-release.yml`.
 
-Setiap push ke `feature/packing-calculation-engine` menjalankan `flutter analyze --no-fatal-infos` dan `flutter test`. APK release hanya dibangun dan dipublikasikan jika keystore permanen tersedia.
+Push ke branch fitur menjalankan `flutter analyze --no-fatal-infos` dan `flutter test`. APK release hanya dibangun dan dipublikasikan jika keystore permanen tersedia.
 
 Tambahkan empat GitHub Actions Secrets berikut sebelum membuat APK rilis:
 
