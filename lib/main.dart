@@ -6,6 +6,7 @@ import 'data/repositories/packing_transaction_repository.dart';
 import 'features/packing/material_master_screen.dart';
 import 'features/packing/packing_backup_screen.dart';
 import 'features/packing/packing_calculator_screen.dart';
+import 'features/packing/packing_cost_estimator_screen.dart';
 import 'features/packing/packing_cash_closing_screen.dart';
 import 'features/packing/packing_customer_master_screen.dart';
 import 'features/packing/packing_identity_settings_screen.dart';
@@ -151,6 +152,7 @@ class _HomePageState extends State<HomePage> {
             _shortcut(Icons.account_balance_wallet_outlined, 'Daftar piutang', const PackingReceivablesScreen()),
             _shortcut(Icons.lock_clock, 'Tutup kas harian', const PackingCashClosingScreen()),
             _shortcut(Icons.bar_chart, 'Laporan usaha', const PackingReportsScreen()),
+            _shortcut(Icons.calculate_outlined, 'Estimasi biaya packing', const PackingCostEstimatorScreen()),
           ],
         ),
         const SizedBox(height: 12),

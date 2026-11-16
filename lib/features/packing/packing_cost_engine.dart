@@ -1,0 +1,180 @@
+enum PackingFastener { nails, screws }
+
+enum SlatCutAxis { length, width, height }
+
+class PackingRates {
+  const PackingRates({
+    this.woodPerLonjor = 3500,
+    this.woodStickLengthCm = 200,
+    this.woodLengthMultiplier = 4,
+    this.woodWidthMultiplier = 4,
+    this.woodHeightMultiplier = 4,
+    this.topSlats = 1,
+    this.bottomSlats = 1,
+    this.frontSlats = 1,
+    this.backSlats = 1,
+    this.leftSlats = 1,
+    this.rightSlats = 1,
+    this.topSlatAxis = SlatCutAxis.length,
+    this.bottomSlatAxis = SlatCutAxis.length,
+    this.frontSlatAxis = SlatCutAxis.length,
+    this.backSlatAxis = SlatCutAxis.length,
+    this.leftSlatAxis = SlatCutAxis.width,
+    this.rightSlatAxis = SlatCutAxis.width,
+    this.screwPerPiece = 320,
+    this.nailPerGram = 25,
+    this.nailsPerKg = 430,
+    this.laborPerPackage = 15000,
+    this.electricityPerPackage = 1500,
+    this.overheadPerPackage = 5000,
+    this.fastenersPerPackage = 68,
+    this.boardSheetsPerPackage = 0,
+    this.boardPricePerSheet = 0,
+    this.marginPercent = 25,
+  });
+
+  final double woodPerLonjor, woodStickLengthCm;
+  final double woodLengthMultiplier, woodWidthMultiplier, woodHeightMultiplier;
+  // Number of extra slats on each face; 1 slat divides a face into 2 sections.
+  final int topSlats, bottomSlats, frontSlats, backSlats, leftSlats, rightSlats;
+  final SlatCutAxis topSlatAxis, bottomSlatAxis, frontSlatAxis, backSlatAxis, leftSlatAxis, rightSlatAxis;
+  final double screwPerPiece, nailPerGram;
+  final int nailsPerKg, fastenersPerPackage;
+  final double laborPerPackage, electricityPerPackage, overheadPerPackage;
+  final double boardSheetsPerPackage, boardPricePerSheet, marginPercent;
+
+  Map<String, Object?> toJson() => {
+    'woodPerLonjor': woodPerLonjor, 'woodStickLengthCm': woodStickLengthCm,
+    'woodLengthMultiplier': woodLengthMultiplier, 'woodWidthMultiplier': woodWidthMultiplier,
+    'woodHeightMultiplier': woodHeightMultiplier,
+    'topSlats': topSlats, 'bottomSlats': bottomSlats, 'frontSlats': frontSlats,
+    'backSlats': backSlats, 'leftSlats': leftSlats, 'rightSlats': rightSlats,
+    'topSlatAxis': topSlatAxis.name, 'bottomSlatAxis': bottomSlatAxis.name,
+    'frontSlatAxis': frontSlatAxis.name, 'backSlatAxis': backSlatAxis.name,
+    'leftSlatAxis': leftSlatAxis.name, 'rightSlatAxis': rightSlatAxis.name,
+    'screwPerPiece': screwPerPiece, 'nailPerGram': nailPerGram,
+    'nailsPerKg': nailsPerKg, 'laborPerPackage': laborPerPackage,
+    'electricityPerPackage': electricityPerPackage, 'overheadPerPackage': overheadPerPackage,
+    'fastenersPerPackage': fastenersPerPackage, 'boardSheetsPerPackage': boardSheetsPerPackage,
+    'boardPricePerSheet': boardPricePerSheet, 'marginPercent': marginPercent,
+  };
+
+  factory PackingRates.fromJson(Map<String, dynamic> json) => PackingRates(
+    woodPerLonjor: (json['woodPerLonjor'] as num?)?.toDouble() ?? 3500,
+    woodStickLengthCm: (json['woodStickLengthCm'] as num?)?.toDouble() ?? 200,
+    woodLengthMultiplier: (json['woodLengthMultiplier'] as num?)?.toDouble() ?? 4,
+    woodWidthMultiplier: (json['woodWidthMultiplier'] as num?)?.toDouble() ?? 4,
+    woodHeightMultiplier: (json['woodHeightMultiplier'] as num?)?.toDouble() ?? 4,
+    topSlats: (json['topSlats'] as num?)?.toInt() ?? 1,
+    bottomSlats: (json['bottomSlats'] as num?)?.toInt() ?? 1,
+    frontSlats: (json['frontSlats'] as num?)?.toInt() ?? 1,
+    backSlats: (json['backSlats'] as num?)?.toInt() ?? 1,
+    leftSlats: (json['leftSlats'] as num?)?.toInt() ?? 1,
+    rightSlats: (json['rightSlats'] as num?)?.toInt() ?? 1,
+    topSlatAxis: SlatCutAxis.values.firstWhere((v) => v.name == json['topSlatAxis'], orElse: () => SlatCutAxis.length),
+    bottomSlatAxis: SlatCutAxis.values.firstWhere((v) => v.name == json['bottomSlatAxis'], orElse: () => SlatCutAxis.length),
+    frontSlatAxis: SlatCutAxis.values.firstWhere((v) => v.name == json['frontSlatAxis'], orElse: () => SlatCutAxis.length),
+    backSlatAxis: SlatCutAxis.values.firstWhere((v) => v.name == json['backSlatAxis'], orElse: () => SlatCutAxis.length),
+    leftSlatAxis: SlatCutAxis.values.firstWhere((v) => v.name == json['leftSlatAxis'], orElse: () => SlatCutAxis.width),
+    rightSlatAxis: SlatCutAxis.values.firstWhere((v) => v.name == json['rightSlatAxis'], orElse: () => SlatCutAxis.width),
+    screwPerPiece: (json['screwPerPiece'] as num?)?.toDouble() ?? 320,
+    nailPerGram: (json['nailPerGram'] as num?)?.toDouble() ?? 25,
+    nailsPerKg: (json['nailsPerKg'] as num?)?.toInt() ?? 430,
+    laborPerPackage: (json['laborPerPackage'] as num?)?.toDouble() ?? 15000,
+    electricityPerPackage: (json['electricityPerPackage'] as num?)?.toDouble() ?? 1500,
+    overheadPerPackage: (json['overheadPerPackage'] as num?)?.toDouble() ?? 5000,
+    fastenersPerPackage: (json['fastenersPerPackage'] as num?)?.toInt() ?? 68,
+    boardSheetsPerPackage: (json['boardSheetsPerPackage'] as num?)?.toDouble() ?? 0,
+    boardPricePerSheet: (json['boardPricePerSheet'] as num?)?.toDouble() ?? 0,
+    marginPercent: (json['marginPercent'] as num?)?.toDouble() ?? 25,
+  );
+}
+
+class PackingCostResult {
+  const PackingCostResult({
+    required this.frameLengthCm, required this.slatLengthCm,
+    required this.slatCountPerPackage, required this.woodSticksPerPackage,
+    required this.woodCost, required this.fastenerQuantity, required this.fastenerUnit,
+    required this.fastenerCost, required this.laborCost, required this.electricityCost,
+    required this.overheadCost, required this.boardQuantity, required this.boardCost,
+    required this.totalCost, required this.suggestedPrice, required this.roundedPrice,
+  });
+  final double frameLengthCm, slatLengthCm, woodCost, fastenerQuantity, fastenerCost;
+  final int slatCountPerPackage, woodSticksPerPackage;
+  final double laborCost, electricityCost, overheadCost, boardQuantity, boardCost;
+  final double totalCost, suggestedPrice, roundedPrice;
+  final String fastenerUnit;
+
+  factory PackingCostResult.calculate({
+    required double lengthCm, required double widthCm, required double heightCm,
+    int packageCount = 1, PackingFastener fastener = PackingFastener.nails,
+    PackingRates rates = const PackingRates(), bool includeBoard = false,
+  }) {
+    final values = [lengthCm, widthCm, heightCm, rates.woodPerLonjor,
+      rates.woodStickLengthCm, rates.woodLengthMultiplier,
+      rates.woodWidthMultiplier, rates.woodHeightMultiplier, rates.screwPerPiece,
+      rates.nailPerGram, rates.laborPerPackage, rates.electricityPerPackage,
+      rates.overheadPerPackage, rates.boardSheetsPerPackage,
+      rates.boardPricePerSheet, rates.marginPercent];
+    final slatCounts = [rates.topSlats, rates.bottomSlats, rates.frontSlats,
+      rates.backSlats, rates.leftSlats, rates.rightSlats];
+    bool axisAllowed(SlatCutAxis axis, List<SlatCutAxis> allowed) =>
+        allowed.contains(axis);
+    final validFaceAxes =
+        axisAllowed(rates.topSlatAxis, const [SlatCutAxis.length, SlatCutAxis.width]) &&
+        axisAllowed(rates.bottomSlatAxis, const [SlatCutAxis.length, SlatCutAxis.width]) &&
+        axisAllowed(rates.frontSlatAxis, const [SlatCutAxis.length, SlatCutAxis.height]) &&
+        axisAllowed(rates.backSlatAxis, const [SlatCutAxis.length, SlatCutAxis.height]) &&
+        axisAllowed(rates.leftSlatAxis, const [SlatCutAxis.width, SlatCutAxis.height]) &&
+        axisAllowed(rates.rightSlatAxis, const [SlatCutAxis.width, SlatCutAxis.height]);
+    if (!validFaceAxes ||
+        values.any((v) => !v.isFinite || v < 0) ||
+        slatCounts.any((v) => v < 0) ||
+        lengthCm <= 0 || widthCm <= 0 || heightCm <= 0 ||
+        packageCount <= 0 || rates.woodStickLengthCm <= 0 ||
+        rates.nailsPerKg <= 0 || rates.fastenersPerPackage < 0 ||
+        rates.marginPercent < 0 || rates.marginPercent >= 100) {
+      throw ArgumentError('Ukuran, jumlah bilah, tarif, jumlah koli, atau margin tidak valid.');
+    }
+    final frame = rates.woodLengthMultiplier * lengthCm +
+        rates.woodWidthMultiplier * widthCm +
+        rates.woodHeightMultiplier * heightCm;
+    final slatCount = slatCounts.fold<int>(0, (sum, count) => sum + count);
+    double cutLength(SlatCutAxis axis) => switch (axis) {
+      SlatCutAxis.length => lengthCm,
+      SlatCutAxis.width => widthCm,
+      SlatCutAxis.height => heightCm,
+    };
+    final slatLength = rates.topSlats * cutLength(rates.topSlatAxis) +
+        rates.bottomSlats * cutLength(rates.bottomSlatAxis) +
+        rates.frontSlats * cutLength(rates.frontSlatAxis) +
+        rates.backSlats * cutLength(rates.backSlatAxis) +
+        rates.leftSlats * cutLength(rates.leftSlatAxis) +
+        rates.rightSlats * cutLength(rates.rightSlatAxis);
+    final sticks = ((frame + slatLength) / rates.woodStickLengthCm).ceil();
+    final wood = sticks * rates.woodPerLonjor * packageCount;
+    final count = rates.fastenersPerPackage * packageCount;
+    final fastenerQty = fastener == PackingFastener.nails
+        ? count * 1000 / rates.nailsPerKg : count.toDouble();
+    final fastenerCost = fastener == PackingFastener.nails
+        ? fastenerQty * rates.nailPerGram : fastenerQty * rates.screwPerPiece;
+    final labor = rates.laborPerPackage * packageCount;
+    final electricity = rates.electricityPerPackage * packageCount;
+    final overhead = rates.overheadPerPackage * packageCount;
+    final boardQty = includeBoard ? rates.boardSheetsPerPackage * packageCount : 0.0;
+    final board = boardQty * rates.boardPricePerSheet;
+    final total = wood + fastenerCost + labor + electricity + overhead + board;
+    final suggested = total / (1 - rates.marginPercent / 100);
+    return PackingCostResult(
+      frameLengthCm: frame, slatLengthCm: slatLength,
+      slatCountPerPackage: slatCount, woodSticksPerPackage: sticks,
+      fastenerQuantity: fastenerQty,
+      fastenerUnit: fastener == PackingFastener.nails ? 'gram' : 'buah',
+      woodCost: wood, fastenerCost: fastenerCost, laborCost: labor,
+      electricityCost: electricity, overheadCost: overhead,
+      boardQuantity: boardQty, boardCost: board,
+      totalCost: total, suggestedPrice: suggested,
+      roundedPrice: (suggested / 1000).ceil() * 1000.0,
+    );
+  }
+}
