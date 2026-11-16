@@ -177,6 +177,10 @@ class PackingCostResult {
     if (!validFaceAxes ||
         values.any((v) => !v.isFinite || v < 0) ||
         slatCounts.any((v) => v < 0) ||
+        [rates.woodLengthMultiplier, rates.woodWidthMultiplier,
+          rates.woodHeightMultiplier].any(
+            (v) => v != v.roundToDouble(),
+          ) ||
         lengthCm <= 0 || widthCm <= 0 || heightCm <= 0 ||
         packageCount <= 0 || rates.woodStickLengthCm <= 0 ||
         rates.nailsPerKg <= 0 || rates.fastenersPerPackage < 0 ||
@@ -198,12 +202,12 @@ class PackingCostResult {
         rates.backSlats * cutLength(rates.backSlatAxis) +
         rates.leftSlats * cutLength(rates.leftSlatAxis) +
         rates.rightSlats * cutLength(rates.rightSlatAxis);
-    // Build the actual cut list for one package. The frame formula remains
-    // 4P + 4L + 4T; slats follow their individually selected cut axes.
+    // Build the actual cut list for one package using the same frame
+    // multipliers as frameLengthCm. Defaults remain 4P + 4L + 4T.
     final cuts = <double>[
-      ...List<double>.filled(4, lengthCm),
-      ...List<double>.filled(4, widthCm),
-      ...List<double>.filled(4, heightCm),
+      ...List<double>.filled(rates.woodLengthMultiplier.toInt(), lengthCm),
+      ...List<double>.filled(rates.woodWidthMultiplier.toInt(), widthCm),
+      ...List<double>.filled(rates.woodHeightMultiplier.toInt(), heightCm),
       ...List<double>.filled(rates.topSlats, cutLength(rates.topSlatAxis)),
       ...List<double>.filled(rates.bottomSlats, cutLength(rates.bottomSlatAxis)),
       ...List<double>.filled(rates.frontSlats, cutLength(rates.frontSlatAxis)),
