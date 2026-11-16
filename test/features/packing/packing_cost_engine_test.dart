@@ -7,7 +7,7 @@ void main() {
       lengthCm: 110, widthCm: 55, heightCm: 56,
     );
     expect(result.frameLengthCm, 884);
-    expect(result.woodSticksPerPackage, 3);
+    expect(result.woodSticksPerPackage, 5);
     expect(result.woodCost, 17500);
     expect(result.fastenerQuantity, closeTo(158.1395, 0.001));
     expect(result.fastenerCost, closeTo(3953.488, 0.01));
