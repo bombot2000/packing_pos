@@ -10,12 +10,12 @@ void main() {
     // One extra slat on each face: 4 slats run along length, 2 along width.
     expect(result.slatCountPerPackage, 6);
     expect(result.slatLengthCm, 550);
-    expect(result.woodSticksPerPackage, 8);
-    expect(result.woodCost, 28000);
+    expect(result.woodSticksPerPackage, 9);
+    expect(result.woodCost, 31500);
     expect(result.fastenerQuantity, closeTo(158.1395, 0.001));
     expect(result.fastenerCost, closeTo(3953.488, 0.01));
-    expect(result.totalCost, closeTo(53453.488, 0.01));
-    expect(result.roundedPrice, 72000);
+    expect(result.totalCost, closeTo(56953.488, 0.01));
+    expect(result.roundedPrice, 76000);
     expect(result.boardCost, 0);
   });
 
@@ -44,6 +44,15 @@ void main() {
       lengthCm: 110, widthCm: 55, heightCm: 56, rates: rates,
     );
     expect(result.slatLengthCm, 55 + 2 * 110 + 3 * 56 + 55);
+  });
+
+  test('rejects a cut longer than one stock lonjor', () {
+    expect(
+      () => PackingCostResult.calculate(
+        lengthCm: 201, widthCm: 43, heightCm: 45,
+      ),
+      throwsArgumentError,
+    );
   });
 
   test('quantity multiplies wood and per-package operating costs', () {
