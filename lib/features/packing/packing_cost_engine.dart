@@ -102,7 +102,6 @@ class PackingRates {
     );
   }
 }
-}
 
 class PackingCostResult {
   const PackingCostResult({
