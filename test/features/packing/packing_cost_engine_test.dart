@@ -19,6 +19,34 @@ void main() {
     expect(result.boardCost, 0);
   });
 
+  test('frame cut counts follow the configured frame multipliers', () {
+    const rates = PackingRates(
+      woodLengthMultiplier: 2,
+      woodWidthMultiplier: 1,
+      woodHeightMultiplier: 1,
+      topSlats: 0, bottomSlats: 0, frontSlats: 0,
+      backSlats: 0, leftSlats: 0, rightSlats: 0,
+    );
+    final result = PackingCostResult.calculate(
+      lengthCm: 20, widthCm: 20, heightCm: 20,
+      rates: rates,
+    );
+
+    expect(result.frameLengthCm, 80);
+    // Four 20 cm frame cuts fit into one 200 cm lonjor.
+    expect(result.woodSticksPerPackage, 1);
+  });
+
+  test('rejects fractional frame cut multipliers', () {
+    expect(
+      () => PackingCostResult.calculate(
+        lengthCm: 20, widthCm: 20, heightCm: 20,
+        rates: const PackingRates(woodLengthMultiplier: 4.5),
+      ),
+      throwsArgumentError,
+    );
+  });
+
   test('one slat divides a face into two and two slats into three', () {
     const rates = PackingRates(
       topSlats: 1, bottomSlats: 2, frontSlats: 0,
