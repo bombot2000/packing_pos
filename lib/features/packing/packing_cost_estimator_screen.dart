@@ -256,7 +256,7 @@ class _PackingCostEstimatorScreenState extends State<PackingCostEstimatorScreen>
             ),
           )),
           const SizedBox(height: 12),
-          const Text('Rumus rangka awal: 8 × panjang + 8 × lebar + 4 × tinggi. Papan penutup terpisah dan tidak wajib. Hasil ini merupakan estimasi, bukan nota transaksi.', style: TextStyle(fontSize: 12)),
+          const Text('Rumus rangka dasar: 4 × panjang + 4 × lebar + 4 × tinggi. Papan penutup terpisah dan tidak wajib. Hasil ini merupakan estimasi, bukan nota transaksi.', style: TextStyle(fontSize: 12)),
         ],
       ),
     );
