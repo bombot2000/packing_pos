@@ -31,6 +31,21 @@ void main() {
     expect(result.slatLengthCm, 6 * 110 + 1 * 55);
   });
 
+  test('slat cut length follows the selected dimension independently per face', () {
+    const rates = PackingRates(
+      topSlats: 1, topSlatAxis: SlatCutAxis.width,
+      bottomSlats: 2, bottomSlatAxis: SlatCutAxis.length,
+      frontSlats: 1, frontSlatAxis: SlatCutAxis.height,
+      backSlats: 1, backSlatAxis: SlatCutAxis.height,
+      leftSlats: 1, leftSlatAxis: SlatCutAxis.height,
+      rightSlats: 1, rightSlatAxis: SlatCutAxis.width,
+    );
+    final result = PackingCostResult.calculate(
+      lengthCm: 110, widthCm: 55, heightCm: 56, rates: rates,
+    );
+    expect(result.slatLengthCm, 55 + 2 * 110 + 4 * 56);
+  });
+
   test('quantity multiplies wood and per-package operating costs', () {
     final result = PackingCostResult.calculate(
       lengthCm: 54, widthCm: 43, heightCm: 45, packageCount: 3,
@@ -78,6 +93,9 @@ void main() {
       boardSheetsPerPackage: 1.5, boardPricePerSheet: 18000,
       marginPercent: 30, topSlats: 2, bottomSlats: 0,
       frontSlats: 3, backSlats: 1, leftSlats: 4, rightSlats: 2,
+      topSlatAxis: SlatCutAxis.width, bottomSlatAxis: SlatCutAxis.height,
+      frontSlatAxis: SlatCutAxis.height, backSlatAxis: SlatCutAxis.width,
+      leftSlatAxis: SlatCutAxis.height, rightSlatAxis: SlatCutAxis.length,
     );
     final restored = PackingRates.fromJson(rates.toJson());
     expect(restored.woodPerLonjor, 5000);
@@ -91,5 +109,11 @@ void main() {
     expect(restored.backSlats, 1);
     expect(restored.leftSlats, 4);
     expect(restored.rightSlats, 2);
+    expect(restored.topSlatAxis, SlatCutAxis.width);
+    expect(restored.bottomSlatAxis, SlatCutAxis.height);
+    expect(restored.frontSlatAxis, SlatCutAxis.height);
+    expect(restored.backSlatAxis, SlatCutAxis.width);
+    expect(restored.leftSlatAxis, SlatCutAxis.height);
+    expect(restored.rightSlatAxis, SlatCutAxis.length);
   });
 }
