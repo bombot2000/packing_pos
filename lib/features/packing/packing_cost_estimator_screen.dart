@@ -38,6 +38,9 @@ class _PackingCostEstimatorScreenState extends State<PackingCostEstimatorScreen>
   final _leftSlats = TextEditingController(text: '1');
   final _rightSlats = TextEditingController(text: '1');
   PackingFastener _fastener = PackingFastener.nails;
+  SlatCutAxis _topAxis = SlatCutAxis.length, _bottomAxis = SlatCutAxis.length;
+  SlatCutAxis _frontAxis = SlatCutAxis.length, _backAxis = SlatCutAxis.length;
+  SlatCutAxis _leftAxis = SlatCutAxis.width, _rightAxis = SlatCutAxis.width;
   bool _includeBoard = false, _loading = true, _saving = false;
   static final _currency = NumberFormat.currency(locale: 'id_ID', symbol: 'Rp', decimalDigits: 0);
 
@@ -60,6 +63,9 @@ class _PackingCostEstimatorScreenState extends State<PackingCostEstimatorScreen>
     topSlats: _integer(_topSlats), bottomSlats: _integer(_bottomSlats),
     frontSlats: _integer(_frontSlats), backSlats: _integer(_backSlats),
     leftSlats: _integer(_leftSlats), rightSlats: _integer(_rightSlats),
+    topSlatAxis: _topAxis, bottomSlatAxis: _bottomAxis,
+    frontSlatAxis: _frontAxis, backSlatAxis: _backAxis,
+    leftSlatAxis: _leftAxis, rightSlatAxis: _rightAxis,
     woodPerLonjor: _number(_wood), woodStickLengthCm: _number(_stickLength),
     screwPerPiece: _number(_screw), nailPerGram: _number(_nail),
     nailsPerKg: _integer(_nailsPerKg), fastenersPerPackage: _integer(_fasteners),
@@ -104,6 +110,9 @@ class _PackingCostEstimatorScreenState extends State<PackingCostEstimatorScreen>
         _backSlats.text = r.backSlats.toString();
         _leftSlats.text = r.leftSlats.toString();
         _rightSlats.text = r.rightSlats.toString();
+        _topAxis = r.topSlatAxis; _bottomAxis = r.bottomSlatAxis;
+        _frontAxis = r.frontSlatAxis; _backAxis = r.backSlatAxis;
+        _leftAxis = r.leftSlatAxis; _rightAxis = r.rightSlatAxis;
       }
     } catch (_) {
       // Invalid preference data falls back to safe defaults; no transaction data is touched.
@@ -141,6 +150,18 @@ class _PackingCostEstimatorScreenState extends State<PackingCostEstimatorScreen>
     onChanged: (_) => setState(() {}),
     decoration: InputDecoration(labelText: label, suffixText: suffix, border: const OutlineInputBorder(), isDense: true),
   );
+
+  Widget _axisField(String label, SlatCutAxis value, ValueChanged<SlatCutAxis?> onChanged) =>
+    DropdownButtonFormField<SlatCutAxis>(
+      value: value,
+      decoration: InputDecoration(labelText: label, border: const OutlineInputBorder(), isDense: true),
+      items: const [
+        DropdownMenuItem(value: SlatCutAxis.length, child: Text('Panjang')),
+        DropdownMenuItem(value: SlatCutAxis.width, child: Text('Lebar')),
+        DropdownMenuItem(value: SlatCutAxis.height, child: Text('Tinggi')),
+      ],
+      onChanged: onChanged,
+    );
 
   Widget _cost(String label, double amount) => Padding(
     padding: const EdgeInsets.symmetric(vertical: 5),
@@ -203,6 +224,26 @@ class _PackingCostEstimatorScreenState extends State<PackingCostEstimatorScreen>
                 Expanded(child: _field('Kiri', _leftSlats, suffix: 'bilah')),
                 const SizedBox(width: 8),
                 Expanded(child: _field('Kanan', _rightSlats, suffix: 'bilah')),
+              ]),
+              const SizedBox(height: 12),
+              const Text('Arah potong bilah (sesuaikan kondisi pemasangan)', style: TextStyle(fontWeight: FontWeight.w600)),
+              const SizedBox(height: 8),
+              Row(children: [
+                Expanded(child: _axisField('Atas: potong searah', _topAxis, (v) => setState(() => _topAxis = v ?? _topAxis))),
+                const SizedBox(width: 8),
+                Expanded(child: _axisField('Bawah: potong searah', _bottomAxis, (v) => setState(() => _bottomAxis = v ?? _bottomAxis))),
+              ]),
+              const SizedBox(height: 8),
+              Row(children: [
+                Expanded(child: _axisField('Depan: potong searah', _frontAxis, (v) => setState(() => _frontAxis = v ?? _frontAxis))),
+                const SizedBox(width: 8),
+                Expanded(child: _axisField('Belakang: potong searah', _backAxis, (v) => setState(() => _backAxis = v ?? _backAxis))),
+              ]),
+              const SizedBox(height: 8),
+              Row(children: [
+                Expanded(child: _axisField('Kiri: potong searah', _leftAxis, (v) => setState(() => _leftAxis = v ?? _leftAxis))),
+                const SizedBox(width: 8),
+                Expanded(child: _axisField('Kanan: potong searah', _rightAxis, (v) => setState(() => _rightAxis = v ?? _rightAxis))),
               ]),
               const SizedBox(height: 14),
               Text('Bahan pengikat', style: Theme.of(context).textTheme.titleMedium),
@@ -278,6 +319,7 @@ class _PackingCostEstimatorScreenState extends State<PackingCostEstimatorScreen>
                 Text('Jumlah bilah: ${result.slatCountPerPackage} buah/koli'),
                 Text('Panjang bilah tambahan: ${result.slatLengthCm.toStringAsFixed(0)} cm/koli'),
                 Text('Pembagian bidang: atas ${_topSlats.text}, bawah ${_bottomSlats.text}, depan ${_frontSlats.text}, belakang ${_backSlats.text}, kiri ${_leftSlats.text}, kanan ${_rightSlats.text} bilah'),
+                Text('Arah potong: atas ${_topAxis.name}, bawah ${_bottomAxis.name}, depan ${_frontAxis.name}, belakang ${_backAxis.name}, kiri ${_leftAxis.name}, kanan ${_rightAxis.name}'),
                 Text('Kayu: ${result.woodSticksPerPackage} lonjor/koli × ${_integer(_quantity)} koli'),
                 Text(_fastener == PackingFastener.nails
                   ? 'Paku: ${result.fastenerQuantity.toStringAsFixed(1)} gram'
