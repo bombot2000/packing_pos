@@ -66,6 +66,38 @@ void main() {
     expect(result.overheadCost, 15000);
   });
 
+  test('each package keeps its own cutting plan and does not share offcuts', () {
+    final onePackage = PackingCostResult.calculate(
+      lengthCm: 54, widthCm: 43, heightCm: 45,
+      packageCount: 1,
+    );
+    final twoPackages = PackingCostResult.calculate(
+      lengthCm: 54, widthCm: 43, heightCm: 45,
+      packageCount: 2,
+    );
+
+    expect(twoPackages.woodSticksPerPackage, onePackage.woodSticksPerPackage);
+    expect(twoPackages.woodCost, onePackage.woodCost * 2);
+  });
+
+  test('additional slats are included in the per-package cutting plan', () {
+    const noSlats = PackingRates(
+      topSlats: 0, bottomSlats: 0, frontSlats: 0,
+      backSlats: 0, leftSlats: 0, rightSlats: 0,
+    );
+    final frameOnly = PackingCostResult.calculate(
+      lengthCm: 100, widthCm: 50, heightCm: 40,
+      rates: noSlats,
+    );
+    final withSlats = PackingCostResult.calculate(
+      lengthCm: 100, widthCm: 50, heightCm: 40,
+    );
+
+    expect(withSlats.slatCountPerPackage, 6);
+    expect(withSlats.woodSticksPerPackage,
+        greaterThan(frameOnly.woodSticksPerPackage));
+  });
+
   test('screw mode and optional board are calculated separately', () {
     final result = PackingCostResult.calculate(
       lengthCm: 54, widthCm: 43, heightCm: 45,
