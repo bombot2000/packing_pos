@@ -91,7 +91,7 @@ void main() {
   test('legacy saved axes are normalized to valid face dimensions', () {
     final restored = PackingRates.fromJson({
       'topSlatAxis': 'height',
-      'bottomSlatAxis': 'width',
+      'bottomSlatAxis': 'height',
       'frontSlatAxis': 'width',
       'backSlatAxis': 'length',
       'leftSlatAxis': 'length',
