@@ -12,6 +12,7 @@ on:
       - feature/packing-calculation-engine
       - feature/refund-ledger-v8-20261114
       - feature/packing-cost-estimator-20261116
+      - fix/packing-estimator-axis-settings
     tags:
       - 'v*'
 
