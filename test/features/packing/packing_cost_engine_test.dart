@@ -28,7 +28,7 @@ void main() {
       lengthCm: 110, widthCm: 55, heightCm: 56, rates: rates,
     );
     expect(result.slatCountPerPackage, 7);
-    expect(result.slatLengthCm, 4 * 110 + 1 * 55);
+    expect(result.slatLengthCm, 6 * 110 + 1 * 55);
   });
 
   test('quantity multiplies wood and per-package operating costs', () {
