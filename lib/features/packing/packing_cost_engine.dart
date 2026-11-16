@@ -1,5 +1,7 @@
 enum PackingFastener { nails, screws }
 
+enum SlatCutAxis { length, width, height }
+
 class PackingRates {
   const PackingRates({
     this.woodPerLonjor = 3500,
@@ -13,6 +15,12 @@ class PackingRates {
     this.backSlats = 1,
     this.leftSlats = 1,
     this.rightSlats = 1,
+    this.topSlatAxis = SlatCutAxis.length,
+    this.bottomSlatAxis = SlatCutAxis.length,
+    this.frontSlatAxis = SlatCutAxis.length,
+    this.backSlatAxis = SlatCutAxis.length,
+    this.leftSlatAxis = SlatCutAxis.width,
+    this.rightSlatAxis = SlatCutAxis.width,
     this.screwPerPiece = 320,
     this.nailPerGram = 25,
     this.nailsPerKg = 430,
@@ -29,6 +37,7 @@ class PackingRates {
   final double woodLengthMultiplier, woodWidthMultiplier, woodHeightMultiplier;
   // Number of extra slats on each face; 1 slat divides a face into 2 sections.
   final int topSlats, bottomSlats, frontSlats, backSlats, leftSlats, rightSlats;
+  final SlatCutAxis topSlatAxis, bottomSlatAxis, frontSlatAxis, backSlatAxis, leftSlatAxis, rightSlatAxis;
   final double screwPerPiece, nailPerGram;
   final int nailsPerKg, fastenersPerPackage;
   final double laborPerPackage, electricityPerPackage, overheadPerPackage;
@@ -40,6 +49,9 @@ class PackingRates {
     'woodHeightMultiplier': woodHeightMultiplier,
     'topSlats': topSlats, 'bottomSlats': bottomSlats, 'frontSlats': frontSlats,
     'backSlats': backSlats, 'leftSlats': leftSlats, 'rightSlats': rightSlats,
+    'topSlatAxis': topSlatAxis.name, 'bottomSlatAxis': bottomSlatAxis.name,
+    'frontSlatAxis': frontSlatAxis.name, 'backSlatAxis': backSlatAxis.name,
+    'leftSlatAxis': leftSlatAxis.name, 'rightSlatAxis': rightSlatAxis.name,
     'screwPerPiece': screwPerPiece, 'nailPerGram': nailPerGram,
     'nailsPerKg': nailsPerKg, 'laborPerPackage': laborPerPackage,
     'electricityPerPackage': electricityPerPackage, 'overheadPerPackage': overheadPerPackage,
@@ -59,6 +71,12 @@ class PackingRates {
     backSlats: (json['backSlats'] as num?)?.toInt() ?? 1,
     leftSlats: (json['leftSlats'] as num?)?.toInt() ?? 1,
     rightSlats: (json['rightSlats'] as num?)?.toInt() ?? 1,
+    topSlatAxis: SlatCutAxis.values.firstWhere((v) => v.name == json['topSlatAxis'], orElse: () => SlatCutAxis.length),
+    bottomSlatAxis: SlatCutAxis.values.firstWhere((v) => v.name == json['bottomSlatAxis'], orElse: () => SlatCutAxis.length),
+    frontSlatAxis: SlatCutAxis.values.firstWhere((v) => v.name == json['frontSlatAxis'], orElse: () => SlatCutAxis.length),
+    backSlatAxis: SlatCutAxis.values.firstWhere((v) => v.name == json['backSlatAxis'], orElse: () => SlatCutAxis.length),
+    leftSlatAxis: SlatCutAxis.values.firstWhere((v) => v.name == json['leftSlatAxis'], orElse: () => SlatCutAxis.width),
+    rightSlatAxis: SlatCutAxis.values.firstWhere((v) => v.name == json['rightSlatAxis'], orElse: () => SlatCutAxis.width),
     screwPerPiece: (json['screwPerPiece'] as num?)?.toDouble() ?? 320,
     nailPerGram: (json['nailPerGram'] as num?)?.toDouble() ?? 25,
     nailsPerKg: (json['nailsPerKg'] as num?)?.toInt() ?? 430,
@@ -111,12 +129,18 @@ class PackingCostResult {
     final frame = rates.woodLengthMultiplier * lengthCm +
         rates.woodWidthMultiplier * widthCm +
         rates.woodHeightMultiplier * heightCm;
-    // Slats on top/bottom and front/back run along the package length.
-    // Slats on left/right run along its width.
     final slatCount = slatCounts.fold<int>(0, (sum, count) => sum + count);
-    final slatLength = (rates.topSlats + rates.bottomSlats +
-        rates.frontSlats + rates.backSlats) * lengthCm +
-        (rates.leftSlats + rates.rightSlats) * widthCm;
+    double cutLength(SlatCutAxis axis) => switch (axis) {
+      SlatCutAxis.length => lengthCm,
+      SlatCutAxis.width => widthCm,
+      SlatCutAxis.height => heightCm,
+    };
+    final slatLength = rates.topSlats * cutLength(rates.topSlatAxis) +
+        rates.bottomSlats * cutLength(rates.bottomSlatAxis) +
+        rates.frontSlats * cutLength(rates.frontSlatAxis) +
+        rates.backSlats * cutLength(rates.backSlatAxis) +
+        rates.leftSlats * cutLength(rates.leftSlatAxis) +
+        rates.rightSlats * cutLength(rates.rightSlatAxis);
     final sticks = ((frame + slatLength) / rates.woodStickLengthCm).ceil();
     final wood = sticks * rates.woodPerLonjor * packageCount;
     final count = rates.fastenersPerPackage * packageCount;
