@@ -59,7 +59,18 @@ class PackingRates {
     'boardPricePerSheet': boardPricePerSheet, 'marginPercent': marginPercent,
   };
 
-  factory PackingRates.fromJson(Map<String, dynamic> json) => PackingRates(
+  factory PackingRates.fromJson(Map<String, dynamic> json) {
+    SlatCutAxis readAxis(
+      String key,
+      List<SlatCutAxis> allowed,
+      SlatCutAxis fallback,
+    ) {
+      final stored = SlatCutAxis.values.where((axis) => axis.name == json[key]);
+      final axis = stored.isEmpty ? fallback : stored.first;
+      return allowed.contains(axis) ? axis : fallback;
+    }
+
+    return PackingRates(
     woodPerLonjor: (json['woodPerLonjor'] as num?)?.toDouble() ?? 3500,
     woodStickLengthCm: (json['woodStickLengthCm'] as num?)?.toDouble() ?? 200,
     woodLengthMultiplier: (json['woodLengthMultiplier'] as num?)?.toDouble() ?? 4,
@@ -71,12 +82,7 @@ class PackingRates {
     backSlats: (json['backSlats'] as num?)?.toInt() ?? 1,
     leftSlats: (json['leftSlats'] as num?)?.toInt() ?? 1,
     rightSlats: (json['rightSlats'] as num?)?.toInt() ?? 1,
-    topSlatAxis: SlatCutAxis.values.firstWhere((v) => v.name == json['topSlatAxis'], orElse: () => SlatCutAxis.length),
-    bottomSlatAxis: SlatCutAxis.values.firstWhere((v) => v.name == json['bottomSlatAxis'], orElse: () => SlatCutAxis.length),
-    frontSlatAxis: SlatCutAxis.values.firstWhere((v) => v.name == json['frontSlatAxis'], orElse: () => SlatCutAxis.length),
-    backSlatAxis: SlatCutAxis.values.firstWhere((v) => v.name == json['backSlatAxis'], orElse: () => SlatCutAxis.length),
-    leftSlatAxis: SlatCutAxis.values.firstWhere((v) => v.name == json['leftSlatAxis'], orElse: () => SlatCutAxis.width),
-    rightSlatAxis: SlatCutAxis.values.firstWhere((v) => v.name == json['rightSlatAxis'], orElse: () => SlatCutAxis.width),
+
     screwPerPiece: (json['screwPerPiece'] as num?)?.toDouble() ?? 320,
     nailPerGram: (json['nailPerGram'] as num?)?.toDouble() ?? 25,
     nailsPerKg: (json['nailsPerKg'] as num?)?.toInt() ?? 430,
@@ -87,7 +93,15 @@ class PackingRates {
     boardSheetsPerPackage: (json['boardSheetsPerPackage'] as num?)?.toDouble() ?? 0,
     boardPricePerSheet: (json['boardPricePerSheet'] as num?)?.toDouble() ?? 0,
     marginPercent: (json['marginPercent'] as num?)?.toDouble() ?? 25,
-  );
+    topSlatAxis: readAxis('topSlatAxis', const [SlatCutAxis.length, SlatCutAxis.width], SlatCutAxis.length),
+    bottomSlatAxis: readAxis('bottomSlatAxis', const [SlatCutAxis.length, SlatCutAxis.width], SlatCutAxis.length),
+    frontSlatAxis: readAxis('frontSlatAxis', const [SlatCutAxis.length, SlatCutAxis.height], SlatCutAxis.length),
+    backSlatAxis: readAxis('backSlatAxis', const [SlatCutAxis.length, SlatCutAxis.height], SlatCutAxis.length),
+    leftSlatAxis: readAxis('leftSlatAxis', const [SlatCutAxis.width, SlatCutAxis.height], SlatCutAxis.width),
+    rightSlatAxis: readAxis('rightSlatAxis', const [SlatCutAxis.width, SlatCutAxis.height], SlatCutAxis.width),
+    );
+  }
+}
 }
 
 class PackingCostResult {
