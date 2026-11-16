@@ -151,17 +151,24 @@ class _PackingCostEstimatorScreenState extends State<PackingCostEstimatorScreen>
     decoration: InputDecoration(labelText: label, suffixText: suffix, border: const OutlineInputBorder(), isDense: true),
   );
 
-  Widget _axisField(String label, SlatCutAxis value, ValueChanged<SlatCutAxis?> onChanged) =>
-    DropdownButtonFormField<SlatCutAxis>(
-      value: value,
-      decoration: InputDecoration(labelText: label, border: const OutlineInputBorder(), isDense: true),
-      items: const [
-        DropdownMenuItem(value: SlatCutAxis.length, child: Text('Panjang')),
-        DropdownMenuItem(value: SlatCutAxis.width, child: Text('Lebar')),
-        DropdownMenuItem(value: SlatCutAxis.height, child: Text('Tinggi')),
-      ],
-      onChanged: onChanged,
-    );
+  Widget _axisField(
+    String label,
+    SlatCutAxis value,
+    List<SlatCutAxis> allowedAxes,
+    ValueChanged<SlatCutAxis?> onChanged,
+  ) => DropdownButtonFormField<SlatCutAxis>(
+    value: allowedAxes.contains(value) ? value : allowedAxes.first,
+    decoration: InputDecoration(labelText: label, border: const OutlineInputBorder(), isDense: true),
+    items: allowedAxes.map((axis) => DropdownMenuItem(
+      value: axis,
+      child: Text(switch (axis) {
+        SlatCutAxis.length => 'Panjang',
+        SlatCutAxis.width => 'Lebar',
+        SlatCutAxis.height => 'Tinggi',
+      }),
+    )).toList(),
+    onChanged: onChanged,
+  );
 
   Widget _cost(String label, double amount) => Padding(
     padding: const EdgeInsets.symmetric(vertical: 5),
@@ -229,21 +236,21 @@ class _PackingCostEstimatorScreenState extends State<PackingCostEstimatorScreen>
               const Text('Arah potong bilah (sesuaikan kondisi pemasangan)', style: TextStyle(fontWeight: FontWeight.w600)),
               const SizedBox(height: 8),
               Row(children: [
-                Expanded(child: _axisField('Atas: potong searah', _topAxis, (v) => setState(() => _topAxis = v ?? _topAxis))),
+                Expanded(child: _axisField('Atas: potong searah', _topAxis, const [SlatCutAxis.length, SlatCutAxis.width], (v) => setState(() => _topAxis = v ?? _topAxis))),
                 const SizedBox(width: 8),
-                Expanded(child: _axisField('Bawah: potong searah', _bottomAxis, (v) => setState(() => _bottomAxis = v ?? _bottomAxis))),
+                Expanded(child: _axisField('Bawah: potong searah', _bottomAxis, const [SlatCutAxis.length, SlatCutAxis.width], (v) => setState(() => _bottomAxis = v ?? _bottomAxis))),
               ]),
               const SizedBox(height: 8),
               Row(children: [
-                Expanded(child: _axisField('Depan: potong searah', _frontAxis, (v) => setState(() => _frontAxis = v ?? _frontAxis))),
+                Expanded(child: _axisField('Depan: potong searah', _frontAxis, const [SlatCutAxis.length, SlatCutAxis.height], (v) => setState(() => _frontAxis = v ?? _frontAxis))),
                 const SizedBox(width: 8),
-                Expanded(child: _axisField('Belakang: potong searah', _backAxis, (v) => setState(() => _backAxis = v ?? _backAxis))),
+                Expanded(child: _axisField('Belakang: potong searah', _backAxis, const [SlatCutAxis.length, SlatCutAxis.height], (v) => setState(() => _backAxis = v ?? _backAxis))),
               ]),
               const SizedBox(height: 8),
               Row(children: [
-                Expanded(child: _axisField('Kiri: potong searah', _leftAxis, (v) => setState(() => _leftAxis = v ?? _leftAxis))),
+                Expanded(child: _axisField('Kiri: potong searah', _leftAxis, const [SlatCutAxis.width, SlatCutAxis.height], (v) => setState(() => _leftAxis = v ?? _leftAxis))),
                 const SizedBox(width: 8),
-                Expanded(child: _axisField('Kanan: potong searah', _rightAxis, (v) => setState(() => _rightAxis = v ?? _rightAxis))),
+                Expanded(child: _axisField('Kanan: potong searah', _rightAxis, const [SlatCutAxis.width, SlatCutAxis.height], (v) => setState(() => _rightAxis = v ?? _rightAxis))),
               ]),
               const SizedBox(height: 14),
               Text('Bahan pengikat', style: Theme.of(context).textTheme.titleMedium),
