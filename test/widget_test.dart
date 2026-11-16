@@ -43,8 +43,15 @@ void main() {
     // pumpAndSettle while the field is focused.
     await tester.pump(const Duration(milliseconds: 100));
 
+    // Dismiss the simulated soft keyboard first; otherwise the first system
+    // Back event may only close the keyboard instead of popping the route.
+    tester.testTextInput.hide();
+    await tester.pump();
     await tester.binding.handlePopRoute();
-    await tester.pumpAndSettle();
+
+    // Do not use pumpAndSettle here: the destination screen may contain
+    // repeating animations that prevent the test clock from settling.
+    await tester.pump(const Duration(milliseconds: 500));
 
     expect(find.text('Packing POS'), findsOneWidget);
     expect(tester.takeException(), isNull);
