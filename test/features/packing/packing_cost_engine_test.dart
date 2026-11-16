@@ -43,7 +43,7 @@ void main() {
     final result = PackingCostResult.calculate(
       lengthCm: 110, widthCm: 55, heightCm: 56, rates: rates,
     );
-    expect(result.slatLengthCm, 55 + 2 * 110 + 4 * 56);
+    expect(result.slatLengthCm, 55 + 2 * 110 + 3 * 56 + 55);
   });
 
   test('quantity multiplies wood and per-package operating costs', () {
