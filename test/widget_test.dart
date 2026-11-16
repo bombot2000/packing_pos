@@ -38,7 +38,11 @@ void main() {
     await tester.tap(find.text('Transaksi packing baru'));
     await tester.pump(const Duration(milliseconds: 500));
 
-    final customerField = find.widgetWithText(TextField, 'Nama pelanggan');
+    final customerField = find.byWidgetPredicate(
+      (widget) => widget is TextField &&
+          widget.decoration?.labelText == 'Nama pelanggan',
+      description: 'TextField label Nama pelanggan',
+    );
     expect(customerField, findsOneWidget);
     await tester.enterText(customerField, 'Pelanggan Uji');
     await tester.pump(const Duration(milliseconds: 100));
