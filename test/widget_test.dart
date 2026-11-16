@@ -29,4 +29,23 @@ void main() {
 
     expect(find.text('Master bahan (arsip)'), findsOneWidget);
   });
+  testWidgets('typing a customer name then navigating back does not crash', (tester) async {
+    await tester.pumpWidget(const PackingPosApp());
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Transaksi packing baru'));
+    await tester.pumpAndSettle();
+
+    final customerField = find.widgetWithText(TextField, 'Nama pelanggan');
+    expect(customerField, findsOneWidget);
+    await tester.enterText(customerField, 'Pelanggan Uji');
+    await tester.pumpAndSettle();
+
+    await tester.binding.handlePopRoute();
+    await tester.pumpAndSettle();
+
+    expect(find.text('Packing POS'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
 }
