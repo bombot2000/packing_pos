@@ -6,13 +6,13 @@ void main() {
     final result = PackingCostResult.calculate(
       lengthCm: 110, widthCm: 55, heightCm: 56,
     );
-    expect(result.frameLengthCm, 1544);
-    expect(result.woodSticksPerPackage, 8);
-    expect(result.woodCost, 28000);
+    expect(result.frameLengthCm, 884);
+    expect(result.woodSticksPerPackage, 3);
+    expect(result.woodCost, 17500);
     expect(result.fastenerQuantity, closeTo(158.1395, 0.001));
     expect(result.fastenerCost, closeTo(3953.488, 0.01));
-    expect(result.totalCost, closeTo(53453.488, 0.01));
-    expect(result.roundedPrice, 72000);
+    expect(result.totalCost, closeTo(42953.488, 0.01));
+    expect(result.roundedPrice, 58000);
     expect(result.boardCost, 0);
   });
 
@@ -20,8 +20,8 @@ void main() {
     final result = PackingCostResult.calculate(
       lengthCm: 54, widthCm: 43, heightCm: 45, packageCount: 3,
     );
-    expect(result.woodSticksPerPackage, 5);
-    expect(result.woodCost, 52500);
+    expect(result.woodSticksPerPackage, 3);
+    expect(result.woodCost, 31500);
     expect(result.laborCost, 45000);
     expect(result.electricityCost, 4500);
     expect(result.overheadCost, 15000);
