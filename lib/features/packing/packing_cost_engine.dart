@@ -1,5 +1,4 @@
 enum PackingFastener { nails, screws }
-enum PackingWoodPattern { spaced, close }
 
 class PackingRates {
   const PackingRates({
@@ -8,8 +7,12 @@ class PackingRates {
     this.woodLengthMultiplier = 4,
     this.woodWidthMultiplier = 4,
     this.woodHeightMultiplier = 4,
-    this.slatWidthCm = 5,
-    this.spacedGapCm = 3,
+    this.topSlats = 1,
+    this.bottomSlats = 1,
+    this.frontSlats = 1,
+    this.backSlats = 1,
+    this.leftSlats = 1,
+    this.rightSlats = 1,
     this.screwPerPiece = 320,
     this.nailPerGram = 25,
     this.nailsPerKg = 430,
@@ -24,7 +27,8 @@ class PackingRates {
 
   final double woodPerLonjor, woodStickLengthCm;
   final double woodLengthMultiplier, woodWidthMultiplier, woodHeightMultiplier;
-  final double slatWidthCm, spacedGapCm;
+  // Number of extra slats on each face; 1 slat divides a face into 2 sections.
+  final int topSlats, bottomSlats, frontSlats, backSlats, leftSlats, rightSlats;
   final double screwPerPiece, nailPerGram;
   final int nailsPerKg, fastenersPerPackage;
   final double laborPerPackage, electricityPerPackage, overheadPerPackage;
@@ -33,13 +37,14 @@ class PackingRates {
   Map<String, Object?> toJson() => {
     'woodPerLonjor': woodPerLonjor, 'woodStickLengthCm': woodStickLengthCm,
     'woodLengthMultiplier': woodLengthMultiplier, 'woodWidthMultiplier': woodWidthMultiplier,
-    'woodHeightMultiplier': woodHeightMultiplier, 'slatWidthCm': slatWidthCm,
-    'spacedGapCm': spacedGapCm, 'screwPerPiece': screwPerPiece,
-    'nailPerGram': nailPerGram, 'nailsPerKg': nailsPerKg,
-    'laborPerPackage': laborPerPackage, 'electricityPerPackage': electricityPerPackage,
-    'overheadPerPackage': overheadPerPackage, 'fastenersPerPackage': fastenersPerPackage,
-    'boardSheetsPerPackage': boardSheetsPerPackage, 'boardPricePerSheet': boardPricePerSheet,
-    'marginPercent': marginPercent,
+    'woodHeightMultiplier': woodHeightMultiplier,
+    'topSlats': topSlats, 'bottomSlats': bottomSlats, 'frontSlats': frontSlats,
+    'backSlats': backSlats, 'leftSlats': leftSlats, 'rightSlats': rightSlats,
+    'screwPerPiece': screwPerPiece, 'nailPerGram': nailPerGram,
+    'nailsPerKg': nailsPerKg, 'laborPerPackage': laborPerPackage,
+    'electricityPerPackage': electricityPerPackage, 'overheadPerPackage': overheadPerPackage,
+    'fastenersPerPackage': fastenersPerPackage, 'boardSheetsPerPackage': boardSheetsPerPackage,
+    'boardPricePerSheet': boardPricePerSheet, 'marginPercent': marginPercent,
   };
 
   factory PackingRates.fromJson(Map<String, dynamic> json) => PackingRates(
@@ -48,8 +53,12 @@ class PackingRates {
     woodLengthMultiplier: (json['woodLengthMultiplier'] as num?)?.toDouble() ?? 4,
     woodWidthMultiplier: (json['woodWidthMultiplier'] as num?)?.toDouble() ?? 4,
     woodHeightMultiplier: (json['woodHeightMultiplier'] as num?)?.toDouble() ?? 4,
-    slatWidthCm: (json['slatWidthCm'] as num?)?.toDouble() ?? 5,
-    spacedGapCm: (json['spacedGapCm'] as num?)?.toDouble() ?? 3,
+    topSlats: (json['topSlats'] as num?)?.toInt() ?? 1,
+    bottomSlats: (json['bottomSlats'] as num?)?.toInt() ?? 1,
+    frontSlats: (json['frontSlats'] as num?)?.toInt() ?? 1,
+    backSlats: (json['backSlats'] as num?)?.toInt() ?? 1,
+    leftSlats: (json['leftSlats'] as num?)?.toInt() ?? 1,
+    rightSlats: (json['rightSlats'] as num?)?.toInt() ?? 1,
     screwPerPiece: (json['screwPerPiece'] as num?)?.toDouble() ?? 320,
     nailPerGram: (json['nailPerGram'] as num?)?.toDouble() ?? 25,
     nailsPerKg: (json['nailsPerKg'] as num?)?.toInt() ?? 430,
@@ -73,43 +82,41 @@ class PackingCostResult {
     required this.totalCost, required this.suggestedPrice, required this.roundedPrice,
   });
   final double frameLengthCm, slatLengthCm, woodCost, fastenerQuantity, fastenerCost;
-  final int slatCountPerPackage;
+  final int slatCountPerPackage, woodSticksPerPackage;
   final double laborCost, electricityCost, overheadCost, boardQuantity, boardCost;
   final double totalCost, suggestedPrice, roundedPrice;
-  final int woodSticksPerPackage;
   final String fastenerUnit;
 
   factory PackingCostResult.calculate({
     required double lengthCm, required double widthCm, required double heightCm,
     int packageCount = 1, PackingFastener fastener = PackingFastener.nails,
     PackingRates rates = const PackingRates(), bool includeBoard = false,
-    PackingWoodPattern woodPattern = PackingWoodPattern.spaced,
   }) {
     final values = [lengthCm, widthCm, heightCm, rates.woodPerLonjor,
-      rates.woodStickLengthCm, rates.woodLengthMultiplier, rates.woodWidthMultiplier,
-      rates.woodHeightMultiplier, rates.slatWidthCm, rates.spacedGapCm,
-      rates.screwPerPiece, rates.nailPerGram,
-      rates.laborPerPackage, rates.electricityPerPackage, rates.overheadPerPackage,
-      rates.boardSheetsPerPackage, rates.boardPricePerSheet, rates.marginPercent];
-    if (values.any((v) => !v.isFinite || v < 0) || lengthCm <= 0 ||
-        widthCm <= 0 || heightCm <= 0 || packageCount <= 0 ||
-        rates.woodStickLengthCm <= 0 || rates.slatWidthCm <= 0 ||
-        rates.nailsPerKg <= 0 ||
-        rates.fastenersPerPackage < 0 || rates.marginPercent < 0 ||
-        rates.marginPercent >= 100) {
-      throw ArgumentError('Ukuran, tarif, jumlah koli, atau margin tidak valid.');
+      rates.woodStickLengthCm, rates.woodLengthMultiplier,
+      rates.woodWidthMultiplier, rates.woodHeightMultiplier, rates.screwPerPiece,
+      rates.nailPerGram, rates.laborPerPackage, rates.electricityPerPackage,
+      rates.overheadPerPackage, rates.boardSheetsPerPackage,
+      rates.boardPricePerSheet, rates.marginPercent];
+    final slatCounts = [rates.topSlats, rates.bottomSlats, rates.frontSlats,
+      rates.backSlats, rates.leftSlats, rates.rightSlats];
+    if (values.any((v) => !v.isFinite || v < 0) ||
+        slatCounts.any((v) => v < 0) ||
+        lengthCm <= 0 || widthCm <= 0 || heightCm <= 0 ||
+        packageCount <= 0 || rates.woodStickLengthCm <= 0 ||
+        rates.nailsPerKg <= 0 || rates.fastenersPerPackage < 0 ||
+        rates.marginPercent < 0 || rates.marginPercent >= 100) {
+      throw ArgumentError('Ukuran, jumlah bilah, tarif, jumlah koli, atau margin tidak valid.');
     }
     final frame = rates.woodLengthMultiplier * lengthCm +
-        rates.woodWidthMultiplier * widthCm + rates.woodHeightMultiplier * heightCm;
-    final gap = woodPattern == PackingWoodPattern.close ? 0.0 : rates.spacedGapCm;
-    int slatsAcross(double dimension) =>
-        ((dimension + gap) / (rates.slatWidthCm + gap)).ceil();
-    final topBottomCount = slatsAcross(widthCm);
-    final frontBackCount = slatsAcross(heightCm);
-    final leftRightCount = slatsAcross(heightCm);
-    final slatCount = 2 * (topBottomCount + frontBackCount + leftRightCount);
-    final slatLength = 2 * (topBottomCount * lengthCm +
-        frontBackCount * lengthCm + leftRightCount * widthCm);
+        rates.woodWidthMultiplier * widthCm +
+        rates.woodHeightMultiplier * heightCm;
+    // Slats on top/bottom and front/back run along the package length.
+    // Slats on left/right run along its width.
+    final slatCount = slatCounts.fold<int>(0, (sum, count) => sum + count);
+    final slatLength = (rates.topSlats + rates.bottomSlats +
+        rates.frontSlats + rates.backSlats) * lengthCm +
+        (rates.leftSlats + rates.rightSlats) * widthCm;
     final sticks = ((frame + slatLength) / rates.woodStickLengthCm).ceil();
     final wood = sticks * rates.woodPerLonjor * packageCount;
     final count = rates.fastenersPerPackage * packageCount;
@@ -129,8 +136,9 @@ class PackingCostResult {
       slatCountPerPackage: slatCount, woodSticksPerPackage: sticks,
       fastenerQuantity: fastenerQty,
       fastenerUnit: fastener == PackingFastener.nails ? 'gram' : 'buah',
-      woodCost: wood, fastenerCost: fastenerCost, laborCost: labor, electricityCost: electricity,
-      overheadCost: overhead, boardQuantity: boardQty, boardCost: board,
+      woodCost: wood, fastenerCost: fastenerCost, laborCost: labor,
+      electricityCost: electricity, overheadCost: overhead,
+      boardQuantity: boardQty, boardCost: board,
       totalCost: total, suggestedPrice: suggested,
       roundedPrice: (suggested / 1000).ceil() * 1000.0,
     );
