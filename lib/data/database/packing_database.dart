@@ -211,7 +211,7 @@ class PackingDatabase {
 
   Future<void> _createCashSessionEvents(Database db) async {
     await db.execute('''
-      CREATE TABLE cash_session_events (
+      CREATE TABLE IF NOT EXISTS cash_session_events (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         session_id INTEGER NOT NULL,
         event_type TEXT NOT NULL CHECK(event_type IN ('closed', 'reopened')),
