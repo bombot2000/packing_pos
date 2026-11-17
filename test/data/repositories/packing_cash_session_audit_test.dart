@@ -60,11 +60,6 @@ void main() {
     final events = await repository.cashSessionEvents(sessionId);
     expect(events.map((event) => event['event_type']).toList(), ['closed', 'reopened', 'closed']);
     expect(events[1]['reason'], 'Ada koreksi pencatatan');
-    final previous = Map<String, dynamic>.from(
-      (await repository.cashSessionEvents(sessionId))[1]['snapshot_json'] as String == ''
-          ? <String, dynamic>{}
-          : <String, dynamic>{},
-    );
     expect(events[1]['snapshot_json'], contains('"expected_balance":800'));
     expect(events[1]['snapshot_json'], contains('"counted_balance":800'));
     expect(events[1]['snapshot_json'], contains('"difference":0'));
