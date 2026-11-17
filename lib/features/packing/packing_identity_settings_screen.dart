@@ -17,6 +17,7 @@ class _PackingIdentitySettingsScreenState
   final _name = TextEditingController();
   final _address = TextEditingController();
   final _phone = TextEditingController();
+  final _thankYou = TextEditingController();
   bool _loading = true;
   bool _saving = false;
 
@@ -31,6 +32,7 @@ class _PackingIdentitySettingsScreenState
     _name.dispose();
     _address.dispose();
     _phone.dispose();
+    _thankYou.dispose();
     super.dispose();
   }
 
@@ -41,6 +43,7 @@ class _PackingIdentitySettingsScreenState
       _name.text = values['business_name'] ?? 'Packing POS';
       _address.text = values['business_address'] ?? '';
       _phone.text = values['business_phone'] ?? '';
+      _thankYou.text = values['receipt_thank_you'] ?? 'Terima kasih';
     } catch (error) {
       _message('Gagal memuat pengaturan: ${friendlyError(error)}', error: true);
     } finally {
@@ -64,6 +67,7 @@ class _PackingIdentitySettingsScreenState
         businessName: _name.text,
         address: _address.text,
         phone: _phone.text,
+        thankYouMessage: _thankYou.text,
       );
       if (!mounted) return;
       _message('Identitas usaha berhasil disimpan.');
@@ -118,6 +122,19 @@ class _PackingIdentitySettingsScreenState
                     keyboardType: TextInputType.phone,
                     decoration: const InputDecoration(
                       labelText: 'Nomor telepon (opsional)',
+                      border: OutlineInputBorder(),
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  TextField(
+                    controller: _thankYou,
+                    maxLength: 120,
+                    maxLines: 2,
+                    textCapitalization: TextCapitalization.sentences,
+                    decoration: const InputDecoration(
+                      labelText: 'Ucapan terima kasih pada struk',
+                      hintText: 'Contoh: Terima kasih telah mempercayakan packing kepada kami.',
+                      helperText: 'Kosongkan jika tidak ingin menampilkan ucapan.',
                       border: OutlineInputBorder(),
                     ),
                   ),
