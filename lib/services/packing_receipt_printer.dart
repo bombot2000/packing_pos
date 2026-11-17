@@ -84,12 +84,6 @@ class PackingReceiptPrinter {
     }
   }
 
-  static List<int> _pair(Generator generator, int cols, String left, String right, {PosStyles styles = const PosStyles()}) {
-    final space = cols - left.length - right.length;
-    if (space >= 1) return generator.text('$left${' ' * space}$right', styles: styles);
-    return [...generator.text(left, styles: styles), ...generator.text(right.padLeft(cols), styles: styles)];
-  }
-
   static Future<List<int>> testPageBytes(int paperWidth) async {
     final prefs = await SharedPreferences.getInstance();
     final identity = await PackingIdentityRepository().getSettings();
@@ -105,6 +99,8 @@ class PackingReceiptPrinter {
       ...generator.text('Kertas $paperWidth mm'),
       ...generator.text('Logo: ${prefs.getBool(printLogoKey) == false ? 'nonaktif' : 'aktif'}'),
       ...generator.text('Bluetooth OK'),
+      // Penggaris lebar: pastikan 32 (58 mm) atau 48 (80 mm) karakter tercetak penuh.
+      ...generator.text('1234567890' * (paperWidth == 80 ? 4 : 3) + (paperWidth == 80 ? '12345678' : '12')),
       ...generator.feed(3),
     ];
   }
@@ -284,7 +280,46 @@ class PackingReceiptPrinter {
     return true;
   }
 
+  /// Word-wraps [text] to [width] columns, breaking over-long words.
+  static List<String> _wrap(String text, int width) {
+    final lines = <String>[];
+    if (width < 1) return [text];
+    for (final paragraph in text.split('\n')) {
+      var line = '';
+      for (var word in paragraph.split(RegExp(r'\s+'))) {
+        if (word.isEmpty) continue;
+        while (word.length > width) {
+          if (line.isNotEmpty) {
+            lines.add(line);
+            line = '';
+          }
+          lines.add(word.substring(0, width));
+          word = word.substring(width);
+        }
+        if (line.isEmpty) {
+          line = word;
+        } else if (line.length + 1 + word.length <= width) {
+          line = '$line $word';
+        } else {
+          lines.add(line);
+          line = word;
+        }
+      }
+      if (line.isNotEmpty) lines.add(line);
+    }
+    return lines;
+  }
+
+  static String _qty(Object? raw) {
+    final v = (raw as num?)?.toDouble() ?? 0;
+    return v == v.roundToDouble() ? v.toInt().toString() : v.toStringAsFixed(3).replaceFirst(RegExp(r'0+$'), '');
+  }
+
   /// Prints one combined receipt containing every job and a single payment summary.
+  ///
+  /// Layout rules for thermal paper: every line is wrapped by this method
+  /// (never by the printer, which would cut words), amounts are right-aligned
+  /// to the paper edge, and totals/payment status are the most prominent items.
   static Future<bool> printReceipt({
     required Map<String, Object?> receipt,
     required List<Map<String, Object?>> jobs,
@@ -299,113 +334,186 @@ class PackingReceiptPrinter {
       throw StateError('Tidak dapat terhubung ke printer Bluetooth.');
     }
     final identity = await PackingIdentityRepository().getSettings();
-    final paper = (prefs.getInt(paperWidthKey) ?? 58) == 80 ? PaperSize.mm80 : PaperSize.mm58;
+    final is80 = (prefs.getInt(paperWidthKey) ?? 58) == 80;
+    final paper = is80 ? PaperSize.mm80 : PaperSize.mm58;
     final generator = Generator(paper, await CapabilityProfile.load());
     final weight = (prefs.getInt(textWeightKey) ?? defaultTextWeight).clamp(0, 4);
-    final cols = paper == PaperSize.mm80 ? 48 : 32;
+    // Font B (lightest setting) fits more characters per line.
+    final cols = weight == 0 ? (is80 ? 64 : 42) : (is80 ? 48 : 32);
     final bytes = <int>[];
+
     String money(Object? raw) {
       final n = (raw as num?)?.toInt() ?? 0;
-      return 'Rp ${n.toString().replaceAllMapped(RegExp(r'(?<=\d)(?=(\d{3})+(?!\d))'), (_) => '.')}';
+      final digits = n.abs().toString().replaceAllMapped(RegExp(r'(?<=\d)(?=(\d{3})+(?!\d))'), (_) => '.');
+      return '${n < 0 ? '-' : ''}Rp $digits';
     }
+
+    String stamp(Object? raw) {
+      final d = DateTime.tryParse(raw?.toString() ?? '');
+      return d == null ? '' : DateFormat('dd/MM/yyyy HH:mm').format(d.toLocal());
+    }
+
+    void rule([String ch = '-']) => bytes.addAll(generator.text(ch * cols));
+
+    void center(String s, {bool bold = false, PosTextSize height = PosTextSize.size1}) {
+      for (final line in _wrap(printable(s), cols)) {
+        bytes.addAll(generator.text(line, styles: PosStyles(align: PosAlign.center, bold: bold, height: height)));
+      }
+    }
+
+    /// Left-aligned wrapped text; [first] prefixes line 1, [rest] the others.
+    void wrapped(String s, {String first = '', String? rest, bool bold = false}) {
+      final hang = rest ?? ' ' * first.length;
+      final width = cols - (first.length > hang.length ? first.length : hang.length);
+      final lines = _wrap(printable(s), width);
+      for (var i = 0; i < lines.length; i++) {
+        bytes.addAll(generator.text('${i == 0 ? first : hang}${lines[i]}', styles: PosStyles(bold: bold)));
+      }
+    }
+
+    /// Label on the left, amount on the right edge. Long labels wrap above.
+    void pair(String label, String value, {String indent = '', bool bold = false, PosTextSize height = PosTextSize.size1}) {
+      final styles = PosStyles(bold: bold, height: height);
+      final left = printable(label);
+      final space = cols - indent.length - left.length - value.length;
+      if (space >= 1) {
+        bytes.addAll(generator.text('$indent$left${' ' * space}$value', styles: styles));
+        return;
+      }
+      final room = cols - indent.length - value.length - 1;
+      final lines = _wrap(left, room > 8 ? room : cols - indent.length);
+      if (room > 8) {
+        for (var i = 0; i < lines.length - 1; i++) {
+          bytes.addAll(generator.text('$indent${lines[i]}', styles: styles));
+        }
+        final last = lines.isEmpty ? '' : lines.last;
+        bytes.addAll(generator.text('$indent$last${' ' * (cols - indent.length - last.length - value.length)}$value', styles: styles));
+      } else {
+        for (final line in lines) {
+          bytes.addAll(generator.text('$indent$line', styles: styles));
+        }
+        bytes.addAll(generator.text(value.padLeft(cols), styles: styles));
+      }
+    }
+
+    final status = receipt['status']?.toString() ?? 'open';
+    final cancelled = status == 'cancelled';
+
+    // ---- Header: logo, business name, contact -------------------------
     bytes.addAll(generator.reset());
     bytes.addAll(_textWeightCommands(weight));
-    bytes.addAll(await _logoBytes(generator, paper == PaperSize.mm80 ? 220 : 160, prefs));
+    bytes.addAll(await _logoBytes(generator, is80 ? 220 : 160, prefs));
     final businessName = printable(identity['business_name'] ?? 'Packing POS');
-    final nameFitsDoubleWidth = businessName.length <= cols ~/ 2;
-    final businessAddress = identity['business_address'] ?? '';
-    final businessPhone = identity['business_phone'] ?? '';
-    final hasContact = businessAddress.isNotEmpty || businessPhone.isNotEmpty;
-    bytes.addAll(generator.text(
-      businessName,
-      styles: PosStyles(
-        align: PosAlign.center,
-        bold: true,
-        height: PosTextSize.size2,
-        width: nameFitsDoubleWidth ? PosTextSize.size2 : PosTextSize.size1,
-      ),
-      // Avoid an empty line before address/phone; keep one only without contact details.
-      linesAfter: hasContact ? 0 : 1,
-    ));
-    if (businessAddress.isNotEmpty) bytes.addAll(generator.text(printable(businessAddress), styles: const PosStyles(align: PosAlign.center)));
-    if (businessPhone.isNotEmpty) bytes.addAll(generator.text('Telp. ${printable(businessPhone)}', styles: const PosStyles(align: PosAlign.center)));
-    bytes.addAll(generator.text(receipt['receipt_no']?.toString() ?? '-', styles: const PosStyles(align: PosAlign.center, bold: true)));
-    bytes.addAll(generator.hr());
-    final created = DateTime.tryParse(receipt['created_at']?.toString() ?? '');
-    if (created != null) bytes.addAll(generator.text('Tanggal: ${DateFormat('dd/MM/yyyy HH:mm').format(created.toLocal())}'));
-    bytes.addAll(generator.text('Pelanggan: ${printable(receipt['customer_name'] ?? '-')}'));
-    bytes.addAll(generator.hr());
+    final nameFitsDoubleWidth = businessName.length <= (cols ~/ 2);
+    if (nameFitsDoubleWidth) {
+      bytes.addAll(generator.text(
+        businessName,
+        styles: const PosStyles(align: PosAlign.center, bold: true, height: PosTextSize.size2, width: PosTextSize.size2),
+      ));
+    } else {
+      center(businessName, bold: true, height: PosTextSize.size2);
+    }
+    final businessAddress = (identity['business_address'] ?? '').trim();
+    final businessPhone = (identity['business_phone'] ?? '').trim();
+    if (businessAddress.isNotEmpty) center(businessAddress);
+    if (businessPhone.isNotEmpty) center('Telp. $businessPhone');
+    rule('=');
+
+    // ---- Receipt info ---------------------------------------------------
+    if (cancelled) {
+      center('*** NOTA DIBATALKAN ***', bold: true);
+      rule();
+    }
+    pair('No. Nota', receipt['receipt_no']?.toString() ?? '-', bold: true);
+    final created = stamp(receipt['created_at']);
+    if (created.isNotEmpty) pair('Tanggal', created);
+    final customer = (receipt['customer_name']?.toString() ?? '').trim();
+    pair('Pelanggan', customer.isEmpty ? '-' : customer);
+    rule();
+
+    // ---- Jobs -------------------------------------------------------------
     for (var i = 0; i < jobs.length; i++) {
       final job = jobs[i];
-      final desc = job['item_description']?.toString().trim();
-      bytes.addAll(generator.text('${i + 1}. ${desc == null || desc.isEmpty ? 'Pekerjaan' : printable(desc)}', styles: const PosStyles(bold: true)));
+      final desc = job['item_description']?.toString().trim() ?? '';
+      final number = '${i + 1}. ';
+      wrapped(desc.isEmpty ? 'Pekerjaan' : desc, first: number, bold: true);
+      const indent = '   ';
       final size = dimensionsLabel(job['length_cm'], job['width_cm'], job['height_cm']);
-      if (size != null) bytes.addAll(generator.text('Ukuran: ${size.replaceAll('×', 'x')}'));
+      if (size != null) wrapped('Ukuran ${size.replaceAll('×', 'x')}', first: indent);
       final materials = materialsByJob[(job['id'] as num).toInt()] ?? const [];
       for (final m in materials) {
-        bytes.addAll(generator.text('  ${m['material_name_snapshot']}: ${m['actual_quantity']} ${m['unit_snapshot']} = ${money(m['subtotal'])}'));
+        wrapped(m['material_name_snapshot']?.toString() ?? 'Bahan', first: indent);
+        pair('${_qty(m['actual_quantity'])} ${m['unit_snapshot'] ?? ''}', money(m['subtotal']), indent: '$indent  ');
       }
       final quantity = (job['quantity'] as num?)?.toInt() ?? 1;
-      final unitPrice = job['unit_price'] ?? job['selling_price'];
-      bytes.addAll(generator.text('  Qty: $quantity x ${money(unitPrice)}'));
-      bytes.addAll(_pair(generator, cols, '  Subtotal pekerjaan', money(job['selling_price'])));
+      // selling_price adalah total baris (harga satuan x jumlah koli).
+      final lineTotal = (job['selling_price'] as num?)?.toInt() ?? 0;
+      final unitPrice = (job['unit_price'] as num?)?.toInt() ?? (quantity > 0 ? lineTotal ~/ quantity : lineTotal);
+      pair('$quantity x ${money(unitPrice)}', money(lineTotal), indent: indent, bold: true);
       final jobNote = job['note']?.toString().trim() ?? '';
-      if (jobNote.isNotEmpty) {
-        bytes.addAll(generator.text('  Catatan pekerjaan: ${printable(jobNote)}'));
+      if (jobNote.isNotEmpty) wrapped('Cat: $jobNote', first: indent);
+      if (cancelled) {
+        final reason = job['cancellation_reason']?.toString().trim() ?? '';
+        if (reason.isNotEmpty) wrapped('Alasan batal: $reason', first: indent);
       }
-      if (receipt['status']?.toString() == 'cancelled') {
-        final cancellationReason =
-            job['cancellation_reason']?.toString().trim() ?? '';
-        if (cancellationReason.isNotEmpty) {
-          bytes.addAll(generator.text('  Alasan pembatalan: ${printable(cancellationReason)}'));
-        }
-      }
-      if (i != jobs.length - 1) bytes.addAll(generator.hr(ch: '-'));
+      if (i != jobs.length - 1) bytes.addAll(generator.feed(1));
     }
-    bytes.addAll(generator.hr());
+    rule();
+
+    // ---- Totals ----------------------------------------------------------
     final total = (receipt['total_amount'] as num?)?.toInt() ?? 0;
     final paid = (receipt['paid_amount'] as num?)?.toInt() ?? 0;
     final discount = (receipt['discount_amount'] as num?)?.toInt() ?? 0;
     if (discount > 0) {
-      bytes.addAll(_pair(generator, cols, 'Subtotal', money(total + discount)));
-      bytes.addAll(_pair(generator, cols, 'Diskon nota', '-${money(discount)}'));
+      pair('Subtotal', money(total + discount));
+      pair('Diskon', '-${money(discount)}');
     }
-    bytes.addAll(_pair(generator, cols, 'TOTAL NOTA', money(total), styles: const PosStyles(bold: true, height: PosTextSize.size2)));
-    bytes.addAll(_pair(generator, cols, 'Dibayar', money(paid)));
-    bytes.addAll(generator.text('Sisa: ${money(total - paid)}'));
+    pair('TOTAL', money(total), bold: true, height: PosTextSize.size2);
+    if (!cancelled) {
+      pair('Dibayar', money(paid));
+      final remaining = total - paid;
+      if (remaining > 0) {
+        pair('SISA', money(remaining), bold: true);
+      } else if (remaining < 0) {
+        pair('Kelebihan bayar', money(-remaining));
+      } else if (total > 0) {
+        bytes.addAll(generator.feed(1));
+        center('** LUNAS **', bold: true);
+      }
+    }
 
-    // Tampilkan metode yang benar-benar dipakai pada setiap pembayaran,
-    // termasuk DP dan pelunasan bertahap, sesuai pilihan kasir.
-    bytes.addAll(generator.hr(ch: '-'));
-    bytes.addAll(generator.text('RINCIAN PEMBAYARAN', styles: const PosStyles(bold: true)));
+    // ---- Payments and refunds ----------------------------------------------
+    rule();
+    bytes.addAll(generator.text('PEMBAYARAN', styles: const PosStyles(bold: true)));
     if (payments.isEmpty) {
       bytes.addAll(generator.text('Belum ada pembayaran'));
     } else {
       for (final payment in payments) {
-        final method = paymentMethodLabel(payment['payment_method']);
-        final amount = money(payment['amount']);
-        bytes.addAll(_pair(generator, cols, method, amount));
-        final paymentDate = DateTime.tryParse(payment['created_at']?.toString() ?? '');
-        if (paymentDate != null) {
-          bytes.addAll(generator.text('  ${DateFormat('dd/MM/yyyy HH:mm').format(paymentDate.toLocal())}'));
-        }
+        pair(paymentMethodLabel(payment['payment_method']), money(payment['amount']));
+        final when = stamp(payment['created_at']);
+        if (when.isNotEmpty) wrapped(when, first: '  ');
         final paymentNote = payment['note']?.toString().trim() ?? '';
-        if (paymentNote.isNotEmpty) bytes.addAll(generator.text('  Catatan: ${printable(paymentNote)}'));
+        if (paymentNote.isNotEmpty) wrapped(paymentNote, first: '  ');
       }
     }
-
-    final note = receipt['note']?.toString() ?? '';
-    if (note.trim().isNotEmpty) bytes.addAll(generator.text('Catatan: ${printable(note)}'));
-    bytes.addAll(generator.hr());
-    final receiptStatus = receipt['status']?.toString() ?? 'open';
-    final thankYou = (identity['receipt_thank_you'] ?? 'Terima kasih').trim();
-    final footer = receiptStatus == 'cancelled' ? 'ARSIP NOTA DIBATALKAN' : thankYou;
-    if (footer.isNotEmpty) {
-      bytes.addAll(generator.text(
-        printable(footer),
-        styles: const PosStyles(align: PosAlign.center, bold: true),
-      ));
+    for (final refund in refunds) {
+      pair('Refund ${paymentMethodLabel(refund['refund_method'])}', '-${money(refund['amount'])}');
+      final when = stamp(refund['created_at']);
+      if (when.isNotEmpty) wrapped(when, first: '  ');
+      final reason = refund['reason']?.toString().trim() ?? '';
+      if (reason.isNotEmpty) wrapped('Alasan: $reason', first: '  ');
     }
+
+    // ---- Notes and footer -----------------------------------------------------
+    final note = receipt['note']?.toString().trim() ?? '';
+    if (note.isNotEmpty) {
+      rule();
+      wrapped('Catatan: $note');
+    }
+    rule('=');
+    final thankYou = (identity['receipt_thank_you'] ?? 'Terima kasih').trim();
+    final footer = cancelled ? 'ARSIP NOTA DIBATALKAN' : thankYou;
+    if (footer.isNotEmpty) center(footer, bold: true);
     bytes.addAll(generator.feed(3));
     if (!await PrintBluetoothThermal.writeBytes(bytes)) throw StateError('Printer menolak data cetak.');
     return true;
