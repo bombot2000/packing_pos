@@ -117,6 +117,35 @@ void main() {
     expect(totals['cash_received_total'], 40000);
   });
 
+  test('laporan per metode mengurangi refund dari kanal pencairan refund', () async {
+    final receiptId = await createReceipt();
+    await repository.addReceiptPayment(
+      receiptId: receiptId,
+      amount: 50000,
+      paymentMethod: 'cash',
+    );
+    final source = (await repository.receiptPaymentsFor(receiptId)).single;
+    await repository.addReceiptRefund(
+      receiptId: receiptId,
+      receiptPaymentId: (source['id'] as num).toInt(),
+      amount: 10000,
+      refundMethod: 'transfer',
+      reason: 'Refund melalui transfer',
+    );
+
+    final report = await repository.reportSummary();
+    final methods = (report['payment_methods'] as List)
+        .map((row) => Map<String, Object?>.from(row as Map));
+    final byMethod = {
+      for (final row in methods) row['payment_method']: row,
+    };
+
+    expect((byMethod['cash']!['amount'] as num).toInt(), 50000);
+    expect((byMethod['cash']!['payment_count'] as num).toInt(), 1);
+    expect((byMethod['transfer']!['amount'] as num).toInt(), -10000);
+    expect((byMethod['transfer']!['payment_count'] as num).toInt(), 0);
+  });
+
   test('pembatalan setelah refund penuh tetap menjaga rekonsiliasi kas historis', () async {
     final sessionId = await repository.startCashSession(
       date: DateTime.now(),
