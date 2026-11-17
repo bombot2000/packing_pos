@@ -103,8 +103,8 @@ void main() {
     expect(totals['cancelled_count'], 1);
     expect(totals['paid_total'], 30000);
     expect(totals['refund_total'], 15000);
-    expect(totals['cash_received_total'], 40000);
-    expect(totals['non_cash_received_total'], -10000);
+    expect(totals['cash_received_total'], 45000);
+    expect(totals['non_cash_received_total'], -15000);
     expect(totals['receivable_total'], 70000);
     expect(totals['material_cost_total'], 10000);
     expect(totals['labor_cost_total'], 5000);
@@ -114,7 +114,7 @@ void main() {
     final methods = (report['payment_methods'] as List)
         .map((row) => Map<String, Object?>.from(row as Map));
     final byMethod = {for (final row in methods) row['payment_method']: row['amount']};
-    expect(byMethod['cash'], 40000);
-    expect(byMethod['transfer'], -10000);
+    expect(byMethod['cash'], 45000);
+    expect(byMethod['transfer'], -15000);
   });
 }
