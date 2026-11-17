@@ -5,7 +5,7 @@ import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 void main() {
   setUpAll(sqfliteFfiInit);
 
-  test('upgrade dari v3 ke v8 tidak menggandakan kolom dan menjaga data', () async {
+  test('upgrade dari v3 ke v9 tidak menggandakan kolom dan menjaga data', () async {
     final db = await databaseFactoryFfi.openDatabase(inMemoryDatabasePath);
     await db.execute('''
       CREATE TABLE packing_transactions (
@@ -77,10 +77,12 @@ void main() {
     expect(await db.query('customers'), isEmpty);
     expect(await db.query('cash_sessions'), isEmpty);
     expect(await db.query('payment_refunds'), isEmpty);
+    expect(await db.query('cash_session_events'), isEmpty);
+    expect(await db.query('cash_session_events'), isEmpty);
     await db.close();
   });
 
-  test('upgrade dari v7 ke v8 menambah tabel refund tanpa menghapus data lama', () async {
+  test('upgrade dari v7 ke v9 menambah tabel refund dan audit tanpa menghapus data lama', () async {
     final db = await databaseFactoryFfi.openDatabase(inMemoryDatabasePath);
     await PackingDatabase.createForTesting(db);
     await db.insert('materials', {
@@ -92,8 +94,9 @@ void main() {
       'updated_at': '2026-11-13T00:00:00.000Z',
     });
 
+    await db.execute('DROP TABLE cash_session_events');
     await db.execute('DROP TABLE payment_refunds');
-    await PackingDatabase.instance.upgradeForTesting(db, 7, 8);
+    await PackingDatabase.instance.upgradeForTesting(db, 7, 9);
 
     final tables = await db.rawQuery(
       "SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'payment_refunds'",
