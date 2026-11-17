@@ -212,6 +212,12 @@ class _PrinterSettingsScreenState extends State<PrinterSettingsScreen> {
         padding: const EdgeInsets.only(top: 12),
         child: Text(_error!, style: TextStyle(color: Theme.of(context).colorScheme.error)),
       ),
+      if (_error != null && _error!.startsWith('Izin'))
+        TextButton.icon(
+          onPressed: openAppSettings,
+          icon: const Icon(Icons.settings),
+          label: const Text('Buka pengaturan aplikasi'),
+        ),
     ]),
   );
 }

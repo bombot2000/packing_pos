@@ -31,7 +31,7 @@ class _ServiceTypeMasterScreenState extends State<ServiceTypeMasterScreen> {
     final result = await Navigator.of(context).push<Map<String, Object?>>(
       MaterialPageRoute(builder: (_) => _ServiceEditor(
         name: row?['name']?.toString() ?? '',
-        price: row?['default_price']?.toString() ?? '0',
+        price: groupThousands((row?['default_price'] as num?)?.toInt() ?? 0),
       )),
     );
     if (result == null || !mounted) return;
@@ -81,7 +81,7 @@ class _ServiceTypeMasterScreenState extends State<ServiceTypeMasterScreen> {
         if (s.connectionState == ConnectionState.waiting) {
           return const Center(child: CircularProgressIndicator());
         }
-        if (s.hasError) return Center(child: Text('Gagal memuat: ${s.error}'));
+        if (s.hasError) return Center(child: Text('Gagal memuat: ${friendlyError(s.error!)}'));
         final rows = s.data ?? [];
         if (rows.isEmpty) return const Center(child: Text('Belum ada jenis pekerjaan.'));
         return ListView.separated(
@@ -164,6 +164,7 @@ class _ServiceEditorState extends State<_ServiceEditor> {
       TextField(
         controller: _price,
         keyboardType: TextInputType.number,
+        inputFormatters: [RupiahInputFormatter()],
         decoration: const InputDecoration(
           labelText: 'Harga standar',
           prefixText: 'Rp ',

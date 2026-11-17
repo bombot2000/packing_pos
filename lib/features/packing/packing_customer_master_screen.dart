@@ -108,7 +108,7 @@ class _PackingCustomerMasterScreenState
               return const Center(child: CircularProgressIndicator());
             }
             if (snapshot.hasError) {
-              return Center(child: Text('Gagal memuat pelanggan: ${snapshot.error}'));
+              return Center(child: Text('Gagal memuat pelanggan: ${friendlyError(snapshot.error!)}'));
             }
             final rows = snapshot.data ?? [];
             if (rows.isEmpty) {

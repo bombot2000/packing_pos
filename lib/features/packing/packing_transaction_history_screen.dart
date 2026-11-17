@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import '../../core/format/friendly_error.dart';
 import '../../core/format/rupiah.dart';
 import '../../data/repositories/packing_transaction_repository.dart';
 import 'packing_receipt_detail_screen.dart';
@@ -83,6 +84,31 @@ class _PackingTransactionHistoryScreenState
     return ((row['paid_amount'] as num?)?.toInt() ?? 0) > 0
         ? 'Dibayar sebagian'
         : 'Belum dibayar';
+  }
+
+  Widget _statusChip(Map<String, Object?> row) {
+    final scheme = Theme.of(context).colorScheme;
+    final paid = (row['paid_amount'] as num?)?.toInt() ?? 0;
+    Color bg;
+    Color fg;
+    if (row['status'] == 'completed') {
+      bg = scheme.primaryContainer;
+      fg = scheme.onPrimaryContainer;
+    } else if (row['status'] == 'cancelled') {
+      bg = Colors.grey.shade300;
+      fg = Colors.black54;
+    } else if (paid > 0) {
+      bg = scheme.tertiaryContainer;
+      fg = scheme.onTertiaryContainer;
+    } else {
+      bg = scheme.errorContainer;
+      fg = scheme.onErrorContainer;
+    }
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+      decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(10)),
+      child: Text(_statusLabel(row), style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: fg)),
+    );
   }
 
   String _dateLabel(DateTime? value) => value == null
@@ -248,7 +274,7 @@ class _PackingTransactionHistoryScreenState
                     return const Center(child: CircularProgressIndicator());
                   }
                   if (snapshot.hasError) {
-                    return Center(child: Text('Gagal membaca nota: ${snapshot.error}'));
+                    return Center(child: Text('Gagal membaca nota: ${friendlyError(snapshot.error!)}'));
                   }
                   final result = snapshot.data ?? const <String, Object?>{};
                   final rows = (result['rows'] as List<Map<String, Object?>>?) ?? [];
@@ -267,9 +293,21 @@ class _PackingTransactionHistoryScreenState
                       Expanded(
                         child: rows.isEmpty
                             ? Center(
-                                child: Text(total == 0
-                                    ? 'Belum ada nota yang sesuai filter.'
-                                    : 'Tidak ada nota pada halaman ini.'),
+                                child: Padding(
+                                  padding: const EdgeInsets.all(24),
+                                  child: Column(mainAxisSize: MainAxisSize.min, children: [
+                                    Text(
+                                      total == 0
+                                          ? (_hasFilters
+                                              ? 'Tidak ada nota yang sesuai filter.'
+                                              : 'Belum ada nota. Buat nota pertama dari Beranda.')
+                                          : 'Tidak ada nota pada halaman ini.',
+                                      textAlign: TextAlign.center,
+                                    ),
+                                    if (total == 0 && _hasFilters)
+                                      TextButton(onPressed: _clearFilters, child: const Text('Hapus semua filter')),
+                                  ]),
+                                ),
                               )
                             : RefreshIndicator(
                                 onRefresh: () async => _refresh(resetPage: true),
@@ -295,8 +333,14 @@ class _PackingTransactionHistoryScreenState
                                           children: [
                                             if ((row['customer_name'] as String).isNotEmpty)
                                               Text(row['customer_name'] as String),
-                                            Text('${row['job_count'] ?? 0} pekerjaan • ${_statusLabel(row)}'),
-                                            Text('Total ${_money(amount)}'),
+                                            Padding(
+                                              padding: const EdgeInsets.symmetric(vertical: 2),
+                                              child: Row(children: [
+                                                _statusChip(row),
+                                                const SizedBox(width: 8),
+                                                Expanded(child: Text('${row['job_count'] ?? 0} pekerjaan • Total ${_money(amount)}')),
+                                              ]),
+                                            ),
                                             if (row['status'] == 'cancelled')
                                               Text('Nota dibatalkan • Pembayaran tercatat ${_money(paid)}')
                                             else

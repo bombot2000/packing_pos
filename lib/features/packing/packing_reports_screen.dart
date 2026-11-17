@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../core/format/friendly_error.dart';
 import '../../data/repositories/packing_transaction_repository.dart';
 
 class PackingReportsScreen extends StatefulWidget {
@@ -66,7 +67,7 @@ class _PackingReportsScreenState extends State<PackingReportsScreen> {
         if (snapshot.hasError) {
           return Center(child: Padding(
             padding: const EdgeInsets.all(24),
-            child: Text('Laporan gagal dimuat: ${snapshot.error}'),
+            child: Text('Laporan gagal dimuat: ${friendlyError(snapshot.error!)}'),
           ));
         }
         final data = snapshot.data!;
@@ -122,11 +123,11 @@ class _PackingReportsScreenState extends State<PackingReportsScreen> {
                   _metric('Biaya jasa', _money(totals['labor_cost_total']), Icons.handyman_outlined),
                 if (((totals['overhead_cost_total'] as num?) ?? 0) > 0)
                   _metric('Biaya tambahan', _money(totals['overhead_cost_total']), Icons.more_horiz),
-                _metric('Pembayaran bersih', _money(totals['paid_total']), Icons.payments_outlined),
+                _metric('Uang masuk (bersih)', _money(totals['paid_total']), Icons.payments_outlined),
                 if (((totals['refund_total'] as num?) ?? 0) > 0)
                   _metric('Total refund', _money(totals['refund_total']), Icons.undo),
-                _metric('Arus kas tunai bersih', _money(totals['cash_received_total']), Icons.point_of_sale),
-                _metric('Arus non-tunai bersih', _money(totals['non_cash_received_total']), Icons.account_balance_outlined),
+                _metric('Uang tunai masuk (bersih)', _money(totals['cash_received_total']), Icons.point_of_sale),
+                _metric('Transfer/QRIS masuk (bersih)', _money(totals['non_cash_received_total']), Icons.account_balance_outlined),
                 _metric('Piutang tersisa', _money(totals['receivable_total']), Icons.account_balance_wallet_outlined),
                 _metric('Nota aktif', (totals['receipt_count'] as num? ?? 0).toString(), Icons.receipt_long),
                 _metric('Jumlah pekerjaan', (totals['transaction_count'] as num? ?? 0).toString(), Icons.inventory_2_outlined),
@@ -171,6 +172,7 @@ class _PackingReportsScreenState extends State<PackingReportsScreen> {
                       trailing: Text(_money(item['amount'])),
                     );
                   }).toList())),
+            if (materials.isNotEmpty) ...[
             const SizedBox(height: 16),
             const Text(
               'Pemakaian bahan aktual',
@@ -186,6 +188,7 @@ class _PackingReportsScreenState extends State<PackingReportsScreen> {
                     ),
                     trailing: Text(_money(item['cost'])),
                   )).toList())),
+            ],
             const SizedBox(height: 16),
             const Text(
               'Catatan: transaksi yang dibatalkan tidak masuk total penjualan dan pemakaian bahan. Periode menggunakan tanggal transaksi lokal perangkat.',

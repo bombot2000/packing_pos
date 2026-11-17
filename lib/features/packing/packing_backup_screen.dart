@@ -4,13 +4,18 @@ import 'dart:io';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:path_provider/path_provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:share_plus/share_plus.dart';
 
+import '../../core/format/friendly_error.dart';
 import '../../data/repositories/packing_backup_validator.dart';
 import '../../data/repositories/packing_transaction_repository.dart';
 
 class PackingBackupScreen extends StatefulWidget {
   const PackingBackupScreen({super.key});
+
+  /// Kunci SharedPreferences untuk waktu backup terakhir (dibaca juga oleh Beranda).
+  static const lastBackupKey = 'packing_last_backup_at';
 
   @override
   State<PackingBackupScreen> createState() => _PackingBackupScreenState();
@@ -19,6 +24,37 @@ class PackingBackupScreen extends StatefulWidget {
 class _PackingBackupScreenState extends State<PackingBackupScreen> {
   final _repository = PackingTransactionRepository();
   bool _busy = false;
+  DateTime? _lastBackup;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadLastBackup();
+  }
+
+  Future<void> _loadLastBackup() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final raw = prefs.getString(PackingBackupScreen.lastBackupKey);
+      if (mounted) setState(() => _lastBackup = DateTime.tryParse(raw ?? '')?.toLocal());
+    } catch (_) {}
+  }
+
+  Future<void> _markBackupDone() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final now = DateTime.now();
+      await prefs.setString(PackingBackupScreen.lastBackupKey, now.toIso8601String());
+      if (mounted) setState(() => _lastBackup = now);
+    } catch (_) {}
+  }
+
+  String _lastBackupLabel() {
+    final d = _lastBackup;
+    if (d == null) return 'Belum pernah backup di perangkat ini.';
+    String two(int n) => n.toString().padLeft(2, '0');
+    return 'Backup terakhir: ${two(d.day)}/${two(d.month)}/${d.year} ${two(d.hour)}:${two(d.minute)}';
+  }
 
   Future<void> _exportBackup() async {
     setState(() => _busy = true);
@@ -31,13 +67,14 @@ class _PackingBackupScreenState extends State<PackingBackupScreen> {
         const JsonEncoder.withIndent('  ').convert(backup),
         flush: true,
       );
-      await Share.shareXFiles(
+      final result = await Share.shareXFiles(
         [XFile(file.path, mimeType: 'application/json')],
         text: 'Backup data Packing POS',
         subject: 'Backup Packing POS',
       );
+      if (result.status != ShareResultStatus.dismissed) await _markBackupDone();
     } catch (error) {
-      _message('Gagal membuat backup: $error', isError: true);
+      _message('Gagal membuat backup: ${friendlyError(error)}', isError: true);
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -105,7 +142,7 @@ class _PackingBackupScreenState extends State<PackingBackupScreen> {
       await _repository.restoreBackup(decoded);
       _message('Backup berhasil dipulihkan.');
     } catch (error) {
-      _message('Backup tidak dapat dipulihkan: $error', isError: true);
+      _message('Backup tidak dapat dipulihkan: ${friendlyError(error)}', isError: true);
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -138,6 +175,8 @@ class _PackingBackupScreenState extends State<PackingBackupScreen> {
             const Text(
               'Mencakup transaksi, rincian bahan dan harga snapshot, pembayaran, master bahan, master jenis pekerjaan dan harga jasa, serta pengaturan. File disimpan sebagai JSON dan dapat dibagikan ke penyimpanan lain.',
             ),
+            const SizedBox(height: 8),
+            Text(_lastBackupLabel(), style: const TextStyle(fontWeight: FontWeight.w600)),
             const SizedBox(height: 12),
             FilledButton.icon(
               onPressed: _busy ? null : _exportBackup,

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../core/format/friendly_error.dart';
 import '../../core/format/rupiah.dart';
 import '../../data/repositories/packing_transaction_repository.dart';
 import 'packing_receipt_detail_screen.dart';
@@ -51,7 +52,7 @@ class _PackingReceivablesScreenState extends State<PackingReceivablesScreen> {
               return const Center(child: CircularProgressIndicator());
             }
             if (snapshot.hasError) {
-              return Center(child: Text('Gagal membaca piutang: ${snapshot.error}'));
+              return Center(child: Text('Gagal membaca piutang: ${friendlyError(snapshot.error!)}'));
             }
             final rows = snapshot.data ?? [];
             final total = rows.fold<int>(
