@@ -230,6 +230,18 @@ class _PackingReceiptDetailScreenState extends State<PackingReceiptDetailScreen>
     if (discount > 0) { b.writeln('Subtotal: ${_money(total + discount)}'); b.writeln('Diskon: -${_money(discount)}'); }
     b.writeln('TOTAL: ${_money(total)}');
     b.writeln('Dibayar: ${_money(paid)}');
+    b.writeln('RINCIAN PEMBAYARAN:');
+    if (_payments.isEmpty) {
+      b.writeln('Belum ada pembayaran');
+    } else {
+      for (final payment in _payments) {
+        b.writeln('  ${PackingReceiptPrinter.paymentMethodLabel(payment['payment_method'])}: ${_money(payment['amount'])}');
+        final paymentDate = DateTime.tryParse(payment['created_at']?.toString() ?? '');
+        if (paymentDate != null) b.writeln('    ${_date(paymentDate.toIso8601String())}');
+        final paymentNote = payment['note']?.toString().trim() ?? '';
+        if (paymentNote.isNotEmpty) b.writeln('    Catatan: $paymentNote');
+      }
+    }
     if (total - paid > 0) b.writeln('Sisa: ${_money(total - paid)}');
     b.writeln('Status: ${r['status'] == 'cancelled' ? 'DIBATALKAN' : total > 0 && paid >= total ? 'LUNAS' : paid > 0 ? 'DIBAYAR SEBAGIAN' : 'BELUM DIBAYAR'}');
     b.writeln(); b.write('Terima kasih');
@@ -455,7 +467,7 @@ class _PackingReceiptDetailScreenState extends State<PackingReceiptDetailScreen>
               final refundable = sourceAmount - refunded;
               return ListTile(
                 title: Text(_money(sourceAmount)),
-                subtitle: Text('${p['payment_method']} • ${_date(p['created_at'])}${(p['note'] ?? '').toString().isEmpty ? '' : '\n${p['note']}'}${refunded > 0 ? '\nRefund: ${_money(refunded)}' : ''}'),
+                subtitle: Text('${PackingReceiptPrinter.paymentMethodLabel(p['payment_method'])} • ${_date(p['created_at'])}${(p['note'] ?? '').toString().isEmpty ? '' : '\n${p['note']}'}${refunded > 0 ? '\nRefund: ${_money(refunded)}' : ''}'),
                 trailing: status != 'cancelled' && refundable > 0
                     ? TextButton(onPressed: _busy ? null : () => _refundPayment(p), child: const Text('Refund'))
                     : null,
