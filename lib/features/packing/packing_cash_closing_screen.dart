@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import '../../core/format/money_input.dart';
 import '../../core/format/friendly_error.dart';
@@ -20,6 +22,7 @@ class _PackingCashClosingScreenState extends State<PackingCashClosingScreen> {
   final _counted = TextEditingController();
   Map<String, Object?>? _summary;
   List<Map<String, Object?>> _history = const [];
+  List<Map<String, Object?>> _auditEvents = const [];
   bool _busy = false;
   String? _error;
 
@@ -46,10 +49,12 @@ class _PackingCashClosingScreenState extends State<PackingCashClosingScreen> {
           ? null
           : await _repository.cashSessionSummary((session['id'] as num).toInt());
       final history = await _repository.listCashSessions(limit: 30);
+      final events = session == null ? const <Map<String, Object?>>[] : await _repository.cashSessionEvents((session['id'] as num).toInt());
       if (mounted) {
         setState(() {
           _summary = summary;
           _history = history;
+          _auditEvents = events;
           _error = null;
         });
       }
@@ -108,6 +113,43 @@ class _PackingCashClosingScreenState extends State<PackingCashClosingScreen> {
     });
   }
 
+  Future<void> _reopen() async {
+    final session = _summary?['session'] as Map<String, Object?>?;
+    if (session == null) return;
+    final controller = TextEditingController();
+    final reason = await showDialog<String>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Buka kembali sesi kas'),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          minLines: 2,
+          maxLines: 4,
+          decoration: const InputDecoration(
+            labelText: 'Alasan koreksi wajib diisi',
+            hintText: 'Contoh: ada pembayaran tunai yang belum dicatat',
+            border: OutlineInputBorder(),
+          ),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(dialogContext), child: const Text('Batal')),
+          FilledButton(onPressed: () {
+            if (controller.text.trim().isEmpty) return;
+            Navigator.pop(dialogContext, controller.text.trim());
+          }, child: const Text('Buka kembali')),
+        ],
+      ),
+    );
+    controller.dispose();
+    if (reason == null || !mounted) return;
+    await _run(() async {
+      await _repository.reopenCashSession(
+        sessionId: (session['id'] as num).toInt(), reason: reason,
+      );
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     final summary = _summary;
@@ -145,6 +187,12 @@ class _PackingCashClosingScreenState extends State<PackingCashClosingScreen> {
               _line('Uang fisik dihitung', _money(session['counted_balance'])),
               _line('Selisih kas', _money(session['difference']), bold: true),
               if ((session['note'] as String? ?? '').isNotEmpty) Text('Catatan: ${session['note']}'),
+              const SizedBox(height: 12),
+              OutlinedButton.icon(
+                onPressed: _busy ? null : _reopen,
+                icon: const Icon(Icons.lock_open),
+                label: const Text('Buka kembali untuk koreksi'),
+              ),
             ],
           ]))),
           const Text('Pengeluaran tunai', style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold)),
@@ -168,6 +216,27 @@ class _PackingCashClosingScreenState extends State<PackingCashClosingScreen> {
         ],
         if (_busy) const Padding(padding: EdgeInsets.all(20), child: Center(child: CircularProgressIndicator())),
         const SizedBox(height: 12),
+        if (_auditEvents.isNotEmpty) ...[
+          const SizedBox(height: 12),
+          Text('Audit sesi kas hari ini', style: Theme.of(context).textTheme.titleMedium),
+          ..._auditEvents.map((event) {
+            final closed = event['event_type'] == 'closed';
+            Map<String, dynamic> snapshot = {};
+            try { snapshot = Map<String, dynamic>.from(jsonDecode(event['snapshot_json'] as String) as Map); } catch (_) {}
+            final when = DateTime.tryParse(event['created_at'] as String? ?? '')?.toLocal();
+            final timeLabel = when == null ? '' : '${when.day.toString().padLeft(2, '0')}-${when.month.toString().padLeft(2, '0')}-${when.year} ${when.hour.toString().padLeft(2, '0')}:${when.minute.toString().padLeft(2, '0')}';
+            return Card(child: ListTile(
+              leading: Icon(closed ? Icons.lock : Icons.lock_open),
+              title: Text(closed ? 'Penutupan kas' : 'Pembukaan kembali kas'),
+              subtitle: Text([
+                timeLabel,
+                if ((event['reason'] as String? ?? '').isNotEmpty) 'Alasan/catatan: ${event['reason']}',
+                if (closed) 'Saldo seharusnya: ${_money(snapshot['expected_balance'])} • Fisik: ${_money(snapshot['counted_balance'])} • Selisih: ${_money(snapshot['difference'])}',
+                if (!closed) 'Saldo penutupan sebelumnya: ${_money(snapshot['expected_balance'])} • Fisik: ${_money(snapshot['counted_balance'])} • Selisih: ${_money(snapshot['difference'])}',
+              ].join('\\n')),
+            ));
+          }),
+        ],
         const Divider(height: 28),
         Text('Riwayat tutup kas', style: Theme.of(context).textTheme.titleMedium),
         if (_history.isEmpty)
