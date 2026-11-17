@@ -243,7 +243,6 @@ class _PackingReceiptDetailScreenState extends State<PackingReceiptDetailScreen>
       }
     }
     if (total - paid > 0) b.writeln('Sisa: ${_money(total - paid)}');
-    b.writeln('Status: ${r['status'] == 'cancelled' ? 'DIBATALKAN' : total > 0 && paid >= total ? 'LUNAS' : paid > 0 ? 'DIBAYAR SEBAGIAN' : 'BELUM DIBAYAR'}');
     final thankYou = (_identity['receipt_thank_you'] ?? 'Terima kasih').trim();
     if (thankYou.isNotEmpty) {
       b.writeln();
