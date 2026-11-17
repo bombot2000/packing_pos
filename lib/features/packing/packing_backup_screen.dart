@@ -110,17 +110,17 @@ class _PackingBackupScreenState extends State<PackingBackupScreen> {
           title: const Text('Pulihkan backup?'),
           content: SingleChildScrollView(
             child: Text(
-              'File: ${file.name}\\n'
-              'Tanggal backup: $createdAt\\n'
-              'Versi format: ${decoded['version']}\\n\\n'
-              'Data yang akan dipulihkan:\\n'
-              '• Nota: ${count('packing_receipts')}\\n'
-              '• Pekerjaan: ${count('packing_transactions')}\\n'
-              '• Riwayat pembayaran: ${count('receipt_payments') + count('transaction_payments')}\\n'
-              '• Pelanggan: ${count('customers')}\\n'
-              '• Master bahan: ${count('materials')}\\n'
-              '• Sesi kas: ${count('cash_sessions')}\\n'
-              '• Pengeluaran kas: ${count('cash_expenses')}\\n\\n'
+              'File: ${file.name}\n'
+              'Tanggal backup: $createdAt\n'
+              'Versi format: ${decoded['version']}\n\n'
+              'Data yang akan dipulihkan:\n'
+              '• Nota: ${count('packing_receipts')}\n'
+              '• Pekerjaan: ${count('packing_transactions')}\n'
+              '• Riwayat pembayaran: ${count('receipt_payments') + count('transaction_payments')}\n'
+              '• Pelanggan: ${count('customers')}\n'
+              '• Master bahan: ${count('materials')}\n'
+              '• Sesi kas: ${count('cash_sessions')}\n'
+              '• Pengeluaran kas: ${count('cash_expenses')}\n\n'
               'Restore akan mengganti data lokal dengan isi file ini. '
               'Buat backup terbaru terlebih dahulu jika data sekarang masih diperlukan.',
             ),
@@ -139,8 +139,20 @@ class _PackingBackupScreenState extends State<PackingBackupScreen> {
       );
       if (confirmed != true || !mounted) return;
       setState(() => _busy = true);
+      // Simpan snapshot data saat ini di direktori internal permanen sebelum
+      // restore. Jika penulisan backup gagal, restore tidak boleh berjalan.
+      final currentBackup = await _repository.exportBackup();
+      final supportDirectory = await getApplicationSupportDirectory();
+      final safetyDirectory = Directory('${supportDirectory.path}/restore_safety_backups');
+      await safetyDirectory.create(recursive: true);
+      final stamp = DateTime.now().toUtc().toIso8601String().replaceAll(':', '-');
+      final safetyFile = File('${safetyDirectory.path}/packing_pos_before_restore_$stamp.json');
+      await safetyFile.writeAsString(
+        const JsonEncoder.withIndent('  ').convert(currentBackup),
+        flush: true,
+      );
       await _repository.restoreBackup(decoded);
-      _message('Backup berhasil dipulihkan.');
+      _message('Backup berhasil dipulihkan. Salinan data sebelumnya tersimpan di penyimpanan internal aplikasi.');
     } catch (error) {
       _message('Backup tidak dapat dipulihkan: ${friendlyError(error)}', isError: true);
     } finally {
