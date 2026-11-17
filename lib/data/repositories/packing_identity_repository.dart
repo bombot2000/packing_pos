@@ -13,12 +13,13 @@ class PackingIdentityRepository {
     'business_name': 'Packing POS',
     'business_address': '',
     'business_phone': '',
+    'receipt_thank_you': 'Terima kasih',
   };
 
   Future<Map<String, String>> getSettings() async {
     final db = await _database.database;
     final rows = await db.query('app_settings',
-        where: 'key IN (?, ?, ?)',
+        where: 'key IN (?, ?, ?, ?)',
         whereArgs: defaults.keys.toList());
     final values = <String, String>{...defaults};
     for (final row in rows) {
@@ -31,12 +32,16 @@ class PackingIdentityRepository {
     required String businessName,
     String address = '',
     String phone = '',
+    String thankYouMessage = 'Terima kasih',
   }) async {
     final name = businessName.trim();
     if (name.isEmpty) throw ArgumentError('Nama usaha tidak boleh kosong.');
     if (name.length > 60) throw ArgumentError('Nama usaha maksimal 60 karakter.');
     if (address.trim().length > 120) {
       throw ArgumentError('Alamat maksimal 120 karakter.');
+    }
+    if (thankYouMessage.trim().length > 120) {
+      throw ArgumentError('Ucapan pada struk maksimal 120 karakter.');
     }
     if (phone.trim().length > 30) {
       throw ArgumentError('Nomor telepon maksimal 30 karakter.');
@@ -48,6 +53,7 @@ class PackingIdentityRepository {
         'business_name': name,
         'business_address': address.trim(),
         'business_phone': phone.trim(),
+        'receipt_thank_you': thankYouMessage.trim(),
       };
       for (final entry in values.entries) {
         await txn.insert('app_settings', {
