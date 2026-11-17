@@ -66,4 +66,34 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+
+  testWidgets('back from add customer dialog does not crash', (tester) async {
+    await tester.pumpWidget(const PackingPosApp());
+    await tester.pump(const Duration(milliseconds: 500));
+
+    await tester.tap(find.byType(FilledButton).first);
+    await tester.pump(const Duration(milliseconds: 500));
+
+    await tester.tap(find.byTooltip('Kelola master pelanggan'));
+    await tester.pump(const Duration(milliseconds: 500));
+    expect(find.text('Master pelanggan'), findsOneWidget);
+
+    final addCustomer = find.text('Tambah pelanggan');
+    for (var i = 0; i < 10 && addCustomer.evaluate().isEmpty; i++) {
+      await tester.pump(const Duration(milliseconds: 100));
+    }
+    expect(addCustomer, findsOneWidget);
+    await tester.tap(addCustomer);
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(find.text('Nama pelanggan *'), findsOneWidget);
+
+    tester.testTextInput.hide();
+    await tester.pump();
+    await tester.binding.handlePopRoute();
+    await tester.pump(const Duration(milliseconds: 500));
+
+    expect(find.text('Master pelanggan'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
 }
