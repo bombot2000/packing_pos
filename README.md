@@ -6,27 +6,29 @@ Flutter POS khusus jasa packing barang, bukan aplikasi transaksi pengiriman/kuri
 
 Aplikasi mendukung transaksi ongkos jasa packing manual dan halaman estimasi biaya bahan packing kayu yang terpisah.
 
-- Master jenis pekerjaan dengan harga standar yang dapat diubah saat transaksi.
-- Satu nota berisi banyak pekerjaan; ukuran barang hanya informasi.
-- Setelah nota disimpan, aplikasi langsung membuka detail nota untuk pembayaran dan cetak.
+- Master pelanggan dan jenis pekerjaan dengan harga standar yang dapat disesuaikan.
+- Satu nota dapat berisi banyak pekerjaan; ukuran barang pada transaksi jasa dicatat sebagai informasi.
+- Setelah nota disimpan, aplikasi membuka detail nota untuk pembayaran dan cetak.
 - Pembayaran penuh, DP, atau bertahap; metode tunai/transfer/QRIS/lainnya; kembalian tunai dihitung otomatis.
-- Pembatalan nota keseluruhan dengan alasan wajib (nota batal tidak masuk laporan).
-- Riwayat nota dengan pencarian nomor nota dan pelanggan.
-- Laporan semua waktu, harian, bulanan: penjualan dan piutang mengikuti tanggal nota, uang masuk mengikuti tanggal pembayaran.
-- Backup JSON dan restore atomik melalui transaksi SQLite.
+- Pengembalian dana pembayaran dicatat dalam ledger refund dengan alasan dan metode pengembalian.
+- Pembatalan nota keseluruhan dengan alasan wajib; nota batal dikecualikan dari laporan penjualan.
+- Riwayat nota dengan pencarian nomor nota dan pelanggan, serta daftar piutang.
+- Laporan penjualan, pembayaran, pengembalian dana, piutang, dan penggunaan bahan.
+- Kas harian: saldo awal, pengeluaran, tutup kas, buka kembali dengan alasan, dan riwayat audit snapshot.
+- Backup JSON dan restore atomik melalui transaksi SQLite dengan validasi data sebelum pemulihan.
 - Printer Bluetooth ESC/POS untuk kertas 58 mm dan 80 mm.
-- APK rilis dipublikasikan ke GitHub Releases, bukan Actions Artifacts.
-- Estimasi biaya packing kayu: kebutuhan rangka, paku/sekrup, upah, listrik, overhead, papan penutup opsional, modal, margin, dan harga jual.
-- Tarif estimasi disimpan lokal pada perangkat; tidak mengubah database atau transaksi lama.
-- Pengaturan arah potong lama yang tidak sesuai bidang dinormalisasi otomatis ke arah potong aman saat dibaca.
+- Estimasi biaya packing kayu tersedia sebagai fitur terpisah. Rumus/model perhitungan yang telah disepakati dipertahankan; tarif dan harga bahan dapat disesuaikan secara lokal.
+- Pengaturan tarif estimasi disimpan pada perangkat dan tidak mengubah transaksi lama.
 
 ## Database dan keamanan data
 
 - Database lokal: `packing_pos.db`.
-- Schema saat ini versi 4 (v2: alasan pembatalan, v3: master jenis pekerjaan, v4: nota induk dan pembayaran tingkat nota).
-- Migrasi tidak menghapus tabel atau transaksi.
-- Restore backup mengganti data lokal yang ada setelah konfirmasi. File yang tidak valid dibatalkan seluruhnya oleh transaksi SQLite.
-- Harga dan nama bahan pada transaksi lama disimpan sebagai snapshot.
+- Schema saat ini versi 9.
+- Riwayat migrasi: v2 alasan pembatalan; v3 master jenis pekerjaan; v4 nota induk dan pembayaran tingkat nota; v5 kuantitas, harga satuan, dan diskon; v6 master pelanggan; v7 kas harian dan pengeluaran; v8 ledger pengembalian dana; v9 riwayat audit tutup/buka kembali kas.
+- Migrasi database dilakukan bertahap melalui `onUpgrade`; jangan menghapus database aplikasi saat memperbarui.
+- Restore backup mengganti data lokal setelah konfirmasi. Validasi dilakukan sebelum pemulihan dan proses restore menggunakan transaksi agar kegagalan tidak meninggalkan pemulihan setengah jalan.
+- Harga dan nama bahan pada transaksi lama disimpan sebagai snapshot agar perubahan master tidak mengubah catatan historis.
+- Tetap buat backup sebelum memasang build baru atau melakukan pemulihan data.
 
 ## Printer Bluetooth
 
@@ -42,17 +44,12 @@ Ketersediaan fitur potong kertas bergantung pada kemampuan printer. Cetak nyata 
 
 Workflow: `.github/workflows/build-release.yml`.
 
-Push ke branch fitur menjalankan `flutter analyze --no-fatal-infos` dan `flutter test`. APK release hanya dibangun dan dipublikasikan jika keystore permanen tersedia.
+Workflow menggunakan Java 17 dan Flutter 3.47.7, lalu menjalankan `flutter analyze --no-fatal-infos`, `flutter test`, dan build APK debug untuk memvalidasi plugin Android. APK debug dipublikasikan ke GitHub Releases, bukan Actions Artifacts.
 
-Tambahkan empat GitHub Actions Secrets berikut sebelum membuat APK rilis:
+APK otomatis dari workflow menggunakan debug keystore sementara GitHub Actions. Sertifikat dapat berbeda antar-build sehingga APK mungkin tidak dapat dipasang sebagai pembaruan di atas aplikasi yang sudah terpasang. Jangan uninstall aplikasi lama atau menghapus data lokal hanya untuk memasang APK uji ini.
 
-- `ANDROID_KEYSTORE_BASE64`
-- `ANDROID_KEY_ALIAS`
-- `ANDROID_KEY_PASSWORD`
-- `ANDROID_STORE_PASSWORD` (atau `ANDROID_KEYSTORE_PASSWORD`)
+Build debug ini bukan APK rilis produksi yang ditandatangani dengan keystore permanen. Jika kelak menyiapkan signing produksi, gunakan keystore aplikasi yang sudah berlaku dan jangan mengganti keystore atau alias/password yang terkait dengannya.
 
-Gunakan keystore permanen yang memang akan dipakai untuk aplikasi ini. Jangan mengganti keystore pada build berikutnya; tanda tangan yang berubah dapat membuat Android menolak update aplikasi dan memaksa uninstall.
+## Branch dan pengembangan
 
-## Branch kerja
-
-Pengembangan aktif dilakukan di `feature/packing-calculation-engine`. Branch `main` tidak diubah selama pengerjaan fitur.
+Branch utama saat ini adalah `main`. Workflow CI juga memantau branch fitur yang tercantum pada `.github/workflows/build-release.yml`.
