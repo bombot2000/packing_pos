@@ -13,6 +13,21 @@ import '../core/format/dimensions.dart';
 import '../data/repositories/packing_identity_repository.dart';
 
 class PackingReceiptPrinter {
+  static String paymentMethodLabel(Object? raw) {
+    switch (raw?.toString().trim().toLowerCase()) {
+      case 'cash':
+        return 'Tunai';
+      case 'transfer':
+        return 'Transfer';
+      case 'qris':
+        return 'QRIS';
+      case 'other':
+        return 'Lainnya';
+      default:
+        return 'Metode lain';
+    }
+  }
+
   static const printerMacKey = 'packing_pos_printer_mac';
   static const paperWidthKey = 'packing_pos_printer_paper_width';
   static const printLogoKey = 'packing_pos_print_logo';
@@ -380,8 +395,25 @@ class PackingReceiptPrinter {
       linesAfter: 1,
     ));
 
-    // Riwayat pembayaran dan refund sengaja tidak dicetak pada nota pelanggan.
-    // Ringkasan total, dibayar, sisa, dan status di atas tetap ditampilkan.
+    // Tampilkan metode yang benar-benar dipakai pada setiap pembayaran,
+    // termasuk DP dan pelunasan bertahap, sesuai pilihan kasir.
+    bytes.addAll(generator.hr(ch: '-'));
+    bytes.addAll(generator.text('RINCIAN PEMBAYARAN', styles: const PosStyles(bold: true)));
+    if (payments.isEmpty) {
+      bytes.addAll(generator.text('Belum ada pembayaran'));
+    } else {
+      for (final payment in payments) {
+        final method = paymentMethodLabel(payment['payment_method']);
+        final amount = money(payment['amount']);
+        bytes.addAll(_pair(generator, cols, method, amount));
+        final paymentDate = DateTime.tryParse(payment['created_at']?.toString() ?? '');
+        if (paymentDate != null) {
+          bytes.addAll(generator.text('  ${DateFormat('dd/MM/yyyy HH:mm').format(paymentDate.toLocal())}'));
+        }
+        final paymentNote = payment['note']?.toString().trim() ?? '';
+        if (paymentNote.isNotEmpty) bytes.addAll(generator.text('  Catatan: ${printable(paymentNote)}'));
+      }
+    }
 
     final note = receipt['note']?.toString() ?? '';
     if (note.trim().isNotEmpty) bytes.addAll(generator.text('Catatan: ${printable(note)}'));
