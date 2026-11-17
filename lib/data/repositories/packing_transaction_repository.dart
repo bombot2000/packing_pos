@@ -1181,17 +1181,34 @@ class PackingTransactionRepository {
     summary['paid_total'] = paidTotal - refundTotal;
     summary['cash_received_total'] = cashReceived - cashRefundTotal;
     summary['non_cash_received_total'] = nonCashReceived - (refundTotal - cashRefundTotal);
+    // Net cash flow by channel: receipts are positive and refunds are
+    // negative on the channel actually used to disburse the refund.
     final paymentMethods = await db.rawQuery('''
-      SELECT receipt_payments.payment_method AS payment_method,
-        COALESCE(SUM(receipt_payments.amount), 0) AS amount,
-        COUNT(*) AS payment_count
-      FROM receipt_payments
-      INNER JOIN packing_receipts
-        ON packing_receipts.id = receipt_payments.receipt_id
-      WHERE packing_receipts.status != 'cancelled'$paymentDateFilter
-      GROUP BY receipt_payments.payment_method
+      SELECT payment_method,
+        COALESCE(SUM(amount), 0) AS amount,
+        COALESCE(SUM(payment_count), 0) AS payment_count
+      FROM (
+        SELECT LOWER(TRIM(receipt_payments.payment_method)) AS payment_method,
+          SUM(receipt_payments.amount) AS amount,
+          COUNT(*) AS payment_count
+        FROM receipt_payments
+        INNER JOIN packing_receipts
+          ON packing_receipts.id = receipt_payments.receipt_id
+        WHERE packing_receipts.status != 'cancelled'$paymentDateFilter
+        GROUP BY LOWER(TRIM(receipt_payments.payment_method))
+        UNION ALL
+        SELECT LOWER(TRIM(payment_refunds.refund_method)) AS payment_method,
+          -SUM(payment_refunds.amount) AS amount,
+          0 AS payment_count
+        FROM payment_refunds
+        INNER JOIN packing_receipts
+          ON packing_receipts.id = payment_refunds.receipt_id
+        WHERE packing_receipts.status != 'cancelled'$refundDateFilter
+        GROUP BY LOWER(TRIM(payment_refunds.refund_method))
+      )
+      GROUP BY payment_method
       ORDER BY amount DESC, payment_method ASC
-    ''', args);
+    ''', [...args, ...args]);
     return {
       'totals': summary,
       'materials': materials,
