@@ -14,7 +14,7 @@ class PackingDatabase {
     return instance;
   }
   static final PackingDatabase instance = PackingDatabase._();
-  static const int schemaVersion = 8;
+  static const int schemaVersion = 9;
   Database? _database;
 
   Future<Database> get database async {
@@ -76,6 +76,7 @@ class PackingDatabase {
     await _createCustomers(db);
     await _createCashTables(db);
     await _createRefundTables(db);
+    await _createCashSessionEvents(db);
     await db.execute('CREATE TABLE app_settings (key TEXT PRIMARY KEY, value TEXT NOT NULL, updated_at TEXT NOT NULL)');
     await _createIndexes(db);
   }
@@ -167,6 +168,7 @@ class PackingDatabase {
     if (oldVersion < 6) await _createCustomers(db);
     if (oldVersion < 7) await _createCashTables(db);
     if (oldVersion < 8) await _createRefundTables(db);
+    if (oldVersion < 9) await _createCashSessionEvents(db);
   }
 
   Future<bool> _hasColumn(Database db, String table, String column) async {
@@ -205,6 +207,21 @@ class PackingDatabase {
       )
     ''');
     await db.execute('CREATE INDEX IF NOT EXISTS idx_cash_expenses_session ON cash_expenses(session_id)');
+  }
+
+  Future<void> _createCashSessionEvents(Database db) async {
+    await db.execute('''
+      CREATE TABLE cash_session_events (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        session_id INTEGER NOT NULL,
+        event_type TEXT NOT NULL CHECK(event_type IN ('closed', 'reopened')),
+        reason TEXT NOT NULL DEFAULT '',
+        snapshot_json TEXT NOT NULL,
+        created_at TEXT NOT NULL,
+        FOREIGN KEY(session_id) REFERENCES cash_sessions(id) ON DELETE RESTRICT
+      )
+    ''');
+    await db.execute('CREATE INDEX IF NOT EXISTS idx_cash_session_events_session ON cash_session_events(session_id, id)');
   }
 
   Future<void> _createReceiptTables(Database db) async {
