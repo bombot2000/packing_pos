@@ -1193,9 +1193,9 @@ class PackingTransactionRepository {
         COALESCE(SUM(labor_cost), 0) AS labor_cost_total,
         COALESCE(SUM(overhead_cost), 0) AS overhead_cost_total,
         (SELECT COALESCE(SUM(total_amount), 0) FROM packing_receipts WHERE status != 'cancelled'$dateFilter) - COALESCE(SUM(material_cost + labor_cost + overhead_cost), 0) AS gross_profit,
-        (SELECT COALESCE(SUM(receipt_payments.amount), 0) FROM receipt_payments INNER JOIN packing_receipts ON packing_receipts.id = receipt_payments.receipt_id WHERE packing_receipts.status != 'cancelled'$paymentDateFilter) AS paid_total,
-        (SELECT COALESCE(SUM(receipt_payments.amount), 0) FROM receipt_payments INNER JOIN packing_receipts ON packing_receipts.id = receipt_payments.receipt_id WHERE packing_receipts.status != 'cancelled' AND LOWER(TRIM(receipt_payments.payment_method)) = 'cash'$paymentDateFilter) AS cash_received_total,
-        (SELECT COALESCE(SUM(receipt_payments.amount), 0) FROM receipt_payments INNER JOIN packing_receipts ON packing_receipts.id = receipt_payments.receipt_id WHERE packing_receipts.status != 'cancelled' AND LOWER(TRIM(receipt_payments.payment_method)) != 'cash'$paymentDateFilter) AS non_cash_received_total,
+        (SELECT COALESCE(SUM(receipt_payments.amount), 0) FROM receipt_payments INNER JOIN packing_receipts ON packing_receipts.id = receipt_payments.receipt_id WHERE 1 = 1$paymentDateFilter) AS paid_total,
+        (SELECT COALESCE(SUM(receipt_payments.amount), 0) FROM receipt_payments INNER JOIN packing_receipts ON packing_receipts.id = receipt_payments.receipt_id WHERE LOWER(TRIM(receipt_payments.payment_method)) = 'cash'$paymentDateFilter) AS cash_received_total,
+        (SELECT COALESCE(SUM(receipt_payments.amount), 0) FROM receipt_payments INNER JOIN packing_receipts ON packing_receipts.id = receipt_payments.receipt_id WHERE LOWER(TRIM(receipt_payments.payment_method)) != 'cash'$paymentDateFilter) AS non_cash_received_total,
         (SELECT COALESCE(SUM(total_amount - paid_amount), 0) FROM packing_receipts WHERE status != 'cancelled'$dateFilter) AS receivable_total,
         (SELECT COUNT(*) FROM packing_receipts WHERE status = 'completed'$dateFilter) AS completed_count,
         (SELECT COUNT(*) FROM packing_receipts WHERE status = 'open'$dateFilter) AS open_count,
@@ -1216,9 +1216,7 @@ class PackingTransactionRepository {
     final refundRows = await db.rawQuery('''
       SELECT COALESCE(SUM(amount), 0) AS total,
         COALESCE(SUM(CASE WHEN LOWER(TRIM(refund_method)) = 'cash' THEN amount ELSE 0 END), 0) AS cash_total
-      FROM payment_refunds
-      INNER JOIN packing_receipts ON packing_receipts.id = payment_refunds.receipt_id
-      WHERE packing_receipts.status != 'cancelled'$refundDateFilter
+      FROM payment_refunds WHERE 1 = 1$refundDateFilter
     ''', args);
     final summary = Map<String, Object?>.from(totals.first);
     final refundTotal = (refundRows.first['total'] as num).toInt();
