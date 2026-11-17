@@ -1102,12 +1102,61 @@ class PackingTransactionRepository {
           + (payments.first['total'] as num).toInt()
           - (refunds.first['total'] as num).toInt()
           - (expenses.first['total'] as num).toInt();
+      final closedAt = DateTime.now().toUtc().toIso8601String();
+      final cashReceived = (payments.first['total'] as num).toInt();
+      final cashRefunded = (refunds.first['total'] as num).toInt();
+      final expenseTotal = (expenses.first['total'] as num).toInt();
+      final cleanNote = note.trim();
       await txn.update('cash_sessions', {
         'expected_balance': expected, 'counted_balance': countedBalance,
         'difference': countedBalance - expected, 'status': 'closed',
-        'note': note.trim(), 'closed_at': DateTime.now().toUtc().toIso8601String(),
+        'note': cleanNote, 'closed_at': closedAt,
+      }, where: 'id = ?', whereArgs: [sessionId]);
+      await txn.insert('cash_session_events', {
+        'session_id': sessionId, 'event_type': 'closed', 'reason': cleanNote,
+        'snapshot_json': jsonEncode({
+          'opening_balance': session['opening_balance'],
+          'cash_received': cashReceived, 'cash_refunded': cashRefunded,
+          'expense_total': expenseTotal, 'expected_balance': expected,
+          'counted_balance': countedBalance, 'difference': countedBalance - expected,
+          'note': cleanNote, 'closed_at': closedAt,
+        }),
+        'created_at': closedAt,
+      });
+    });
+  }
+
+  Future<void> reopenCashSession({required int sessionId, required String reason}) async {
+    final cleanReason = reason.trim();
+    if (cleanReason.isEmpty) throw ArgumentError('Alasan membuka kembali sesi kas wajib diisi.');
+    final db = await _database.database;
+    await db.transaction((txn) async {
+      final rows = await txn.query('cash_sessions', where: 'id = ?', whereArgs: [sessionId], limit: 1);
+      if (rows.isEmpty) throw StateError('Sesi kas tidak ditemukan.');
+      final session = rows.first;
+      if (session['status'] != 'closed') throw StateError('Hanya sesi kas yang sudah ditutup yang dapat dibuka kembali.');
+      final now = DateTime.now().toUtc().toIso8601String();
+      await txn.insert('cash_session_events', {
+        'session_id': sessionId, 'event_type': 'reopened', 'reason': cleanReason,
+        'snapshot_json': jsonEncode({
+          'opening_balance': session['opening_balance'],
+          'expected_balance': session['expected_balance'],
+          'counted_balance': session['counted_balance'],
+          'difference': session['difference'], 'note': session['note'],
+          'closed_at': session['closed_at'],
+        }),
+        'created_at': now,
+      });
+      await txn.update('cash_sessions', {
+        'status': 'open', 'expected_balance': null, 'counted_balance': null,
+        'difference': null, 'note': '', 'closed_at': null,
       }, where: 'id = ?', whereArgs: [sessionId]);
     });
+  }
+
+  Future<List<Map<String, Object?>>> cashSessionEvents(int sessionId) async {
+    final db = await _database.database;
+    return db.query('cash_session_events', where: 'session_id = ?', whereArgs: [sessionId], orderBy: 'id DESC');
   }
 
   /// Ringkasan laporan lintas transaksi. Transaksi batal tidak dihitung sebagai
@@ -1226,7 +1275,7 @@ class PackingTransactionRepository {
           txn.query(table, orderBy: 'id');
       return {
         'format': 'packing_pos_backup',
-        'version': 8,
+        'version': 9,
         'createdAt': DateTime.now().toUtc().toIso8601String(),
         'packing_transactions': await rows('packing_transactions'),
         'packing_receipts': await rows('packing_receipts'),
@@ -1240,6 +1289,7 @@ class PackingTransactionRepository {
         'app_settings': await txn.query('app_settings', orderBy: 'key'),
         'cash_sessions': await rows('cash_sessions'),
         'cash_expenses': await rows('cash_expenses'),
+        'cash_session_events': await rows('cash_session_events'),
       };
     });
   }
@@ -1251,6 +1301,7 @@ class PackingTransactionRepository {
 
     final db = await _database.database;
     await db.transaction((txn) async {
+      await txn.delete('cash_session_events');
       await txn.delete('cash_expenses');
       await txn.delete('cash_sessions');
       await txn.delete('payment_refunds');
@@ -1290,6 +1341,7 @@ class PackingTransactionRepository {
       }
       for (final row in data['cash_sessions'] ?? const <Map<String, Object?>>[]) { await txn.insert('cash_sessions', row); }
       for (final row in data['cash_expenses'] ?? const <Map<String, Object?>>[]) { await txn.insert('cash_expenses', row); }
+      for (final row in data['cash_session_events'] ?? const <Map<String, Object?>>[]) { await txn.insert('cash_session_events', row); }
     });
   }
 
