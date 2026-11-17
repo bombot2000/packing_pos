@@ -15,8 +15,8 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Packing POS'), findsOneWidget);
-    expect(find.text('Buat nota baru'), findsOneWidget);
-    expect(find.text('Riwayat nota'), findsOneWidget);
+    expect(find.text('Transaksi packing baru'), findsOneWidget);
+    expect(find.text('Riwayat transaksi'), findsOneWidget);
 
     // Settings are below the dashboard shortcuts in the scrollable home page.
     final settings = find.text('Pengaturan & data');
