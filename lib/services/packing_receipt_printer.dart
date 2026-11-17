@@ -418,10 +418,14 @@ class PackingReceiptPrinter {
     final note = receipt['note']?.toString() ?? '';
     if (note.trim().isNotEmpty) bytes.addAll(generator.text('Catatan: ${printable(note)}'));
     bytes.addAll(generator.hr());
-    bytes.addAll(generator.text(
-      receiptStatus == 'cancelled' ? 'ARSIP NOTA DIBATALKAN' : 'Terima kasih',
-      styles: const PosStyles(align: PosAlign.center, bold: true),
-    ));
+    final thankYou = (identity['receipt_thank_you'] ?? 'Terima kasih').trim();
+    final footer = receiptStatus == 'cancelled' ? 'ARSIP NOTA DIBATALKAN' : thankYou;
+    if (footer.isNotEmpty) {
+      bytes.addAll(generator.text(
+        printable(footer),
+        styles: const PosStyles(align: PosAlign.center, bold: true),
+      ));
+    }
     bytes.addAll(generator.feed(3));
     if (!await PrintBluetoothThermal.writeBytes(bytes)) throw StateError('Printer menolak data cetak.');
     return true;
