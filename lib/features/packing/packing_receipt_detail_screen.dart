@@ -92,81 +92,30 @@ class _PackingReceiptDetailScreenState extends State<PackingReceiptDetailScreen>
         .fold<int>(0, (sum, row) => sum + (row['amount'] as num).toInt());
     final refundable = sourceAmount - alreadyRefunded;
     if (refundable <= 0) return;
-    final amount = TextEditingController(text: groupThousands(refundable));
-    final reason = TextEditingController();
-    final note = TextEditingController();
-    var method = 'cash';
-    final confirmed = await showDialog<bool>(
+
+    final result = await showDialog<_RefundFormResult>(
       context: context,
-      builder: (ctx) => StatefulBuilder(builder: (ctx, setLocal) => AlertDialog(
-        title: const Text('Catat pengembalian dana'),
-        content: SingleChildScrollView(child: Column(mainAxisSize: MainAxisSize.min, children: [
-          Text('Pembayaran sumber ' + _money(sourceAmount) + ' • Sudah dikembalikan ' + _money(alreadyRefunded)),
-          const Text('Pembayaran asli tetap tersimpan. Refund tunai mengurangi saldo kas pada tanggal refund.'),
-          const SizedBox(height: 12),
-          TextField(
-            controller: amount,
-            keyboardType: TextInputType.number,
-            inputFormatters: [RupiahInputFormatter()],
-            decoration: InputDecoration(
-              labelText: 'Nominal refund',
-              prefixText: 'Rp ',
-              helperText: 'Maksimal ' + _money(refundable),
-            ),
-          ),
-          const SizedBox(height: 8),
-          DropdownButtonFormField<String>(
-            value: method,
-            decoration: const InputDecoration(labelText: 'Metode pengembalian'),
-            items: const [
-              DropdownMenuItem(value: 'cash', child: Text('Tunai')),
-              DropdownMenuItem(value: 'transfer', child: Text('Transfer')),
-              DropdownMenuItem(value: 'qris', child: Text('QRIS')),
-              DropdownMenuItem(value: 'other', child: Text('Lainnya')),
-            ],
-            onChanged: (value) => setLocal(() => method = value ?? 'cash'),
-          ),
-          const SizedBox(height: 8),
-          TextField(
-            controller: reason,
-            onChanged: (_) => setLocal(() {}),
-            decoration: const InputDecoration(labelText: 'Alasan refund *'),
-          ),
-          const SizedBox(height: 8),
-          TextField(
-            controller: note,
-            decoration: const InputDecoration(labelText: 'Catatan tambahan (opsional)'),
-          ),
-        ])),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Kembali')),
-          FilledButton(
-            onPressed: reason.text.trim().isEmpty ? null : () => Navigator.pop(ctx, true),
-            child: const Text('Simpan refund'),
-          ),
-        ],
-      )),
+      builder: (_) => _RefundFormDialog(
+        sourceAmount: sourceAmount,
+        alreadyRefunded: alreadyRefunded,
+        refundable: refundable,
+      ),
     );
-    final refundAmount = _parse(amount.text);
-    final refundReason = reason.text.trim();
-    final refundNote = note.text.trim();
-    amount.dispose();
-    reason.dispose();
-    note.dispose();
-    if (confirmed != true) return;
-    if (refundAmount == null || refundAmount <= 0 || refundAmount > refundable) {
+    if (!mounted || result == null) return;
+    if (result.amount <= 0 || result.amount > refundable) {
       setState(() => _error = 'Nominal refund tidak valid atau melebihi sisa pembayaran sumber.');
       return;
     }
+
     setState(() { _busy = true; _error = null; });
     try {
       await _repo.addReceiptRefund(
         receiptId: widget.receiptId,
         receiptPaymentId: paymentId,
-        amount: refundAmount,
-        refundMethod: method,
-        reason: refundReason,
-        note: refundNote,
+        amount: result.amount,
+        refundMethod: result.method,
+        reason: result.reason,
+        note: result.note,
       );
       await _load();
       if (mounted) {
@@ -532,6 +481,126 @@ class _PackingReceiptDetailScreenState extends State<PackingReceiptDetailScreen>
           ],
         ),
       ),
+    );
+  }
+}
+
+
+class _RefundFormResult {
+  const _RefundFormResult({
+    required this.amount,
+    required this.method,
+    required this.reason,
+    required this.note,
+  });
+
+  final int amount;
+  final String method;
+  final String reason;
+  final String note;
+}
+
+class _RefundFormDialog extends StatefulWidget {
+  const _RefundFormDialog({
+    required this.sourceAmount,
+    required this.alreadyRefunded,
+    required this.refundable,
+  });
+
+  final int sourceAmount;
+  final int alreadyRefunded;
+  final int refundable;
+
+  @override
+  State<_RefundFormDialog> createState() => _RefundFormDialogState();
+}
+
+class _RefundFormDialogState extends State<_RefundFormDialog> {
+  late final TextEditingController _amount;
+  final _reason = TextEditingController();
+  final _note = TextEditingController();
+  String _method = 'cash';
+
+  @override
+  void initState() {
+    super.initState();
+    _amount = TextEditingController(text: groupThousands(widget.refundable));
+  }
+
+  @override
+  void dispose() {
+    _amount.dispose();
+    _reason.dispose();
+    _note.dispose();
+    super.dispose();
+  }
+
+  void _submit() {
+    final amount = parseRupiah(_amount.text);
+    if (amount == null || amount <= 0 || amount > widget.refundable) return;
+    Navigator.of(context).pop(_RefundFormResult(
+      amount: amount,
+      method: _method,
+      reason: _reason.text.trim(),
+      note: _note.text.trim(),
+    ));
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final canSubmit = _reason.text.trim().isNotEmpty;
+    return AlertDialog(
+      title: const Text('Catat pengembalian dana'),
+      content: SingleChildScrollView(
+        child: Column(mainAxisSize: MainAxisSize.min, children: [
+          Text('Pembayaran sumber ${formatRupiah(widget.sourceAmount)} • Sudah dikembalikan ${formatRupiah(widget.alreadyRefunded)}'),
+          const Text('Pembayaran asli tetap tersimpan. Refund tunai mengurangi saldo kas pada tanggal refund.'),
+          const SizedBox(height: 12),
+          TextField(
+            controller: _amount,
+            keyboardType: TextInputType.number,
+            inputFormatters: [RupiahInputFormatter()],
+            decoration: InputDecoration(
+              labelText: 'Nominal refund',
+              prefixText: 'Rp ',
+              helperText: 'Maksimal ${formatRupiah(widget.refundable)}',
+            ),
+          ),
+          const SizedBox(height: 8),
+          DropdownButtonFormField<String>(
+            value: _method,
+            decoration: const InputDecoration(labelText: 'Metode pengembalian'),
+            items: const [
+              DropdownMenuItem(value: 'cash', child: Text('Tunai')),
+              DropdownMenuItem(value: 'transfer', child: Text('Transfer')),
+              DropdownMenuItem(value: 'qris', child: Text('QRIS')),
+              DropdownMenuItem(value: 'other', child: Text('Lainnya')),
+            ],
+            onChanged: (value) => setState(() => _method = value ?? 'cash'),
+          ),
+          const SizedBox(height: 8),
+          TextField(
+            controller: _reason,
+            onChanged: (_) => setState(() {}),
+            decoration: const InputDecoration(labelText: 'Alasan refund *'),
+          ),
+          const SizedBox(height: 8),
+          TextField(
+            controller: _note,
+            decoration: const InputDecoration(labelText: 'Catatan tambahan (opsional)'),
+          ),
+        ]),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('Kembali'),
+        ),
+        FilledButton(
+          onPressed: canSubmit ? _submit : null,
+          child: const Text('Simpan refund'),
+        ),
+      ],
     );
   }
 }
