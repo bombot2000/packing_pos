@@ -18,6 +18,7 @@ class PackingBackupValidator {
     'cash_sessions',
     'cash_expenses',
     'payment_refunds',
+    'cash_session_events',
   ];
 
   static Map<String, List<Map<String, Object?>>> validate(
@@ -25,13 +26,13 @@ class PackingBackupValidator {
   ) {
     final version = backup['version'];
     if (backup['format'] != 'packing_pos_backup' ||
-        (version != 1 && version != 2 && version != 3 && version != 4 && version != 5 && version != 6 && version != 7 && version != 8)) {
+        (version != 1 && version != 2 && version != 3 && version != 4 && version != 5 && version != 6 && version != 7 && version != 8 && version != 9)) {
       throw const FormatException('Format atau versi backup tidak didukung.');
     }
 
     final data = <String, List<Map<String, Object?>>>{};
     for (final table in tables) {
-      if ((table == 'service_types' && version < 3 && backup[table] == null) || (version < 4 && ['packing_receipts', 'receipt_payments'].contains(table)) || (table == 'customers' && version < 6) || (['cash_sessions', 'cash_expenses'].contains(table) && version < 7) || (table == 'payment_refunds' && version < 8)) continue;
+      if ((table == 'service_types' && version < 3 && backup[table] == null) || (version < 4 && ['packing_receipts', 'receipt_payments'].contains(table)) || (table == 'customers' && version < 6) || (['cash_sessions', 'cash_expenses'].contains(table) && version < 7) || (table == 'payment_refunds' && version < 8) || (table == 'cash_session_events' && version < 9)) continue;
       final raw = backup[table];
       if (raw is! List) {
         throw FormatException('Data tabel $table tidak ditemukan pada backup.');
@@ -380,6 +381,21 @@ class PackingBackupValidator {
       _text(row['category'], 'Kategori pengeluaran kas');
       _string(row['note'], 'Catatan pengeluaran kas');
       _text(row['created_at'], 'Tanggal pengeluaran kas');
+    }
+
+    final cashEventIds = <int>{};
+    for (final row in data['cash_session_events'] ?? const <Map<String, Object?>>[]) {
+      final id = _positiveInt(row['id'], 'ID audit sesi kas');
+      if (!cashEventIds.add(id)) throw FormatException('ID audit sesi kas duplikat: $id.');
+      final sessionId = _positiveInt(row['session_id'], 'ID sesi audit kas');
+      if (!cashSessionIds.contains(sessionId)) throw const FormatException('Audit kas merujuk sesi yang tidak ada.');
+      final type = _text(row['event_type'], 'Jenis audit kas');
+      if (!['closed', 'reopened'].contains(type)) throw const FormatException('Jenis audit kas tidak valid.');
+      _string(row['reason'], 'Alasan audit kas');
+      final snapshot = _text(row['snapshot_json'], 'Snapshot audit kas');
+      try { if (jsonDecode(snapshot) is! Map) throw const FormatException(); }
+      on FormatException { throw FormatException('Snapshot audit kas $id tidak valid.'); }
+      _text(row['created_at'], 'Tanggal audit kas');
     }
 
     // A closed cash session is a historical snapshot. Verify its expected
