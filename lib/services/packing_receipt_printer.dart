@@ -397,6 +397,7 @@ class PackingReceiptPrinter {
     final note = receipt['note']?.toString() ?? '';
     if (note.trim().isNotEmpty) bytes.addAll(generator.text('Catatan: ${printable(note)}'));
     bytes.addAll(generator.hr());
+    final receiptStatus = receipt['status']?.toString() ?? 'open';
     final thankYou = (identity['receipt_thank_you'] ?? 'Terima kasih').trim();
     final footer = receiptStatus == 'cancelled' ? 'ARSIP NOTA DIBATALKAN' : thankYou;
     if (footer.isNotEmpty) {
