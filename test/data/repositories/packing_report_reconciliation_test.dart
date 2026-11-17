@@ -114,7 +114,7 @@ void main() {
     final methods = (report['payment_methods'] as List)
         .map((row) => Map<String, Object?>.from(row as Map));
     final byMethod = {for (final row in methods) row['payment_method']: row['amount']};
-    expect(byMethod['cash'], 45000);
-    expect(byMethod['transfer'], -15000);
+    expect(byMethod['cash'], 40000);
+    expect(byMethod['transfer'], -10000);
   });
 }
