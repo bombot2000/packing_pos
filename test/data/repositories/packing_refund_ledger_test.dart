@@ -227,6 +227,65 @@ void main() {
 
 
 
+  test('rekonsiliasi pembayaran DP, refund sebagian, pelunasan, dan backup', () async {
+    final receiptId = await createReceipt();
+    await repository.addReceiptPayment(
+      receiptId: receiptId,
+      amount: 60000,
+      paymentMethod: 'cash',
+      note: 'DP tunai',
+    );
+    final firstPayment = (await repository.receiptPaymentsFor(receiptId)).single;
+
+    await repository.addReceiptRefund(
+      receiptId: receiptId,
+      receiptPaymentId: (firstPayment['id'] as num).toInt(),
+      amount: 10000,
+      refundMethod: 'transfer',
+      reason: 'Penyesuaian pekerjaan',
+    );
+
+    await repository.addReceiptPayment(
+      receiptId: receiptId,
+      amount: 50000,
+      paymentMethod: 'transfer',
+      note: 'Pelunasan setelah refund',
+    );
+
+    var receipt = (await repository.findReceiptById(receiptId))!;
+    expect(receipt['total_amount'], 100000);
+    expect(receipt['paid_amount'], 100000);
+    expect(receipt['status'], 'completed');
+
+    var report = await repository.reportSummary();
+    var totals = Map<String, Object?>.from(report['totals'] as Map);
+    expect(totals['paid_total'], 100000);
+    expect(totals['cash_received_total'], 60000);
+    expect(totals['non_cash_received_total'], 40000);
+    expect(totals['refund_total'], 10000);
+
+    var methods = (report['payment_methods'] as List)
+        .map((row) => Map<String, Object?>.from(row as Map));
+    var byMethod = {for (final row in methods) row['payment_method']: row};
+    expect((byMethod['cash']!['amount'] as num).toInt(), 60000);
+    expect((byMethod['transfer']!['amount'] as num).toInt(), 40000);
+
+    final backup = await repository.exportBackup();
+    await repository.restoreBackup(backup);
+
+    receipt = (await repository.findReceiptById(receiptId))!;
+    expect(receipt['paid_amount'], 100000);
+    expect(await repository.receiptPaymentsFor(receiptId), hasLength(2));
+    expect(await repository.receiptRefundsFor(receiptId), hasLength(1));
+
+    report = await repository.reportSummary();
+    totals = Map<String, Object?>.from(report['totals'] as Map);
+    expect(totals['paid_total'], 100000);
+    expect(totals['refund_total'], 10000);
+  });
+
+
+
   test('refund tunai ditolak setelah sesi kas hari itu ditutup', () async {
     final sessionId = await repository.startCashSession(
       date: DateTime.now(),
