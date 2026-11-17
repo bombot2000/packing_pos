@@ -84,7 +84,7 @@ void main() {
       receiptId: cancelledId,
       receiptPaymentId: (cancelledPayment['id'] as num).toInt(),
       amount: 5000,
-      refundMethod: 'cash',
+      refundMethod: 'transfer',
       reason: 'Nota dibatalkan',
     );
     await repository.cancelReceipt(
