@@ -84,7 +84,7 @@ void main() {
     );
 
     final backup = await repository.exportBackup();
-    expect(backup['version'], 8);
+    expect(backup['version'], 9);
     expect(backup['payment_refunds'], hasLength(1));
 
     await repository.restoreBackup(backup);
