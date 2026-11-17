@@ -21,6 +21,7 @@ class PackingCalculatorScreen extends StatefulWidget {
 class _PackingCalculatorScreenState extends State<PackingCalculatorScreen> {
   final _customer = TextEditingController();
   final _customerFocus = FocusNode();
+  final _scroll = ScrollController();
   final _item = TextEditingController();
   final _length = TextEditingController();
   final _width = TextEditingController();
@@ -129,6 +130,26 @@ class _PackingCalculatorScreenState extends State<PackingCalculatorScreen> {
     if (mounted) setState(() {});
   }
 
+  bool get _canQuickAddCustomer {
+    final name = _customer.text.trim().toLowerCase();
+    if (name.isEmpty) return false;
+    return !_customers.any((row) => (row['name'] as String).trim().toLowerCase() == name);
+  }
+
+  Future<void> _quickAddCustomer() async {
+    final name = _customer.text.trim();
+    if (name.isEmpty) return;
+    try {
+      await _repo.saveCustomer(name: name);
+      await _loadCustomers();
+      if (!mounted) return;
+      _customerFocus.unfocus();
+      _showInfo('Pelanggan "$name" ditambahkan ke master.');
+    } catch (e) {
+      if (mounted) setState(() => _error = 'Gagal menambah pelanggan: ${friendlyError(e)}');
+    }
+  }
+
   List<String> get _customerSuggestions {
     final query = _customer.text.trim().toLowerCase();
     if (query.isEmpty) return const [];
@@ -144,6 +165,7 @@ class _PackingCalculatorScreenState extends State<PackingCalculatorScreen> {
   void dispose() {
     _customerFocus.removeListener(_onCustomerFocusChanged);
     _customerFocus.dispose();
+    _scroll.dispose();
     _customer.dispose(); _item.dispose(); _length.dispose(); _width.dispose();
     _height.dispose(); _charge.dispose(); _quantity.dispose(); _discount.dispose(); _note.dispose(); _receiptNote.dispose();
     super.dispose();
@@ -191,6 +213,18 @@ class _PackingCalculatorScreenState extends State<PackingCalculatorScreen> {
   int get _grandSubtotal => _jobs.fold<int>(0, (sum, job) => sum + job.sellingPrice * job.quantity);
   int get _discountAmount => parseRupiah(_discount.text) ?? 0;
   int get _grandTotal => _grandSubtotal - _discountAmount;
+
+  bool get _hasPendingInput => [_item, _length, _width, _height, _note].any((c) => c.text.trim().isNotEmpty);
+
+  void _showInfo(String message, {String? actionLabel, VoidCallback? onAction}) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context)..hideCurrentSnackBar()..showSnackBar(SnackBar(content: Text(message), behavior: SnackBarBehavior.floating, duration: const Duration(seconds: 3), action: actionLabel == null ? null : SnackBarAction(label: actionLabel, onPressed: onAction ?? () {})));
+  }
+
+  void _scrollToList() {
+    if (!_scroll.hasClients) return;
+    _scroll.animateTo(_scroll.position.maxScrollExtent, duration: const Duration(milliseconds: 300), curve: Curves.easeOut);
+  }
 
   int get _quantityValue => int.tryParse(_quantity.text.trim()) ?? 1;
   void _changeQuantity(int delta) { final next = (_quantityValue + delta).clamp(1, 9999); setState(() => _quantity.text = next.toString()); }
@@ -240,15 +274,33 @@ class _PackingCalculatorScreenState extends State<PackingCalculatorScreen> {
       _error = null;
       _item.clear(); _length.clear(); _width.clear(); _height.clear(); _quantity.text = '1'; _note.clear();
     });
+    _showInfo('Pekerjaan ditambahkan • ${_jobs.length} pekerjaan • Total ${_money(_grandTotal)}', actionLabel: 'Lihat daftar', onAction: _scrollToList);
   }
 
-  void _removeJob(int index) => setState(() => _jobs.removeAt(index));
+  void _removeJob(int index) {
+    if (index < 0 || index >= _jobs.length) return;
+    final removed = _jobs[index];
+    setState(() => _jobs.removeAt(index));
+    _showInfo('Pekerjaan dihapus', actionLabel: 'Urungkan', onAction: () {
+      if (!mounted) return;
+      final at = index > _jobs.length ? _jobs.length : index;
+      setState(() => _jobs.insert(at, removed));
+    });
+  }
 
   Future<void> _saveReceipt() async {
     if (_jobs.isEmpty) { setState(() => _error = 'Tambahkan minimal satu pekerjaan ke nota.'); return; }
     if (_discountAmount < 0 || _discountAmount > _grandSubtotal) {
       setState(() => _error = 'Diskon tidak boleh melebihi subtotal pekerjaan.');
       return;
+    }
+    if (_hasPendingInput) {
+      final proceed = await showDialog<bool>(context: context, builder: (ctx) => AlertDialog(
+        title: const Text('Ada isian yang belum ditambahkan'),
+        content: const Text('Isian pada "Pekerjaan berikutnya" belum ditambahkan ke nota dan tidak akan ikut tersimpan.'),
+        actions: [TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Kembali')), FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Simpan tanpa itu'))],
+      ));
+      if (proceed != true || !mounted) return;
     }
     FocusScope.of(context).unfocus();
     setState(() { _saving = true; _error = null; });
@@ -316,10 +368,10 @@ class _PackingCalculatorScreenState extends State<PackingCalculatorScreen> {
   @override
   Widget build(BuildContext context) => Scaffold(
     appBar: AppBar(title: Text(widget.editReceiptId == null ? 'Buat nota packing' : 'Edit nota packing')),
-    body: ListView(padding: const EdgeInsets.fromLTRB(16, 16, 16, 12), children: [
+    body: ListView(controller: _scroll, padding: const EdgeInsets.fromLTRB(16, 16, 16, 12), children: [
       Text(widget.editReceiptId == null
-        ? 'Satu nota dapat berisi banyak pekerjaan. Tambahkan pekerjaan satu per satu, lalu simpan dan lakukan pembayaran untuk total seluruh nota.'
-        : 'Edit data nota yang belum dibayar. Hapus pekerjaan yang tidak diperlukan atau tambahkan pekerjaan baru, lalu simpan perubahan.'),
+        ? 'Tambahkan pekerjaan satu per satu, lalu simpan. Pembayaran dicatat untuk total seluruh nota.'
+        : 'Ubah pekerjaan pada nota yang belum dibayar, lalu simpan perubahan.'),
       const SizedBox(height: 16),
       Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -373,6 +425,8 @@ class _PackingCalculatorScreenState extends State<PackingCalculatorScreen> {
                 )).toList(),
               ),
             ),
+          if (_customerFocus.hasFocus && _canQuickAddCustomer)
+            Card(margin: const EdgeInsets.only(top: 4), child: ListTile(dense: true, leading: const Icon(Icons.person_add_alt_1), title: Text('Simpan "${_customer.text.trim()}" sebagai pelanggan baru'), subtitle: const Text('Agar piutang tidak terpecah karena salah ketik'), onTap: _quickAddCustomer)),
         ],
       ),
       const SizedBox(height: 12),

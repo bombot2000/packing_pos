@@ -8,6 +8,7 @@ import '../../core/format/friendly_error.dart';
 import '../../core/format/money_input.dart';
 import '../../core/format/rupiah.dart';
 import 'packing_calculator_screen.dart';
+import 'printer_settings_screen.dart';
 import '../../data/repositories/packing_transaction_repository.dart';
 import '../../services/packing_receipt_printer.dart';
 import '../../data/repositories/packing_identity_repository.dart';
@@ -180,6 +181,14 @@ class _PackingReceiptDetailScreenState extends State<PackingReceiptDetailScreen>
     }
   }
 
+  void _setError(String? message, {SnackBarAction? action}) {
+    if (!mounted) return;
+    setState(() => _error = message);
+    if (message == null) return;
+    final scheme = Theme.of(context).colorScheme;
+    ScaffoldMessenger.of(context)..hideCurrentSnackBar()..showSnackBar(SnackBar(content: Text(message), backgroundColor: scheme.error, behavior: SnackBarBehavior.floating, duration: const Duration(seconds: 5), action: action));
+  }
+
   Future<void> _printReceipt() async {
     if (_receipt == null || _busy) return;
     setState(() => _busy = true);
@@ -202,7 +211,7 @@ class _PackingReceiptDetailScreenState extends State<PackingReceiptDetailScreen>
         );
       }
     } catch (e) {
-      if (mounted) setState(() => _error = friendlyError(e));
+      if (mounted) _setError(friendlyError(e), action: SnackBarAction(label: 'Atur printer', textColor: Theme.of(context).colorScheme.onError, onPressed: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const PrinterSettingsScreen()))));
     } finally {
       if (mounted) setState(() => _busy = false);
     }

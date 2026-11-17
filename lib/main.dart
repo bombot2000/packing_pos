@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import 'core/format/rupiah.dart';
 import 'data/repositories/packing_identity_repository.dart';
@@ -39,6 +40,9 @@ class _HomePageState extends State<HomePage> {
   final _repository = PackingTransactionRepository();
   String _businessName = 'Packing POS';
   int? _salesToday, _paidToday, _receivable;
+  int? _receiptCount;
+  int? _backupAgeDays;
+  bool _backupKnown = false;
 
   static const _days = ['Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu', 'Minggu'];
   static const _months = ['Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'];
@@ -48,6 +52,7 @@ class _HomePageState extends State<HomePage> {
     super.initState();
     _loadIdentity();
     _loadSummary();
+    _loadBackupStatus();
   }
 
   Future<void> _loadIdentity() async {
@@ -70,15 +75,28 @@ class _HomePageState extends State<HomePage> {
         _salesToday = (t['sales_total'] as num?)?.toInt() ?? 0;
         _paidToday = (t['paid_total'] as num?)?.toInt() ?? 0;
         _receivable = (a['receivable_total'] as num?)?.toInt() ?? 0;
+        _receiptCount = (a['receipt_count'] as num?)?.toInt() ?? 0;
       });
     } catch (_) {}
   }
+
+  Future<void> _loadBackupStatus() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final last = DateTime.tryParse(prefs.getString(PackingBackupScreen.lastBackupKey) ?? '');
+      if (!mounted) return;
+      setState(() { _backupKnown = true; _backupAgeDays = last == null ? null : DateTime.now().difference(last).inDays; });
+    } catch (_) {}
+  }
+
+  bool get _needsBackup => _backupKnown && (_receiptCount ?? 0) > 0 && (_backupAgeDays == null || _backupAgeDays! >= 7);
 
   Future<void> _open(Widget page) async {
     await Navigator.of(context).push(MaterialPageRoute(builder: (_) => page));
     if (!mounted) return;
     _loadSummary();
     _loadIdentity();
+    _loadBackupStatus();
   }
 
   String _dateLabel() {
@@ -137,24 +155,30 @@ class _HomePageState extends State<HomePage> {
             Text('Data tersimpan di perangkat dan dapat dipakai tanpa internet.', textAlign: TextAlign.center, style: Theme.of(context).textTheme.bodySmall),
           ]),
         )),
+        if (_needsBackup) ...[
+          const SizedBox(height: 12),
+          Card(color: Theme.of(context).colorScheme.tertiaryContainer, margin: EdgeInsets.zero, child: ListTile(leading: const Icon(Icons.backup_outlined), title: Text(_backupAgeDays == null ? 'Data belum pernah dibackup' : 'Backup terakhir $_backupAgeDays hari lalu'), subtitle: const Text('Data hanya tersimpan di HP ini. Backup agar tidak hilang.'), trailing: TextButton(onPressed: () => _open(const PackingBackupScreen()), child: const Text('Backup')))),
+        ],
         const SizedBox(height: 12),
         SizedBox(height: 64, child: FilledButton.icon(
           onPressed: () => _open(const PackingCalculatorScreen()),
           icon: const Icon(Icons.add_box_outlined, size: 28),
-          label: const Text('Transaksi packing baru', style: TextStyle(fontSize: 18)),
+          label: const Text('Buat nota baru', style: TextStyle(fontSize: 18)),
         )),
         const SizedBox(height: 12),
         GridView.count(
           crossAxisCount: 2, shrinkWrap: true, physics: const NeverScrollableScrollPhysics(),
           mainAxisSpacing: 10, crossAxisSpacing: 10, childAspectRatio: 1.5,
           children: [
-            _shortcut(Icons.receipt_long, 'Riwayat transaksi', const PackingTransactionHistoryScreen()),
+            _shortcut(Icons.receipt_long, 'Riwayat nota', const PackingTransactionHistoryScreen()),
             _shortcut(Icons.account_balance_wallet_outlined, 'Daftar piutang', const PackingReceivablesScreen()),
             _shortcut(Icons.lock_clock, 'Tutup kas harian', const PackingCashClosingScreen()),
             _shortcut(Icons.bar_chart, 'Laporan usaha', const PackingReportsScreen()),
-            _shortcut(Icons.calculate_outlined, 'Estimasi biaya packing', const PackingCostEstimatorScreen()),
+
           ],
         ),
+        const SizedBox(height: 10),
+        Card(margin: EdgeInsets.zero, child: ListTile(leading: Icon(Icons.calculate_outlined, color: Theme.of(context).colorScheme.primary), title: const Text('Estimasi biaya packing', style: TextStyle(fontWeight: FontWeight.w600)), trailing: const Icon(Icons.chevron_right), onTap: () => _open(const PackingCostEstimatorScreen()))),
         const SizedBox(height: 12),
         Card(child: ExpansionTile(
           leading: const Icon(Icons.settings_outlined),
