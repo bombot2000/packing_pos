@@ -374,27 +374,6 @@ class PackingReceiptPrinter {
     bytes.addAll(_pair(generator, cols, 'Dibayar', money(paid)));
     bytes.addAll(generator.text('Sisa: ${money(total - paid)}'));
 
-    final receiptStatus = receipt['status']?.toString() ?? 'open';
-    // Derive the payment label from the amounts so a stale status value
-    // cannot print a partially paid receipt as fully settled.
-    final statusLabel = receiptStatus == 'cancelled'
-        ? 'DIBATALKAN'
-        : total > 0 && paid >= total
-            ? 'LUNAS'
-            : paid > 0
-                ? 'DIBAYAR SEBAGIAN'
-                : refunds.isNotEmpty
-                    ? 'REFUND TERCATAT'
-                    : 'BELUM DIBAYAR';
-    bytes.addAll(generator.text(
-      'STATUS: $statusLabel',
-      styles: const PosStyles(
-        bold: true,
-        align: PosAlign.center,
-      ),
-      linesAfter: 1,
-    ));
-
     // Tampilkan metode yang benar-benar dipakai pada setiap pembayaran,
     // termasuk DP dan pelunasan bertahap, sesuai pilihan kasir.
     bytes.addAll(generator.hr(ch: '-'));
