@@ -769,7 +769,7 @@ class PackingTransactionRepository {
     String note = '',
   }) async {
     if (amount <= 0) throw ArgumentError('Nominal pembayaran harus lebih dari nol.');
-    if (paymentMethod.trim().isEmpty) throw ArgumentError('Metode pembayaran wajib dipilih.');
+    final normalizedPaymentMethod = _normalizePaymentMethod(paymentMethod);
     final db = await _database.database;
     final now = DateTime.now().toUtc().toIso8601String();
     await db.transaction((txn) async {
@@ -896,7 +896,7 @@ class PackingTransactionRepository {
     String note = '',
   }) async {
     if (amount <= 0) throw ArgumentError('Nominal pembayaran harus lebih dari nol.');
-    if (paymentMethod.trim().isEmpty) throw ArgumentError('Metode pembayaran wajib dipilih.');
+    final normalizedPaymentMethod = _normalizePaymentMethod(paymentMethod);
     final db = await _database.database;
     final now = DateTime.now().toUtc().toIso8601String();
     await db.transaction((txn) async {
