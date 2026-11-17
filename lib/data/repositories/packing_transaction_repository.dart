@@ -59,6 +59,15 @@ class PackingTransactionDraft {
 }
 
 class PackingTransactionRepository {
+  static String _normalizePaymentMethod(String value) {
+    final method = value.trim().toLowerCase();
+    const allowed = {'cash', 'transfer', 'qris', 'other'};
+    if (!allowed.contains(method)) {
+      throw ArgumentError('Metode pembayaran harus cash, transfer, qris, atau other.');
+    }
+    return method;
+  }
+
   PackingTransactionRepository({PackingDatabase? database})
       : _database = database ?? PackingDatabase.instance;
 
@@ -699,7 +708,7 @@ class PackingTransactionRepository {
     String note = '',
   }) async {
     if (amount <= 0) throw ArgumentError('Nominal pembayaran harus lebih dari nol.');
-    if (paymentMethod.trim().isEmpty) throw ArgumentError('Metode pembayaran wajib dipilih.');
+    final normalizedPaymentMethod = _normalizePaymentMethod(paymentMethod);
     final db = await _database.database;
     final now = DateTime.now().toUtc().toIso8601String();
     await db.transaction((txn) async {
@@ -733,7 +742,7 @@ class PackingTransactionRepository {
       }
       if (paid > 0) throw StateError('Nota ini sudah memiliki pembayaran.');
       if (amount != total) throw ArgumentError('Pembayaran harus sama dengan total nota ($total).');
-      if (paymentMethod.trim().toLowerCase() == 'cash') {
+      if (normalizedPaymentMethod == 'cash') {
         final sessions = await txn.query('cash_sessions', columns: ['status'], where: 'date_key = ?', whereArgs: [_cashDateKey(DateTime.now())], limit: 1);
         if (sessions.isNotEmpty && sessions.first['status'] == 'closed') {
           throw StateError('Kas hari ini sudah ditutup; pembayaran tunai baru tidak dapat dicatat.');
@@ -741,7 +750,7 @@ class PackingTransactionRepository {
       }
       await txn.insert('receipt_payments', {
         'receipt_id': receiptId, 'amount': amount,
-        'payment_method': paymentMethod.trim().toLowerCase(), 'note': note.trim(), 'created_at': now,
+        'payment_method': normalizedPaymentMethod, 'note': note.trim(), 'created_at': now,
       });
       await txn.update('packing_receipts', {
         'paid_amount': amount, 'status': 'completed', 'updated_at': now,
@@ -804,7 +813,7 @@ class PackingTransactionRepository {
       if (amount > remaining) {
         throw ArgumentError('Pembayaran melebihi sisa tagihan ($remaining).');
       }
-      if (paymentMethod.trim().toLowerCase() == 'cash') {
+      if (normalizedPaymentMethod == 'cash') {
         final sessions = await txn.query('cash_sessions', columns: ['status'], where: 'date_key = ?', whereArgs: [_cashDateKey(DateTime.now())], limit: 1);
         if (sessions.isNotEmpty && sessions.first['status'] == 'closed') {
           throw StateError('Kas hari ini sudah ditutup; pembayaran tunai baru tidak dapat dicatat.');
@@ -813,7 +822,7 @@ class PackingTransactionRepository {
       await txn.insert('receipt_payments', {
         'receipt_id': receiptId,
         'amount': amount,
-        'payment_method': paymentMethod.trim().toLowerCase(),
+        'payment_method': normalizedPaymentMethod,
         'note': note.trim(),
         'created_at': now,
       });
@@ -908,7 +917,7 @@ class PackingTransactionRepository {
       if (amount > total - paid) {
         throw ArgumentError('Pembayaran melebihi sisa tagihan.');
       }
-      if (paymentMethod.trim().toLowerCase() == 'cash') {
+      if (normalizedPaymentMethod == 'cash') {
         final sessions = await txn.query(
           'cash_sessions',
           columns: ['status'],
@@ -923,7 +932,7 @@ class PackingTransactionRepository {
       await txn.insert('transaction_payments', {
         'transaction_id': transactionId,
         'amount': amount,
-        'payment_method': paymentMethod.trim().toLowerCase(),
+        'payment_method': normalizedPaymentMethod,
         'note': note.trim(),
         'created_at': now,
       });
