@@ -384,6 +384,7 @@ class PackingBackupValidator {
     }
 
     final cashEventIds = <int>{};
+    final cashEventRows = <Map<String, Object?>>[];
     for (final row in data['cash_session_events'] ?? const <Map<String, Object?>>[]) {
       final id = _positiveInt(row['id'], 'ID audit sesi kas');
       if (!cashEventIds.add(id)) throw FormatException('ID audit sesi kas duplikat: $id.');
@@ -441,6 +442,39 @@ class PackingBackupValidator {
       _string(snapshot['note'], 'Snapshot audit note');
       _text(snapshot['closed_at'], 'Snapshot audit closed_at');
       _text(row['created_at'], 'Tanggal audit kas');
+      cashEventRows.add(row);
+    }
+
+    // Cash audit events must form a valid state sequence per session:
+    // closed -> reopened -> closed -> reopened ... . A reopen cannot be the
+    // first event, and consecutive close/reopen events of the same type are
+    // rejected as impossible history.
+    final eventsBySession = <int, List<Map<String, Object?>>>{};
+    for (final event in cashEventRows) {
+      final sessionId = _positiveInt(event['session_id'], 'ID sesi audit kas');
+      eventsBySession.putIfAbsent(sessionId, () => []).add(event);
+    }
+    for (final entry in eventsBySession.entries) {
+      final events = entry.value
+        ..sort((a, b) {
+          final byTime = DateTime.parse(a['created_at'] as String)
+              .compareTo(DateTime.parse(b['created_at'] as String));
+          return byTime != 0
+              ? byTime
+              : _positiveInt(a['id'], 'ID audit kas')
+                  .compareTo(_positiveInt(b['id'], 'ID audit kas'));
+        });
+      String? previousType;
+      for (final event in events) {
+        final type = event['event_type'] as String;
+        if (previousType == null && type != 'closed') {
+          throw FormatException('Audit sesi kas ${entry.key} harus dimulai dari penutupan.');
+        }
+        if (previousType == type) {
+          throw FormatException('Urutan audit sesi kas ${entry.key} tidak valid.');
+        }
+        previousType = type;
+      }
     }
 
     // A closed cash session is a historical snapshot. Verify its expected
