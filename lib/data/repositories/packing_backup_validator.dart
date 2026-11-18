@@ -392,9 +392,27 @@ class PackingBackupValidator {
       final type = _text(row['event_type'], 'Jenis audit kas');
       if (!['closed', 'reopened'].contains(type)) throw const FormatException('Jenis audit kas tidak valid.');
       _string(row['reason'], 'Alasan audit kas');
-      final snapshot = _text(row['snapshot_json'], 'Snapshot audit kas');
-      try { if (jsonDecode(snapshot) is! Map) throw const FormatException(); }
-      on FormatException { throw FormatException('Snapshot audit kas $id tidak valid.'); }
+      final snapshotText = _text(row['snapshot_json'], 'Snapshot audit kas');
+      Map<String, dynamic> snapshot;
+      try {
+        final decoded = jsonDecode(snapshotText);
+        if (decoded is! Map<String, dynamic>) throw const FormatException();
+        snapshot = decoded;
+      } on FormatException {
+        throw FormatException('Snapshot audit kas $id tidak valid.');
+      }
+      final snapshotNumericFields = type == 'closed'
+          ? ['opening_balance', 'cash_received', 'cash_refunded', 'expense_total', 'expected_balance', 'counted_balance', 'difference']
+          : ['opening_balance', 'expected_balance', 'counted_balance', 'difference'];
+      for (final field in snapshotNumericFields) {
+        if (field == 'difference') {
+          _signedInt(snapshot[field], 'Snapshot audit $field');
+        } else {
+          _nonNegativeInt(snapshot[field], 'Snapshot audit $field');
+        }
+      }
+      _string(snapshot['note'], 'Snapshot audit note');
+      _text(snapshot['closed_at'], 'Snapshot audit closed_at');
       _text(row['created_at'], 'Tanggal audit kas');
     }
 
