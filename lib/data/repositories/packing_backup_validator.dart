@@ -405,10 +405,37 @@ class PackingBackupValidator {
           ? ['opening_balance', 'cash_received', 'cash_refunded', 'expense_total', 'expected_balance', 'counted_balance', 'difference']
           : ['opening_balance', 'expected_balance', 'counted_balance', 'difference'];
       for (final field in snapshotNumericFields) {
-        if (field == 'difference') {
+        if (field == 'expected_balance' || field == 'difference') {
           _signedInt(snapshot[field], 'Snapshot audit $field');
         } else {
           _nonNegativeInt(snapshot[field], 'Snapshot audit $field');
+        }
+      }
+      final snapshotExpected = _signedInt(
+        snapshot['expected_balance'],
+        'Snapshot audit expected_balance',
+      );
+      final snapshotCounted = _nonNegativeInt(
+        snapshot['counted_balance'],
+        'Snapshot audit counted_balance',
+      );
+      final snapshotDifference = _signedInt(
+        snapshot['difference'],
+        'Snapshot audit difference',
+      );
+      if (snapshotDifference != snapshotCounted - snapshotExpected) {
+        throw FormatException('Selisih pada snapshot audit kas $id tidak cocok.');
+      }
+      if (type == 'closed') {
+        final calculatedExpected = _nonNegativeInt(
+              snapshot['opening_balance'],
+              'Snapshot audit opening_balance',
+            ) +
+            _nonNegativeInt(snapshot['cash_received'], 'Snapshot audit cash_received') -
+            _nonNegativeInt(snapshot['cash_refunded'], 'Snapshot audit cash_refunded') -
+            _nonNegativeInt(snapshot['expense_total'], 'Snapshot audit expense_total');
+        if (snapshotExpected != calculatedExpected) {
+          throw FormatException('Saldo pada snapshot audit kas $id tidak cocok.');
         }
       }
       _string(snapshot['note'], 'Snapshot audit note');
