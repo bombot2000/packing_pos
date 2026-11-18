@@ -660,10 +660,45 @@ void main() {
           'session_id': 1,
           'event_type': 'reopened',
           'reason': 'Koreksi',
-          'snapshot_json': '{"expected_balance":13000}',
+          'snapshot_json': '{"opening_balance":10000,"expected_balance":13000,"counted_balance":13000,"difference":0,"note":"","closed_at":"2026-11-09T23:00:00.000Z"}',
           'created_at': '2026-11-09T23:30:00.000Z',
         },
       ];
+      expect(
+        () => PackingBackupValidator.validate(backup),
+        throwsFormatException,
+      );
+    });
+
+    test('rejects negative cash audit snapshot amounts', () {
+      final backup = validRefundBackup();
+      backup['version'] = 9;
+      backup['cash_sessions'] = [
+        {
+          'id': 1,
+          'date_key': '2026-11-09',
+          'opening_balance': 10000,
+          'expected_balance': 13000,
+          'counted_balance': 13000,
+          'difference': 0,
+          'status': 'closed',
+          'note': '',
+          'created_at': '2026-11-09T00:00:00.000Z',
+          'closed_at': '2026-11-09T23:00:00.000Z',
+        },
+      ];
+      backup['cash_session_events'] = [
+        {
+          'id': 1,
+          'session_id': 1,
+          'event_type': 'closed',
+          'reason': '',
+          'snapshot_json': '{"opening_balance":10000,"cash_received":5000,"cash_refunded":2000,"expense_total":0,"expected_balance":13000,"counted_balance":13000,"difference":0,"note":"","closed_at":"2026-11-09T23:00:00.000Z"}',
+          'created_at': '2026-11-09T23:00:00.000Z',
+        },
+      ];
+      backup['cash_session_events']![0]['snapshot_json'] =
+          '{"opening_balance":-10000,"cash_received":5000,"cash_refunded":2000,"expense_total":0,"expected_balance":13000,"counted_balance":13000,"difference":0,"note":"","closed_at":"2026-11-09T23:00:00.000Z"}';
       expect(
         () => PackingBackupValidator.validate(backup),
         throwsFormatException,
