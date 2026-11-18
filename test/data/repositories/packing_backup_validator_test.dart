@@ -703,6 +703,15 @@ void main() {
         () => PackingBackupValidator.validate(backup),
         throwsFormatException,
       );
+
+      // Even if difference matches counted minus expected, the expected balance
+      // must also match the closing snapshot's cash-flow arithmetic.
+      backup['cash_session_events']![0]['snapshot_json'] =
+          '{"opening_balance":10000,"cash_received":5000,"cash_refunded":2000,"expense_total":0,"expected_balance":12000,"counted_balance":13000,"difference":1000,"note":"","closed_at":"2026-11-09T23:00:00.000Z"}';
+      expect(
+        () => PackingBackupValidator.validate(backup),
+        throwsFormatException,
+      );
     });
 
     test('rejects invalid cash audit event type and reason field', () {
