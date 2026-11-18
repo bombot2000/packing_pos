@@ -668,6 +668,13 @@ void main() {
         () => PackingBackupValidator.validate(backup),
         throwsFormatException,
       );
+
+      backup['cash_session_events']![1]['id'] = 2;
+      backup['cash_session_events']![1]['event_type'] = 'closed';
+      expect(
+        () => PackingBackupValidator.validate(backup),
+        throwsFormatException,
+      );
     });
 
     test('rejects negative cash audit snapshot amounts', () {
