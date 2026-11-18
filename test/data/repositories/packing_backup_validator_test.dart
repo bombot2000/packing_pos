@@ -670,6 +670,46 @@ void main() {
       );
     });
 
+    test('rejects invalid cash audit event type and reason field', () {
+      final backup = validRefundBackup();
+      backup['version'] = 9;
+      backup['cash_sessions'] = [
+        {
+          'id': 1,
+          'date_key': '2026-11-09',
+          'opening_balance': 10000,
+          'expected_balance': 13000,
+          'counted_balance': 13000,
+          'difference': 0,
+          'status': 'closed',
+          'note': '',
+          'created_at': '2026-11-09T00:00:00.000Z',
+          'closed_at': '2026-11-09T23:00:00.000Z',
+        },
+      ];
+      backup['cash_session_events'] = [
+        {
+          'id': 1,
+          'session_id': 1,
+          'event_type': 'deleted',
+          'reason': '',
+          'snapshot_json': '{"expected_balance":13000}',
+          'created_at': '2026-11-09T23:00:00.000Z',
+        },
+      ];
+      expect(
+        () => PackingBackupValidator.validate(backup),
+        throwsFormatException,
+      );
+
+      backup['cash_session_events']![0]['event_type'] = 'closed';
+      backup['cash_session_events']![0]['reason'] = 123;
+      expect(
+        () => PackingBackupValidator.validate(backup),
+        throwsFormatException,
+      );
+    });
+
     test('closed cash session subtracts cash refunds on the refund date', () {
       final backup = validRefundBackup();
       backup['cash_sessions'] = [
