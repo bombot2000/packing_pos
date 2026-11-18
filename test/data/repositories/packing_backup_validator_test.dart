@@ -652,7 +652,7 @@ void main() {
           'session_id': 1,
           'event_type': 'closed',
           'reason': '',
-          'snapshot_json': '{"expected_balance":13000}',
+          'snapshot_json': '{"opening_balance":10000,"cash_received":5000,"cash_refunded":2000,"expense_total":0,"expected_balance":13000,"counted_balance":13000,"difference":0,"note":"","closed_at":"2026-11-09T23:00:00.000Z"}',
           'created_at': '2026-11-09T23:00:00.000Z',
         },
         {
