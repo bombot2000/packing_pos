@@ -761,6 +761,52 @@ void main() {
       );
     });
 
+    test('cash session status must match the last audit event', () {
+      final backup = validRefundBackup();
+      backup['version'] = 9;
+      backup['cash_sessions'] = [
+        {
+          'id': 1,
+          'date_key': '2026-11-09',
+          'opening_balance': 10000,
+          'status': 'closed',
+          'note': '',
+          'created_at': '2026-11-09T00:00:00.000Z',
+          'expected_balance': 13000,
+          'counted_balance': 13000,
+          'difference': 0,
+          'closed_at': '2026-11-09T23:00:00.000Z',
+        },
+      ];
+      backup['cash_expenses'] = <Map<String, Object?>>[];
+      backup['cash_session_events'] = [
+        {
+          'id': 1,
+          'session_id': 1,
+          'event_type': 'closed',
+          'reason': '',
+          'snapshot_json': '{"opening_balance":10000,"cash_received":3000,"cash_refunded":0,"expense_total":0,"expected_balance":13000,"counted_balance":13000,"difference":0,"note":"","closed_at":"2026-11-09T23:00:00.000Z"}',
+          'created_at': '2026-11-09T23:00:00.000Z',
+        },
+        {
+          'id': 2,
+          'session_id': 1,
+          'event_type': 'reopened',
+          'reason': 'Koreksi',
+          'snapshot_json': '{"opening_balance":10000,"expected_balance":13000,"counted_balance":13000,"difference":0,"note":"","closed_at":"2026-11-09T23:00:00.000Z"}',
+          'created_at': '2026-11-09T23:30:00.000Z',
+        },
+      ];
+
+      expect(() => PackingBackupValidator.validate(backup), throwsFormatException);
+      backup['cash_sessions']![0]['status'] = 'open';
+      backup['cash_sessions']![0].remove('expected_balance');
+      backup['cash_sessions']![0].remove('counted_balance');
+      backup['cash_sessions']![0].remove('difference');
+      backup['cash_sessions']![0].remove('closed_at');
+      expect(() => PackingBackupValidator.validate(backup), returnsNormally);
+    });
+
     test('closed cash session subtracts cash refunds on the refund date', () {
       final backup = validRefundBackup();
       backup['cash_sessions'] = [
