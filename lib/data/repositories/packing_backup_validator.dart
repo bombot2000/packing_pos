@@ -475,6 +475,14 @@ class PackingBackupValidator {
         }
         previousType = type;
       }
+      final session = (data['cash_sessions'] ?? const <Map<String, Object?>>[])
+          .firstWhere((row) => _positiveInt(row['id'], 'ID sesi kas') == entry.key);
+      if (session['status'] == 'closed' && previousType != 'closed') {
+        throw FormatException('Status sesi kas ${entry.key} tidak cocok dengan audit terakhir.');
+      }
+      if (session['status'] == 'open' && previousType != 'reopened') {
+        throw FormatException('Status sesi kas ${entry.key} tidak cocok dengan audit terakhir.');
+      }
     }
 
     // A closed cash session is a historical snapshot. Verify its expected
