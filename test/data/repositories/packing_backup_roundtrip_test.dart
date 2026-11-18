@@ -786,4 +786,50 @@ void main() {
     expect(restoredJobs.single['status'], 'completed');
   });
 
+  test('cash session close and reopen audit events survive backup restore', () async {
+    final sessionId = await repository.startCashSession(
+      date: DateTime.now(),
+      openingBalance: 15000,
+    );
+    await repository.addCashExpense(
+      sessionId: sessionId,
+      amount: 2500,
+      category: 'Operasional',
+      note: 'Biaya audit roundtrip',
+    );
+    await repository.closeCashSession(
+      sessionId: sessionId,
+      countedBalance: 12500,
+      note: 'Penutupan awal',
+    );
+    await repository.reopenCashSession(
+      sessionId: sessionId,
+      reason: 'Perlu koreksi pencatatan',
+    );
+
+    final beforeBackup = await repository.cashSessionEvents(sessionId);
+    expect(beforeBackup, hasLength(2));
+    expect(beforeBackup.map((event) => event['event_type']), ['reopened', 'closed']);
+    expect(beforeBackup.first['reason'], 'Perlu koreksi pencatatan');
+    final reopenedSnapshot = jsonDecode(beforeBackup.first['snapshot_json'] as String)
+        as Map<String, dynamic>;
+    expect(reopenedSnapshot['expected_balance'], 12500);
+    expect(reopenedSnapshot['counted_balance'], 12500);
+    expect(reopenedSnapshot['difference'], 0);
+
+    final backup = await repository.exportBackup();
+    expect(backup['cash_session_events'], hasLength(2));
+    await repository.restoreBackup(backup);
+
+    final restoredEvents = await repository.cashSessionEvents(sessionId);
+    expect(restoredEvents, hasLength(2));
+    expect(restoredEvents.map((event) => event['event_type']), ['reopened', 'closed']);
+    expect(restoredEvents.first['reason'], 'Perlu koreksi pencatatan');
+    final restoredSnapshot = jsonDecode(restoredEvents.first['snapshot_json'] as String)
+        as Map<String, dynamic>;
+    expect(restoredSnapshot['expected_balance'], 12500);
+    expect(restoredSnapshot['counted_balance'], 12500);
+    expect(restoredSnapshot['difference'], 0);
+  });
+
 }
